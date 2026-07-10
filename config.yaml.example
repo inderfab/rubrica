@@ -1,0 +1,17 @@
+database:
+  path: rubrica.db
+
+server:
+  port: 8000
+
+# Phase 2: CardDAV-Sync nach Radicale (App -> Radicale -> Apple Kontakte, nie umgekehrt).
+# Standardmaessig aus - bestehendes Verhalten bleibt unveraendert, bis dies eingeschaltet wird.
+radicale:
+  enabled: false
+  base_url: https://127.0.0.1:8443
+  # __RUBRICA_USER__ wird beim Erststart durch den tatsaechlichen macOS-Benutzernamen ersetzt
+  # (siehe Contents/MacOS/Rubrica Server im gepackten .app-Bundle bzw. scripts/dev.sh).
+  addressbook_path: /__RUBRICA_USER__/kontakte/
+  username: __RUBRICA_USER__
+  password: ""
+  verify_ssl: true

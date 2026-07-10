@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% block title %}Kontakt bearbeiten – Rubrica{% endblock %}
+{% block content %}
+<h1>Kontakt bearbeiten</h1>
+
+<form method="post" action="{{ action }}">
+    <div class="grid-2">
+        <div class="field">
+            <label>Vorname</label>
+            <input type="text" name="vorname" value="{{ kontakt.vorname if kontakt else '' }}">
+        </div>
+        <div class="field">
+            <label>Nachname</label>
+            <input type="text" name="nachname" value="{{ kontakt.nachname if kontakt else '' }}">
+        </div>
+        <div class="field">
+            <label>Firma</label>
+            <input type="text" name="firma" value="{{ kontakt.firma if kontakt else '' }}">
+        </div>
+        <div class="field">
+            <label>Rolle</label>
+            <input type="text" name="rolle" value="{{ kontakt.rolle if kontakt else '' }}">
+        </div>
+        <div class="field">
+            <label>Kategorie</label>
+            <input type="text" name="kategorie" value="{{ kontakt.kategorie if kontakt else '' }}" placeholder="z. B. Fachplaner, Unternehmer">
+        </div>
+    </div>
+
+    <fieldset>
+        <legend>Telefonnummern</legend>
+        <div id="tel-rows">
+            {% for t in (kontakt.telefonnummern if kontakt else []) %}
+            <div class="tel-row">
+                <input type="text" name="telefon_typ" value="{{ t.typ }}" placeholder="Typ" style="width: 6rem;">
+                <input type="text" name="telefon_nummer" value="{{ t.nummer }}" placeholder="Nummer">
+                <button type="button" class="secondary" onclick="this.parentElement.remove()">Entfernen</button>
+            </div>
+            {% endfor %}
+        </div>
+        <button type="button" class="secondary" onclick="addRow('tel-rows', 'tel')">+ Telefonnummer</button>
+    </fieldset>
+
+    <fieldset>
+        <legend>E-Mails</legend>
+        <div id="mail-rows">
+            {% for e in (kontakt.emails if kontakt else []) %}
+            <div class="mail-row">
+                <input type="text" name="email_typ" value="{{ e.typ }}" placeholder="Typ" style="width: 6rem;">
+                <input type="text" name="email_adresse" value="{{ e.email }}" placeholder="E-Mail">
+                <button type="button" class="secondary" onclick="this.parentElement.remove()">Entfernen</button>
+            </div>
+            {% endfor %}
+        </div>
+        <button type="button" class="secondary" onclick="addRow('mail-rows', 'mail')">+ E-Mail</button>
+    </fieldset>
+
+    <fieldset>
+        <legend>Adressen</legend>
+        <div id="adr-rows">
+            {% for a in (kontakt.adressen if kontakt else []) %}
+            <div class="tel-row">
+                <input type="text" name="adresse_typ" value="{{ a.typ }}" placeholder="Typ" style="width: 5rem;">
+                <input type="text" name="adresse_strasse" value="{{ a.strasse }}" placeholder="Strasse">
+                <input type="text" name="adresse_plz" value="{{ a.plz }}" placeholder="PLZ" style="width: 4.5rem;">
+                <input type="text" name="adresse_ort" value="{{ a.ort }}" placeholder="Ort">
+                <input type="text" name="adresse_region" value="{{ a.region }}" placeholder="Kanton" style="width: 5rem;">
+                <input type="text" name="adresse_land" value="{{ a.land }}" placeholder="Land" style="width: 6rem;">
+                <button type="button" class="secondary" onclick="this.parentElement.remove()">Entfernen</button>
+            </div>
+            {% endfor %}
+        </div>
+        <button type="button" class="secondary" onclick="addRow('adr-rows', 'adr')">+ Adresse</button>
+    </fieldset>
+
+    <fieldset>
+        <legend>Homepage / URLs</legend>
+        <div id="url-rows">
+            {% for u in (kontakt.urls if kontakt else []) %}
+            <div class="mail-row">
+                <input type="text" name="url_typ" value="{{ u.typ }}" placeholder="Typ" style="width: 6rem;">
+                <input type="text" name="url_adresse" value="{{ u.url }}" placeholder="https://…">
+                <button type="button" class="secondary" onclick="this.parentElement.remove()">Entfernen</button>
+            </div>
+            {% endfor %}
+        </div>
+        <button type="button" class="secondary" onclick="addRow('url-rows', 'url')">+ URL</button>
+    </fieldset>
+
+    <fieldset>
+        <legend>Notizen</legend>
+        <textarea name="notizen" rows="4" style="width: 100%;">{{ kontakt.notizen if kontakt else '' }}</textarea>
+    </fieldset>
+
+    <fieldset>
+        <legend>Ordner</legend>
+        {% for o in ordner %}
+        <label style="display:inline-block; margin-right: 1rem;">
+            <input type="checkbox" name="ordner_ids" value="{{ o.id }}"
+                {% if kontakt and o.id in kontakt.projekte|map(attribute='id')|list %}checked{% endif %}>
+            {{ o.name }}
+        </label>
+        {% endfor %}
+        {% if not ordner %}<p class="empty">Noch keine Ordner angelegt.</p>{% endif %}
+    </fieldset>
+
+    <div class="actions">
+        <button type="submit">Speichern</button>
+        <a class="btn secondary" href="/kontakte">Abbrechen</a>
+    </div>
+</form>
+
+<script>
+const ROW_SPECS = {
+    tel: {cls: 'tel-row', fields: [['telefon_typ', 'Typ', '6rem'], ['telefon_nummer', 'Nummer', null]]},
+    mail: {cls: 'mail-row', fields: [['email_typ', 'Typ', '6rem'], ['email_adresse', 'E-Mail', null]]},
+    url: {cls: 'mail-row', fields: [['url_typ', 'Typ', '6rem'], ['url_adresse', 'https://…', null]]},
+    adr: {cls: 'tel-row', fields: [
+        ['adresse_typ', 'Typ', '5rem'], ['adresse_strasse', 'Strasse', null],
+        ['adresse_plz', 'PLZ', '4.5rem'], ['adresse_ort', 'Ort', null],
+        ['adresse_region', 'Kanton', '5rem'], ['adresse_land', 'Land', '6rem'],
+    ]},
+};
+
+function addRow(containerId, kind) {
+    const container = document.getElementById(containerId);
+    const spec = ROW_SPECS[kind];
+    const row = document.createElement('div');
+    row.className = spec.cls;
+    const inputs = spec.fields.map(([name, placeholder, width]) =>
+        `<input type="text" name="${name}" placeholder="${placeholder}"${width ? ` style="width: ${width};"` : ''}>`
+    ).join('\n');
+    row.innerHTML = inputs + '<button type="button" class="secondary" onclick="this.parentElement.remove()">Entfernen</button>';
+    container.appendChild(row);
+}
+</script>
+{% endblock %}

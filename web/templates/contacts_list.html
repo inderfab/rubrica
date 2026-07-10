@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Kontakte – Rubrica{% endblock %}
+{% block content %}
+<h1>Kontakte</h1>
+<p class="empty">
+    Neue Kontakte werden in Kontakte.app angelegt und über <a href="/import">Import</a> eingespielt.
+    Hier lassen sich bestehende Kontakte bearbeiten (Kategorie, Ordner-Zuordnung, Korrekturen).
+</p>
+
+<form class="filter" hx-get="/kontakte" hx-target="#kontakte-ergebnis" hx-select="#kontakte-ergebnis"
+      hx-push-url="true"
+      hx-trigger="keyup changed delay:300ms from:input[name='suche'], change from:select">
+    <input type="text" name="suche" placeholder="Name oder Firma suchen…" value="{{ suche }}">
+    <select name="ordner_id">
+        <option value="">Alle Ordner</option>
+        {% for o in ordner %}
+        <option value="{{ o.id }}" {% if ordner_id == o.id %}selected{% endif %}>{{ o.name }}</option>
+        {% endfor %}
+    </select>
+    <select name="kategorie">
+        <option value="">Alle Kategorien</option>
+        {% for k in kategorien %}
+        <option value="{{ k }}" {% if kategorie == k %}selected{% endif %}>{{ k }}</option>
+        {% endfor %}
+    </select>
+</form>
+
+<div id="kontakte-ergebnis">
+    {% if kontakte %}
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th><th>Firma</th><th>Rolle</th><th>Kategorie</th>
+                <th>Telefon</th><th>E-Mail</th><th>Ordner</th><th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for k in kontakte %}
+            <tr>
+                <td><a href="/kontakte/{{ k.id }}/bearbeiten">{{ k.vorname }} {{ k.nachname }}</a></td>
+                <td>{{ k.firma }}</td>
+                <td>{{ k.rolle }}</td>
+                <td>{{ k.kategorie }}</td>
+                <td>{% for t in k.telefonnummern %}<a href="tel:{{ t.nummer }}">{{ t.nummer }}</a>{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
+                <td>{% for e in k.emails %}<a href="mailto:{{ e.email }}">{{ e.email }}</a>{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
+                <td>{% for o in k.projekte %}<span class="tag">{{ o.name }}</span>{% endfor %}</td>
+                <td>
+                    <form method="post" action="/kontakte/{{ k.id }}/loeschen" onsubmit="return confirm('Kontakt wirklich löschen?')">
+                        <button type="submit" class="danger">Löschen</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="empty">Keine Kontakte gefunden.</p>
+    {% endif %}
+</div>
+{% endblock %}

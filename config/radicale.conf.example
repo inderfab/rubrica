@@ -1,0 +1,25 @@
+[server]
+# Alle Interfaces (nicht nur loopback) - entspricht dem realen Einsatz
+# (Stationen verbinden sich per LAN/Bonjour-Hostname zum iMac).
+# Port 8443 statt 5232: macOS Kontakte.app fuehrt bei "Erweitert"-CardDAV-Accounts
+# immer eine HTTPS-Autodiscovery auf den Ports 8443/8843/443 durch - der manuell
+# eingetragene Port wird fuer die Kontoverifizierung ignoriert (Spike-Erfahrung,
+# per Systemlog verifiziert). Ohne HTTPS auf einem dieser Ports schlaegt die
+# Accountpruefung immer fehl, unabhaengig von Radicales eigentlicher Konfiguration.
+hosts = 0.0.0.0:8443, [::]:8443
+ssl = True
+certificate = __RUBRICA_DATA_DIR__/radicale-tls/cert.pem
+key = __RUBRICA_DATA_DIR__/radicale-tls/key.pem
+
+[auth]
+type = htpasswd
+htpasswd_filename = __RUBRICA_DATA_DIR__/radicale-htpasswd
+htpasswd_encryption = bcrypt
+
+[storage]
+# Wird von scripts/radicale-dev.sh mit dem tatsaechlichen RUBRICA_DATA_DIR ersetzt
+# (Radicale kennt keine Umgebungsvariablen-Interpolation in der Config-Datei).
+filesystem_folder = __RUBRICA_DATA_DIR__/radicale
+
+[rights]
+type = owner_only

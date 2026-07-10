@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "rubrica-dev",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["scripts/dev.sh"],
+      "port": 8000
+    },
+    {
+      "name": "rubrica-radicale",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["scripts/radicale-dev.sh"],
+      "port": 8443
+    }
+  ]
+}

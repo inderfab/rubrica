@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Import – Rubrica{% endblock %}
+{% block content %}
+<h1>Bestehende Adressbücher importieren</h1>
+<p class="empty">
+    Export als .vcf aus Kontakte.app (Ablage → Exportieren → vCard exportieren) bei jedem Mitarbeiter.
+    Alle Exporte können gleichzeitig hochgeladen werden — Duplikate werden in der Review-Queue
+    zusammengeführt, nichts wird automatisch überschrieben.
+</p>
+
+<form method="post" action="/import" enctype="multipart/form-data">
+    <div class="field">
+        <label>vCard-Dateien (.vcf)</label>
+        <input type="file" name="dateien" accept=".vcf" multiple required>
+    </div>
+    <div class="field">
+        <label><input type="checkbox" name="gruppen_als_ordner"> Bestehende Apple-Gruppen als Ordner übernehmen</label>
+    </div>
+    <button type="submit">Importieren</button>
+</form>
+{% endblock %}
