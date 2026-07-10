@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Ordner – Rubrica{% endblock %}
+{% block content %}
+<h1>Ordner</h1>
+
+<form method="post" action="/ordner/neu" class="filter">
+    <input type="text" name="name" placeholder="Neuer Ordner…" required>
+    <button type="submit">Anlegen</button>
+</form>
+
+{% if ordner %}
+<table>
+    <thead><tr><th>Name</th><th>Kontakte</th><th></th></tr></thead>
+    <tbody>
+        {% for o in ordner %}
+        <tr>
+            <td><a href="/kontakte?ordner_id={{ o.id }}">{{ o.name }}</a></td>
+            <td>{{ o.anzahl_kontakte }}</td>
+            <td>
+                <form method="post" action="/ordner/{{ o.id }}/loeschen" onsubmit="return confirm('Ordner wirklich löschen?')">
+                    <button type="submit" class="danger">Löschen</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p class="empty">Noch keine Ordner angelegt.</p>
+{% endif %}
+{% endblock %}

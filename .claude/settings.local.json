@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls -la /Users/fi/archivio 2>&1 | head -50)"
+    ]
+  }
+}

@@ -1,0 +1,58 @@
+* { box-sizing: border-box; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+    margin: 0;
+    color: #1d1d1f;
+    background: #f5f5f7;
+}
+nav {
+    background: #1d1d1f;
+    padding: 0.75rem 1.5rem;
+    display: flex;
+    gap: 1.5rem;
+    align-items: center;
+}
+nav a {
+    color: #f5f5f7;
+    text-decoration: none;
+    font-size: 0.95rem;
+}
+nav a:hover { text-decoration: underline; }
+nav .brand { font-weight: 600; margin-right: 1rem; }
+main { padding: 1.5rem 2rem; max-width: 1100px; margin: 0 auto; }
+h1 { font-size: 1.4rem; margin-top: 0; }
+table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 8px; overflow: hidden; }
+th, td { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid #e5e5ea; font-size: 0.9rem; }
+th { background: #eceef0; font-weight: 600; }
+tr:last-child td { border-bottom: none; }
+form.filter { display: flex; gap: 0.75rem; margin-bottom: 1rem; flex-wrap: wrap; }
+input, select, textarea {
+    padding: 0.4rem 0.6rem;
+    border: 1px solid #d2d2d7;
+    border-radius: 6px;
+    font-size: 0.9rem;
+}
+button, .btn {
+    padding: 0.4rem 0.9rem;
+    border: none;
+    border-radius: 6px;
+    background: #0071e3;
+    color: #fff;
+    font-size: 0.9rem;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+}
+button.secondary, .btn.secondary { background: #d2d2d7; color: #1d1d1f; }
+button.danger, .btn.danger { background: #d70015; }
+.tel-row, .mail-row { display: flex; gap: 0.5rem; margin-bottom: 0.4rem; }
+fieldset { border: 1px solid #d2d2d7; border-radius: 8px; margin-bottom: 1rem; padding: 1rem; }
+legend { font-weight: 600; padding: 0 0.4rem; }
+.actions { display: flex; gap: 0.5rem; }
+.empty { color: #86868b; padding: 1rem 0; }
+label { display: block; font-size: 0.85rem; color: #515154; margin-bottom: 0.2rem; }
+.field { margin-bottom: 0.75rem; }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+.diff-old { color: #86868b; text-decoration: line-through; }
+.diff-new { color: #0071e3; font-weight: 600; }
+.tag { display: inline-block; background: #eceef0; border-radius: 4px; padding: 0.1rem 0.5rem; font-size: 0.8rem; margin-right: 0.25rem; }
