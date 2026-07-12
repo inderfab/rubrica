@@ -2,7 +2,10 @@
 {% block title %}Review-Queue – Rubrica{% endblock %}
 {% block content %}
 <h1>Review-Queue</h1>
-<p class="empty">Vorschläge aus dem Import. Nichts wird automatisch übernommen — erst nach Bestätigung.</p>
+<p class="empty">
+    Vorschläge aus dem Import. Nichts wird automatisch übernommen — erst nach Bestätigung.
+    <a href="/review/archivio-vorschau">Archivio-Vorschau ansehen →</a>
+</p>
 
 {% if vorschlaege %}
 {% for v in vorschlaege %}

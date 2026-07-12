@@ -12,6 +12,7 @@ from web.folders import router as folders_router
 from web.review import router as review_router
 from web.imports import router as imports_router
 from web.export import router as export_router
+from web.archivio import router as archivio_router
 
 
 @asynccontextmanager
@@ -27,6 +28,7 @@ app.include_router(folders_router)
 app.include_router(review_router)
 app.include_router(imports_router)
 app.include_router(export_router)
+app.include_router(archivio_router)
 
 
 @app.get("/")
