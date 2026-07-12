@@ -2,7 +2,7 @@ database:
   path: rubrica.db
 
 server:
-  port: 8000
+  port: 8001
 
 # Phase 2: CardDAV-Sync nach Radicale (App -> Radicale -> Apple Kontakte, nie umgekehrt).
 # Standardmaessig aus - bestehendes Verhalten bleibt unveraendert, bis dies eingeschaltet wird.
