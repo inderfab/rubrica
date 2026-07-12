@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Einstellungen – Rubrica{% endblock %}
+{% block content %}
+<h1>Einstellungen</h1>
+
+{% if gespeichert %}
+<p style="color:#1a7f37; padding:0.5rem 0">Gespeichert.</p>
+{% endif %}
+
+<form method="post" action="/einstellungen">
+    <fieldset>
+        <legend>Archivio-Anbindung</legend>
+        <p class="empty" style="padding:0 0 0.5rem">
+            Liest bereits von Archivio erfasste E-Mail-Signaturen und schlägt daraus neue Kontakte in der
+            Review-Queue vor. Leer lassen, um die Funktion zu deaktivieren.
+        </p>
+        <div class="field">
+            <label>Pfad zur Archivio-Datenbank</label>
+            <input type="text" name="archivio_db_path" value="{{ archivio_db_path }}"
+                   placeholder="/Users/…/Library/Application Support/Archivio/archivio.db" style="width:100%">
+        </div>
+        <div class="field">
+            <label>Mindestanzahl E-Mails pro Absender (Indiz für echte Korrespondenz)</label>
+            <input type="number" name="archivio_min_mails" value="{{ archivio_min_mails }}" min="1" style="width:6rem">
+        </div>
+    </fieldset>
+
+    <button type="submit">Speichern</button>
+</form>
+{% endblock %}

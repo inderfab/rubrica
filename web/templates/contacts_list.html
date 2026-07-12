@@ -52,9 +52,10 @@
                 </thead>
                 <tbody>
                     {% for k in kontakte %}
-                    <tr draggable="true" ondragstart="event.dataTransfer.setData('text/plain', '{{ k.id }}')"
-                        class="kontakt-zeile" title="Zum Zuordnen auf einen Ordner links ziehen">
-                        <td class="zieh-griff">⠿</td>
+                    <tr class="kontakt-zeile">
+                        <td class="zieh-griff" draggable="true"
+                            ondragstart="event.dataTransfer.setData('text/plain', '{{ k.id }}')"
+                            title="Zum Zuordnen auf einen Ordner links ziehen">⠿</td>
                         <td><a href="/kontakte/{{ k.id }}/bearbeiten">{{ k.vorname }} {{ k.nachname }}</a></td>
                         <td>{{ k.firma }}</td>
                         <td>{{ k.kategorie }}</td>
