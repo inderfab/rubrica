@@ -195,20 +195,57 @@ Geklärt: Zugriff erfolgt vorerst ausschließlich lokal im Büro-LAN, kein Remot
   (`MKCOL`/`PUT`/`GET`/`PROPFIND` per curl verifiziert). **Auf einem iPhone als CardDAV-Account
   eingerichtet erscheint die Gruppe "Rubrica Testprojekt" korrekt mit den zugehörigen Testkontakten
   als Mitglieder** — das Kernrisiko ist damit ausgeräumt.
-  Nebenbefund, mittlerweile mit realen Daten (1503 Kontakte/32 Ordner) mehrfach reproduziert und anhand
-  der Radicale-Server-Logs zweifelsfrei eingegrenzt: **macOS Kontakte.app (getestet: Sonoma 14.8.2) holt
-  nach dem Verbinden nie die eigentlichen Kontaktdaten ab.** Log-Vergleich:
-  - iOS (`dataaccessd`): Discovery (`PROPFIND`/`OPTIONS`) **gefolgt von** zahlreichen `REPORT`-Anfragen,
-    die die vCards tatsächlich abholen — vollständiger Sync funktioniert zuverlässig, mehrfach bestätigt.
-  - macOS (`AddressBookCore`): **nur** Discovery, nie ein `REPORT` — die Kontakte bleiben leer, obwohl
-    Login/Rechteprüfung serverseitig jedes Mal erfolgreich sind (bestätigt per Log: 401→Login OK→207).
-  Das ist reproduzierbar über mehrere Versuche, Zertifikat-Fixes (selbstsigniert + Login-Keychain-Trust)
-  und sogar einen Systemneustart hinweg — eingeordnet als macOS-/Kontakte.app-seitige Einschränkung dieser
-  konkreten macOS-Version, nicht als Fehler in Rubrica/Radicale (Protokoll- und Datenkorrektheit sind über
-  iOS zweifelsfrei erwiesen). Vor dem manuellen "Erweitert"-CardDAV-Setup zusätzlich zu beachten: macOS
-  prüft bei der Accountverifizierung immer HTTPS auf 8443/8843/443, unabhängig vom eingetragenen Port
-  (s. `config/radicale.conf.example`). Offener Punkt: auf dem iMac (anderes/neueres macOS) erneut prüfen,
-  ob dort dasselbe Verhalten auftritt.
+- ~~macOS Kontakte.app holt nach dem Verbinden nie die Kontaktdaten ab (nur Discovery, nie `REPORT`) –
+  eingeordnet als macOS-Einschränkung.~~ **URSACHE GEFUNDEN & GELÖST (2026-07-10). War kein macOS-Bug,
+  sondern ein nicht-konformes TLS-Zertifikat.** Symptom: macOS Kontakte.app (Sonoma 14.8.2) machte nach
+  dem Verbinden nur Discovery (`PROPFIND`/`OPTIONS`), nie einen `REPORT`; die Kontakte blieben leer, teils
+  Meldung "Accountname/Passwort konnte nicht überprüft werden". iOS funktionierte, weil man dort das
+  Zertifikat per Dialog **manuell** bestätigt (Trust-Override) — der macOS-Sync-Daemon
+  (`dataaccessd`/`contactsd`) validiert dagegen strikt und bricht **vor** dem `REPORT` still ab.
+  - **Beleg (Unified Log, `trustd`):** `[com.apple.securityd:ev] Leaf has invalid basic constraints`.
+  - **Ursache im Detail:** Das selbstsignierte Zertifikat aus dem alten Build-Skript
+    (`openssl req -x509 -days 3650`, nur `subjectAltName`) verletzte gleich mehrere Apple-Anforderungen an
+    TLS-Server-Zertifikate: (a) **keine `basicConstraints`** → ein Zertifikat, das zugleich eigener
+    Trust-Anchor und Server-Leaf ist, scheitert an Apples Constraint-Prüfung; (b) **kein
+    `extendedKeyUsage=serverAuth`**; (c) **Gültigkeit 3650 Tage** statt der von Apple erzwungenen
+    **≤ 398 Tage** (support.apple.com/en-us/HT211025).
+  - **Lösung:** neues `scripts/generate-cert.sh` erzeugt eine lokale **CA** + davon signiertes **Leaf**
+    (`CA:FALSE`, `keyUsage=digitalSignature,keyEncipherment`, `extendedKeyUsage=serverAuth`, SAN mit
+    Hostname, 397 Tage, SHA-256/RSA-2048) — dasselbe Prinzip wie `mkcert`. Radicale liefert die Full-Chain
+    (Leaf + CA) aus; die CA wird auf jedem Client **einmalig** als vertrauenswürdig markiert. Der
+    `.pkg`-Postinstall (`scripts/build-pkg.sh`) erzeugt das Zertifikat und markiert die CA per
+    `security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain` automatisch als
+    vertrauenswürdig (läuft als root → kein Dialog). Vorteil des CA-Modells: Das jährlich ablaufende Leaf
+    (398-Tage-Grenze) kann erneuert werden, ohne dass auf den Clients erneut vertraut werden muss.
+  - **Manuell (bestehende Installation ohne neuen Postinstall, z. B. Mac Studio):** einmalig
+    `sudo security add-trusted-cert -d -r trustRoot -p ssl -k /Library/Keychains/System.keychain \
+    "~/Library/Application Support/Rubrica/radicale-tls/ca-cert.pem"`, danach alten CardDAV-Account
+    entfernen und neu anlegen.
+  - **Zu beachten beim "Erweitert"-CardDAV-Setup:** macOS prüft bei der Accountverifizierung immer HTTPS
+    auf 8443/8843/443, unabhängig vom eingetragenen Port (s. `config/radicale.conf.example`).
+- ~~macOS Kontakte.app synchronisiert nach behobenem TLS zwar fehlerfrei die Discovery, startet aber den
+  eigentlichen Inhalts-Sync nicht.~~ **GELÖST (2026-07-12).** War ein macOS-Client-Zustandsproblem, kein
+  Rubrica-/Radicale-Fehler — durch Vanilla-Radicale-Gegentest zweifelsfrei von Rubrica getrennt (siehe unten).
+  - **Beweis, dass Rubrica nicht die Ursache war:** (a) iOS synchronisiert mit identischen Serverantworten
+    zuverlässig; (b) ein frisches, leeres Vanilla-Radicale (kein Rubrica-Code, nur 2 Testkontakte) zeigte
+    exakt dasselbe Symptom — Discovery ja, `REPORT` nie; (c) per mitschreibendem TLS-Proxy verifiziert, dass
+    macOS die von ChatGPT vermuteten Properties (`getcontenttype`/`getcontentlength` auf der Collection)
+    nie abfragt — diese Hypothese war falsch.
+  - **Tatsächliche Ursache:** angesammelter Client-Zustand nach mehreren Setup-Versuchen (8 verwaiste, leere
+    CardDAV-Quellen unter `~/Library/Application Support/AddressBook/Sources/`) **plus** Account-Setup im
+    Modus **"Erweitert" mit explizitem Serverpfad** (`/fi/kontakte/`) — das führte dazu, dass `contactsd`
+    nach der Discovery keinen Inhalts-Sync ansetzte.
+  - **Lösung:** (1) Account entfernen, Kontakte.app beenden, `killall contactsd`; (2) alle leeren,
+    verwaisten CardDAV-Quellen aus `~/Library/Application Support/AddressBook/Sources/` entfernen
+    (Quellen mit 0 Karten und vorhandener `AddressBook-v22.abcddb`; echte lokale Kontakte-Quellen mit
+    Karteninhalt nicht anfassen); (3) Account **neu und im Modus "Manuell"** anlegen, **nur mit dem
+    Hostnamen** (`Fabio-Mac-Studio.local`), **ohne Port und ohne Pfad** — macOS macht dann die
+    CardDAV-Autodiscovery über `/.well-known/carddav` selbst (wie beim iPhone) statt über einen fest
+    eingetragenen Collection-Pfad. Danach sendete macOS sofort 28 `addressbook-multiget`-REPORTs und alle
+    1535 Kontakte + 32 Gruppen kamen korrekt an (verifiziert in Kontakte.app auf dem Mac Studio).
+  - **Für den iMac-Rollout:** Account **immer** im Modus "Manuell" mit nur dem Hostnamen anlegen, nie
+    "Erweitert" mit explizitem Pfad — auch wenn beide Modi denselben Server ansprechen, verhält sich
+    `contactsd` beim Auslösen des initialen Inhalts-Syncs unterschiedlich.
 - Archivio enthält aktuell keine strukturierten Adressdaten, nur extrahierten Freitext (z. B. Mail-Signaturen) – die Extraktion daraus ist ein eigenständiges Teilproblem und bewusst auf später verschoben.
 - pkg-Bündelung von Python + Radicale + Abhängigkeiten sollte sich eng am bestehenden Archivio-Build orientieren, um doppelte Lösungswege für dasselbe Problem zu vermeiden.
 - SQLite-Eignung bei tatsächlicher Nutzung validieren (bei diesem Datenvolumen unkritisch, aber gleichzeitige Schreibzugriffe im Auge behalten).
@@ -301,7 +338,17 @@ Umgesetzt und end-to-end im Browser verifiziert (2026-07-10):
   - Beide launchd-Dienste teilen sich ein venv und starten gleichzeitig (`RunAtLoad`) — ohne Sperre
     entstand eine Race Condition beim venv-Aufbau. Behoben mit einer einfachen `mkdir`-basierten Lockdatei
     in der gemeinsamen Bootstrap-Logik.
+- **CardDAV-Zertifikat + macOS-Sync vollständig gelöst (2026-07-12):** siehe Abschnitt 9 für die Details
+  (Ursache: nicht Apple-konformes selbstsigniertes Zertifikat + macOS-Client-Zustand/Setup-Modus). Neue
+  `scripts/generate-cert.sh` (lokale CA + konformes Leaf) ist in `build-pkg.sh` eingebaut; der Postinstall
+  erzeugt das Zertifikat und markiert die CA automatisch systemweit als vertrauenswürdig (`security
+  add-trusted-cert` als root, kein manueller Dialog nötig). `.pkg` mit diesem Fix neu gebaut
+  (`dist/rubrica-server-0.1.0-test.pkg`) und Payload/Postinstall verifiziert (`generate-cert.sh` enthalten,
+  `add-trusted-cert`-Aufruf vorhanden). End-to-End auf dem Mac Studio bestätigt: Account im Modus
+  "Manuell" (nur Hostname) synchronisiert alle 1535 Karten + 32 Gruppen korrekt in Kontakte.app.
+  `scripts/fix-macos-trust.sh` steht für bestehende Installationen ohne neuen Postinstall bereit.
 
 Bekannte Einschränkung: Entwicklungsumgebung läuft unter Python 3.9 (Systemversion) statt der ursprünglich in Abschnitt 6 vermuteten 3.12 — FastAPI-Routenparameter deshalb mit `typing.Optional[int]` statt `int | None` (siehe `CLAUDE.md`).
 
-Nächste sinnvolle Schritte: `.pkg` auf dem echten iMac testweise installieren (identisches Vorgehen), danach echtes/vertrauenswürdiges TLS-Zertifikat für den Mehrstationen-Rollout (siehe Abschnitt 7), danach Phase 3 (Excel/PDF-Export).
+Nächste sinnvolle Schritte: `.pkg` auf dem echten iMac installieren (Account beim Einrichten im Modus
+"Manuell" mit nur dem Hostnamen anlegen, siehe Abschnitt 9), danach Phase 3 (Excel/PDF-Export).
