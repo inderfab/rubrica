@@ -522,11 +522,29 @@ die Adoption abwürgen). Später: sicherer Remote-Zugriff für On-Site-Erfassung
   angelegt, per simuliertem Drop einem echten Ordner zugeordnet, Tag erschien korrekt in der Liste, danach
   sauber geloescht).
 
+- **Bugfix Drag&Drop blockierte Bearbeiten-Klick (2026-07-12):** Nutzer-Feedback nach dem ersten Live-Test
+  auf dem iMac: Ordner-Sidebar und Drag&Drop funktionierten, aber der Klick auf den Kontaktnamen (Link zu
+  `/kontakte/{id}/bearbeiten`) reagierte nicht zuverlässig. Ursache: `draggable="true"` stand auf der ganzen
+  `<tr>` — jede minimale Mausbewegung beim Klicken wurde vom Browser als Drag-Start statt als Klick
+  interpretiert. Fix: `draggable` nur noch auf dem Ziehgriff-`<td>` ("⠿"), der Rest der Zeile (inkl.
+  Name-Link) ist normal klickbar. Live auf dem Mac Studio verifiziert.
+- **Einstellungsseite (2026-07-12):** Nutzer-Feedback: `archivio.db_path` liess sich nicht setzen, weil die
+  `archivio:`-Sektion in bestehenden `config.yaml`-Dateien (vor dieser Funktion installiert) schlicht fehlte
+  und Hand-Editieren von YAML fehleranfaellig ist. Neue Seite `/einstellungen` (`web/settings.py` +
+  `templates/settings.html`, Nav-Link): Formular für Archivio-Datenbankpfad + Mindestanzahl E-Mails,
+  schreibt über die bestehende `config.settings.save()` (deep-merge, legt fehlende Sektionen automatisch an).
+  3 Tests. Live gegen die echte Mac-Studio-Config verifiziert: bestehende `config.yaml` ohne `archivio:`-
+  Sektion wurde korrekt ergänzt, andere Werte (Radicale-Zugangsdaten etc.) blieben unangetastet; danach
+  `archivio.db_path` auf den echten lokalen Pfad (`/Users/fi/archivio/archivio.db`) gesetzt — Archivio-Vorschau
+  darüber erfolgreich aufgerufen (0 Kandidaten, weil die zuvor gefundenen 2 Personen als Kontakt bereits
+  vorhanden sind — Dublettenschutz korrekt gegen den vollen 1503-Kontakte-Bestand verifiziert).
+
 Bekannte Einschränkung: Entwicklungsumgebung läuft unter Python 3.9 (Systemversion) statt der ursprünglich in Abschnitt 6 vermuteten 3.12 — FastAPI-Routenparameter deshalb mit `typing.Optional[int]` statt `int | None` (siehe `CLAUDE.md`). Dies betrifft nur die lokale Entwicklungsumgebung; das produktive `.pkg` bringt sein eigenes Python 3.13 mit und ist davon unabhängig.
 
-Nächste sinnvolle Schritte: Neues `.pkg` (Menubar-App + Drag&Drop + reportlab + Archivio-Anbindung) auf dem
-iMac installieren (Menubar-App-Migration entlaedt dabei automatisch den alten Radicale-Agent). Auf dem iMac
-in `config.yaml` `archivio.db_path` auf `/Users/pas/Library/Application Support/Archivio/archivio.db` setzen,
-falls Archivio dort auch aktiv genutzt werden soll. Danach: mehr Postfächer/Projekte in Archivio scannen
-lassen, um die Archivio-Vorschau ertragreicher zu machen; UI-Komfort fuer die Archivio-Vorschau ausbauen
+Nächste sinnvolle Schritte: Neues `.pkg` (Menubar-App + Drag&Drop-Fix + Einstellungsseite + reportlab +
+Archivio-Anbindung) auf dem iMac installieren (Menubar-App-Migration entlaedt dabei automatisch den alten
+Radicale-Agent). Auf dem iMac unter „Einstellungen" `archivio.db_path` auf
+`/Users/pas/Library/Application Support/Archivio/archivio.db` setzen, falls Archivio dort auch aktiv genutzt
+werden soll. Danach: mehr Postfächer/Projekte in Archivio scannen lassen, um die Archivio-Vorschau
+ertragreicher zu machen; UI-Komfort fuer die Archivio-Vorschau ausbauen
 (z. B. einzelne Kandidaten abwaehlen koennen, statt alles-oder-nichts).

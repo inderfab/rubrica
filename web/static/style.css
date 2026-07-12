@@ -84,6 +84,5 @@ label { display: block; font-size: 0.85rem; color: #515154; margin-bottom: 0.2re
 .ordner-eintrag.drop-hover { background: #0071e3; color: #fff; outline: 2px dashed #fff; outline-offset: -3px; }
 .ordner-anzahl { background: #eceef0; border-radius: 10px; padding: 0.05rem 0.5rem; font-size: 0.75rem; }
 .kontakte-hauptbereich { flex: 1; min-width: 0; }
-.kontakt-zeile { cursor: grab; }
-.kontakt-zeile:active { cursor: grabbing; }
-.zieh-griff { color: #c7c7cc; width: 1.5rem; text-align: center; user-select: none; }
+.zieh-griff { color: #c7c7cc; width: 1.5rem; text-align: center; user-select: none; cursor: grab; }
+.zieh-griff:active { cursor: grabbing; }
