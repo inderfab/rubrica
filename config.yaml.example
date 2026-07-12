@@ -23,3 +23,9 @@ radicale:
 archivio:
   db_path: ""
   min_mails: 2
+
+# Automatisches Backup: nach jeder aendernden Anfrage wird ein Snapshot der
+# Datenbank an diesen Ordner geschrieben (per sqlite3-Backup-API, konsistent
+# auch bei laufendem Schreibzugriff). Deaktiviert, solange pfad leer ist.
+backup:
+  pfad: ""

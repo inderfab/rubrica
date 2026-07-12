@@ -668,6 +668,32 @@ Session. Gesammeltes Wissen fuer naechstes Mal:
     (Combobox-Markup/-Optionen, Bulk-Flyover-Fragment mit "Unterschiedliche Werte", Hidden-Felder) — kein
     Zugriff auf echte Kontaktdaten in dieser Zusammenfassung, nur Struktur-/Zaehl-Checks.
 
+- **Automatisches Backup an konfigurierbaren Pfad (2026-07-12):** Nutzer-Wunsch — nach jeder Änderung soll
+  eine Sicherung z. B. auf ein NAS geschrieben werden. Neues Modul `backup/__init__.py`:
+  `sichern_falls_konfiguriert()` liest `backup.pfad` aus den Einstellungen und schreibt bei jedem Aufruf
+  EINE Datei (`rubrica-backup.sqlite`, wird jedes Mal überschrieben statt zu akkumulieren) über sqlite3s
+  eingebaute `Connection.backup()`-API statt einer rohen Dateikopie — dadurch bleibt der Snapshot auch
+  konsistent, falls im selben Moment ein Schreibzugriff läuft (rohes Kopieren der `.sqlite`-Datei könnte
+  sonst einen halb geschriebenen Zustand einfrieren). Ausgelöst über eine neue HTTP-Middleware in
+  `web/main.py` (`backup_nach_aenderung`): nach jeder erfolgreichen POST-Anfrage (Status < 400) wird die
+  Sicherung im Threadpool angestossen (`run_in_threadpool`, damit ein langsamer NAS-Pfad die Event-Loop
+  nicht blockiert) — deckt dadurch automatisch ALLE aendernden Routen ab (Kontakte, Ordner, Vorschläge,
+  Sammel-Bearbeiten), ohne dass jede Route einzeln angepasst werden musste. Fehlschläge (Pfad nicht
+  erreichbar, z. B. NAS offline) werden nur geloggt, nie als Exception nach aussen gereicht — eine normale
+  Kontakt-Änderung darf dadurch nicht scheitern. Neues Feld „Backup-Pfad" im Einstellungen-Formular
+  (`web/settings.py`, `settings.html`), Default leer = deaktiviert. 5 neue Tests (`tests/test_backup.py`),
+  inkl. Middleware-Integrationstest und Fehlerfall mit ungültigem Pfad. Alle 86 Tests grün.
+
+**Offene Frage vom Nutzer (2026-07-12, noch nicht umgesetzt): kompletten `.abbu`-Ordner statt einzelner
+vCard-Datei importieren können**, mit Blick auf andere Büros mit derselben Ausgangslage (Apple-Kontakte-Export
+statt Rubrica). Kurz recherchiert: `.abbu` ist kein vCard-Text, sondern ein macOS-Bundle (Ordner) mit Apples
+interner, proprietärer SQLite-Datenbank (`AddressBook-v22.abcddb`, Tabellen wie `ZABCDRECORD` — undokumentiert,
+ändert sich zwischen macOS-Versionen). Das direkt zu parsen wäre deutlich fragiler als der bestehende, gut
+getestete vCard-Import. Empfehlung (noch nicht mit dem Nutzer abgestimmt): eher client-seitig per AppleScript
+aus Kontakte.app heraus nach vCard exportieren lassen (wie schon in `scripts/import_from_contacts_app.py` für
+den eigenen Bestand gelöst) und dieses vcf in Rubrica importieren, statt einen eigenen `.abbu`-Parser zu bauen.
+Müsste noch mit dem Nutzer besprochen werden, bevor das umgesetzt wird.
+
 Bekannte Einschränkung: Entwicklungsumgebung läuft unter Python 3.9 (Systemversion) statt der ursprünglich in Abschnitt 6 vermuteten 3.12 — FastAPI-Routenparameter deshalb mit `typing.Optional[int]` statt `int | None` (siehe `CLAUDE.md`). Dies betrifft nur die lokale Entwicklungsumgebung; das produktive `.pkg` bringt sein eigenes Python 3.13 mit und ist davon unabhängig.
 
 Nächste sinnvolle Schritte: Neues `.pkg` (Notion-Redesign + Archivio einzeln übernehmen/ablehnen + Ordner-
