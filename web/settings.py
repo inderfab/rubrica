@@ -20,6 +20,7 @@ def einstellungen_form(request: Request, gespeichert: str = ""):
         "gespeichert": bool(gespeichert),
         "archivio_db_path": settings.get("archivio.db_path", "") or "",
         "archivio_min_mails": settings.get("archivio.min_mails", 2),
+        "backup_pfad": settings.get("backup.pfad", "") or "",
     })
 
 
@@ -31,6 +32,10 @@ async def einstellungen_speichern(request: Request):
         min_mails = int(form.get("archivio_min_mails") or 2)
     except ValueError:
         min_mails = 2
+    backup_pfad = (form.get("backup_pfad") or "").strip()
 
-    settings.save({"archivio": {"db_path": db_path, "min_mails": min_mails}})
+    settings.save({
+        "archivio": {"db_path": db_path, "min_mails": min_mails},
+        "backup": {"pfad": backup_pfad},
+    })
     return RedirectResponse(url="/einstellungen?gespeichert=1", status_code=303)

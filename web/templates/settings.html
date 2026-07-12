@@ -25,6 +25,20 @@
         </div>
     </fieldset>
 
+    <fieldset>
+        <legend>Backup</legend>
+        <p class="empty" style="padding:0 0 0.5rem">
+            Nach jeder Änderung wird ein Snapshot der Datenbank an diesen Pfad geschrieben (überschreibt
+            jeweils die vorherige Sicherung) – z. B. ein NAS-Ordner, für eine zusätzliche Kopie ausserhalb
+            dieses Rechners. Leer lassen, um kein automatisches Backup zu schreiben.
+        </p>
+        <div class="field">
+            <label>Backup-Pfad (Ordner)</label>
+            <input type="text" name="backup_pfad" value="{{ backup_pfad }}"
+                   placeholder="/Volumes/NAS/Rubrica-Backup" style="width:100%">
+        </div>
+    </fieldset>
+
     <button type="submit">Speichern</button>
 </form>
 {% endblock %}

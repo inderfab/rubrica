@@ -21,12 +21,14 @@ def test_einstellungen_speichern_schreibt_config(tmp_db, monkeypatch, tmp_path):
     r = TestClient(app).post("/einstellungen", data={
         "archivio_db_path": "/neuer/pfad/archivio.db",
         "archivio_min_mails": "5",
+        "backup_pfad": "/Volumes/NAS/Rubrica-Backup",
     }, follow_redirects=False)
     assert r.status_code == 303
     assert "gespeichert=1" in r.headers["location"]
 
     assert settings.get("archivio.db_path") == "/neuer/pfad/archivio.db"
     assert settings.get("archivio.min_mails") == 5
+    assert settings.get("backup.pfad") == "/Volumes/NAS/Rubrica-Backup"
 
 
 def test_einstellungen_speichern_zeigt_bestaetigung(tmp_db, monkeypatch, tmp_path):
