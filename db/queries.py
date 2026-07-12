@@ -117,6 +117,25 @@ def update_kontakt(conn: sqlite3.Connection, kontakt_id: int, daten: dict) -> No
         _replace_urls(conn, kontakt_id, daten.get("urls", []))
 
 
+_ERLAUBTE_MEHRFACHFELDER = {"vorname", "nachname", "firma", "rolle", "kategorie", "notizen"}
+
+
+def update_kontakt_felder(conn: sqlite3.Connection, kontakt_id: int, felder: dict) -> None:
+    """Partielles Update nur der uebergebenen Scalar-Spalten - fasst (anders als
+    update_kontakt) Telefonnummern/E-Mails/Adressen/URLs nicht an. Fuer das
+    Sammel-Bearbeiten mehrerer ausgewaehlter Kontakte."""
+    spalten = [f for f in felder if f in _ERLAUBTE_MEHRFACHFELDER]
+    if not spalten:
+        return
+    zuweisungen = ", ".join(f"{spalte} = ?" for spalte in spalten)
+    werte = [felder[spalte] for spalte in spalten]
+    with conn:
+        conn.execute(
+            f"UPDATE kontakte SET {zuweisungen}, updated_at = ? WHERE id = ?",
+            (*werte, _now(), kontakt_id),
+        )
+
+
 def merge_kontakt(conn: sqlite3.Connection, kontakt_id: int, daten: dict) -> None:
     """Wie update_kontakt, aber fuer Vorschlaege: leere Felder ueberschreiben nichts,
     Telefonnummern/E-Mails/Adressen/URLs werden ergaenzt statt ersetzt (kein Datenverlust bei Dedup).

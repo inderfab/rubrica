@@ -46,6 +46,7 @@
             <table>
                 <thead>
                     <tr>
+                        <th><input type="checkbox" id="alle-auswaehlen" onchange="rubricaAlleAuswaehlen(this)"></th>
                         <th></th><th>Name</th><th>Firma</th><th>Funktion</th><th>Rolle</th>
                         <th>Telefon</th><th>E-Mail</th><th>Ordner</th><th></th>
                     </tr>
@@ -53,6 +54,7 @@
                 <tbody>
                     {% for k in kontakte %}
                     <tr class="kontakt-zeile">
+                        <td><input type="checkbox" class="kontakt-auswahl" value="{{ k.id }}" onchange="rubricaAuswahlGeaendert()"></td>
                         <td class="zieh-griff" draggable="true"
                             ondragstart="rubricaDragStart(event, '{{ k.id }}', '{{ (k.vorname ~ ' ' ~ k.nachname)|trim|e }}')"
                             title="Zum Zuordnen auf einen Ordner links ziehen">⠿</td>
@@ -65,12 +67,13 @@
                         <td>{% for o in k.projekte %}<span class="tag">{{ o.name }}</span>{% endfor %}</td>
                         <td class="actions">
                             <button type="button" class="secondary"
-                                    hx-get="/kontakte/{{ k.id }}/bearbeiten-flyover"
+                                    hx-get="/kontakte/{{ k.id }}/bearbeiten-flyover?ordner_id={{ ordner_id or '' }}"
                                     hx-target="#kontakt-modal-inhalt" hx-swap="innerHTML"
                                     onclick="rubricaModalOeffnen()">
                                 Bearbeiten
                             </button>
                             <form method="post" action="/kontakte/{{ k.id }}/loeschen" onsubmit="return confirm('Kontakt wirklich löschen?')">
+                                <input type="hidden" name="zurueck_ordner_id" value="{{ ordner_id or '' }}">
                                 <button type="submit" class="danger">Löschen</button>
                             </form>
                         </td>
@@ -83,6 +86,12 @@
             {% endif %}
         </div>
     </div>
+</div>
+
+<div id="sammel-leiste" class="sammel-leiste" style="display:none">
+    <span id="sammel-anzahl"></span>
+    <button type="button" class="secondary" onclick="rubricaSammelBearbeiten()">Ausgewählte bearbeiten</button>
+    <button type="button" class="secondary" onclick="rubricaAuswahlAufheben()">Auswahl aufheben</button>
 </div>
 
 <div id="kontakt-modal-overlay" class="modal-overlay" onclick="if (event.target === this) rubricaModalSchliessen()">
@@ -120,6 +129,43 @@ function rubricaModalOeffnen() {
 }
 function rubricaModalSchliessen() {
     document.getElementById('kontakt-modal-overlay').classList.remove('sichtbar');
+}
+
+function rubricaAusgewaehlteIds() {
+    return Array.from(document.querySelectorAll('.kontakt-auswahl:checked')).map(cb => cb.value);
+}
+
+function rubricaAuswahlGeaendert() {
+    const ids = rubricaAusgewaehlteIds();
+    const leiste = document.getElementById('sammel-leiste');
+    leiste.style.display = ids.length > 0 ? 'flex' : 'none';
+    document.getElementById('sammel-anzahl').textContent = ids.length + ' ausgewählt';
+    const alle = document.querySelectorAll('.kontakt-auswahl');
+    document.getElementById('alle-auswaehlen').checked = alle.length > 0 && ids.length === alle.length;
+}
+
+function rubricaAlleAuswaehlen(checkbox) {
+    document.querySelectorAll('.kontakt-auswahl').forEach(cb => cb.checked = checkbox.checked);
+    rubricaAuswahlGeaendert();
+}
+
+function rubricaAuswahlAufheben() {
+    document.querySelectorAll('.kontakt-auswahl').forEach(cb => cb.checked = false);
+    document.getElementById('alle-auswaehlen').checked = false;
+    rubricaAuswahlGeaendert();
+}
+
+function rubricaSammelBearbeiten() {
+    const ids = rubricaAusgewaehlteIds();
+    if (!ids.length) return;
+    const params = ids.map(id => 'ids=' + id).join('&');
+    const ordnerId = document.querySelector("input[name='ordner_id']").value || '';
+    fetch(`/kontakte/bulk-bearbeiten-flyover?${params}&ordner_id=${ordnerId}`)
+        .then(r => r.text())
+        .then(html => {
+            document.getElementById('kontakt-modal-inhalt').innerHTML = html;
+            rubricaModalOeffnen();
+        });
 }
 </script>
 {% endblock %}

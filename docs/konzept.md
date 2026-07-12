@@ -630,6 +630,44 @@ Session. Gesammeltes Wissen fuer naechstes Mal:
   Alle 72 Tests weiterhin gruen, live verifiziert (Sidebar + aktive Markierung pro Seite, alle bestehenden
   Funktionen/Klassen intakt).
 
+- **Sammel-Bearbeiten, Ordner-Kontext, geschlechtsneutrale Funktionen, Funktion-Combobox (2026-07-12):**
+  Vier Punkte aus einem Nutzer-Feedback-Batch:
+  - **Mehrfachauswahl + Sammel-Bearbeiten:** Checkbox je Zeile in `contacts_list.html` + "Alle auswaehlen"
+    in der Kopfzeile; bei Auswahl erscheint eine `.sammel-leiste` mit "Ausgewählte bearbeiten". Neue Route
+    `GET /kontakte/bulk-bearbeiten-flyover?ids=...` (`web/contacts.py`) berechnet je Scalar-Feld
+    (`FELDER_MEHRFACHBEARBEITUNG` = vorname/nachname/firma/rolle/kategorie/notizen), ob alle ausgewaehlten
+    Kontakte denselben Wert haben (vorausgefuellt) oder nicht ("Unterschiedliche Werte" als Platzhalter,
+    Feld bleibt leer + `{feld}__gemischt`-Hidden-Flag). `POST /kontakte/bulk-bearbeiten` wertet das Flag aus:
+    war ein Feld gemischt und wird leer abgeschickt, bleibt es je Kontakt unangetastet; war es NICHT
+    gemischt (auch wenn der gemeinsame Wert leer war) oder wurde explizit befuellt, gilt der neue Wert fuer
+    alle ausgewaehlten Kontakte. Telefonnummern/E-Mails/Adressen/URLs/Ordner bewusst ausgeklammert (kein
+    klares Gleich/Verschieden-Konzept bei unterschiedlicher Anzahl je Kontakt, ein Bulk-Replace ueber die
+    bestehende `update_kontakt()` waere hier destruktiv). Neue `db.queries.update_kontakt_felder()` fuer das
+    partielle Scalar-Update, neues Template `kontakt_bulk_bearbeiten_modal.html`.
+  - **Ordner-Kontext bleibt beim Speichern/Loeschen erhalten:** bisher sprang jeder Speichern/Loeschen-Vorgang
+    zurueck auf „Alle Kontakte", auch wenn man vorher in einem Ordner gefiltert hatte. Die Bearbeiten-Buttons
+    in `contacts_list.html` haengen jetzt `?ordner_id=...` an die Flyover-URL, das Formular traegt es als
+    Hidden-Feld `zurueck_ordner_id` durch die Runde, `_liste_url()` in `web/contacts.py` baut daraus die
+    Redirect-Ziel-URL (`/kontakte?ordner_id=X` statt `/kontakte`). Gleiches Muster fuer Loeschen.
+  - **FUNKTIONEN-Liste geschlechtsneutral:** alle Eintraege in `web/contacts.py::FUNKTIONEN` auf "/in"-Form
+    bzw. neutrale Kollektivbegriffe umgestellt (z. B. "Architekt" → "Architekt/in", "Bauherr/Kunde" →
+    "Bauherrschaft/Kundschaft").
+  - **Funktion-Feld als Combobox mit "Neuer Eintrag erstellen":** natives `<input list><datalist>` konnte
+    keine explizite "das gibt es noch nicht, neu anlegen"-Option zeigen. Neue geteilte Vanilla-JS-Komponente
+    `web/static/app.js` (`rubricaComboboxInput`/`rubricaComboboxWaehlen`/`rubricaComboboxBlur`), eingebunden
+    global ueber `base.html`; Optionen werden als JSON in `data-optionen` auf `.combobox` mitgegeben (ueber
+    einen neuen `tojson`-Jinja-Filter in `web/shared.py`, da FastAPIs `Jinja2Templates` anders als Flask
+    keinen eingebauten `tojson`-Filter registriert). Tippt man Text ohne Uebereinstimmung, erscheint
+    „<Eingabe>" als neuen Eintrag erstellen" als letzter Listeneintrag; Auswahl uebernimmt den Freitext
+    unveraendert. Listenelemente werden bewusst per DOM-API (`createElement`/`addEventListener`) statt per
+    interpolierten `innerHTML`-Strings aufgebaut, da Optionswerte beliebige Zeichen (Anfuehrungszeichen etc.)
+    enthalten koennen, die einen inline `onmousedown="..."`-Attribut-String gebrochen haetten. Eingesetzt in
+    `_kontakt_felder.html`, `_kontakt_bearbeiten_form.html` und dem neuen Bulk-Bearbeiten-Modal.
+  - 9 neue Tests (Mehrfachauswahl/Sammel-Bearbeiten, Ordner-Kontext, geschlechtsneutrale Liste,
+    `update_kontakt_felder`), alle 81 Tests gruen. Live gegen die echte Entwicklungsdatenbank verifiziert
+    (Combobox-Markup/-Optionen, Bulk-Flyover-Fragment mit "Unterschiedliche Werte", Hidden-Felder) — kein
+    Zugriff auf echte Kontaktdaten in dieser Zusammenfassung, nur Struktur-/Zaehl-Checks.
+
 Bekannte Einschränkung: Entwicklungsumgebung läuft unter Python 3.9 (Systemversion) statt der ursprünglich in Abschnitt 6 vermuteten 3.12 — FastAPI-Routenparameter deshalb mit `typing.Optional[int]` statt `int | None` (siehe `CLAUDE.md`). Dies betrifft nur die lokale Entwicklungsumgebung; das produktive `.pkg` bringt sein eigenes Python 3.13 mit und ist davon unabhängig.
 
 Nächste sinnvolle Schritte: Neues `.pkg` (Notion-Redesign + Archivio einzeln übernehmen/ablehnen + Ordner-

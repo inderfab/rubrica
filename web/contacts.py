@@ -1,6 +1,6 @@
-from typing import Optional
+from typing import List, Optional
 
-from fastapi import APIRouter, Request, Response
+from fastapi import APIRouter, Form, Query, Request, Response
 from fastapi.responses import RedirectResponse
 
 from db import queries
@@ -11,17 +11,24 @@ from web.shared import templates
 
 router = APIRouter()
 
-# Vordefinierte Funktionen (Fachrichtungen) fuer das Auswahlfeld. Freitext bleibt
-# moeglich (HTML-datalist) - die Liste ist nur Vorschlag, kein Zwang. Technisch im
-# bestehenden Feld kontakte.kategorie gespeichert (UI-Label "Funktion").
+# Vordefinierte Funktionen (Fachrichtungen) fuer das Auswahlfeld - geschlechtsneutral
+# (Swiss-uebliche "/in"-Schreibweise bzw. neutrale Kollektivbegriffe wie
+# "Bauherrschaft"). Freitext bleibt moeglich, die Liste ist nur Vorschlag, kein
+# Zwang. Technisch im bestehenden Feld kontakte.kategorie gespeichert (UI-Label
+# "Funktion").
 FUNKTIONEN = [
-    "Architekt", "Innenarchitekt", "Bauingenieur/Statik", "Bauleiter",
-    "Bauherr/Kunde", "Bauherrenvertreter", "Geologe", "Vermessung/Geometer",
-    "Sanitärplaner", "Lüftungsplaner", "Heizungsplaner", "Elektroplaner",
-    "Lichtplaner", "Türplaner", "Brandschutzplaner", "Bauphysik/Akustik",
-    "Landschaftsarchitekt", "Industrieplaner", "Unternehmer/Handwerker",
-    "Behörde/Amt", "Lieferant", "intern",
+    "Architekt/in", "Innenarchitekt/in", "Bauingenieur/in (Statik)", "Bauleiter/in",
+    "Bauherrschaft/Kundschaft", "Bauherrenvertretung", "Geologe/in", "Vermessung/Geometer/in",
+    "Sanitärplaner/in", "Lüftungsplaner/in", "Heizungsplaner/in", "Elektroplaner/in",
+    "Lichtplaner/in", "Türplaner/in", "Brandschutzplaner/in", "Bauphysik/Akustik",
+    "Landschaftsarchitekt/in", "Industrieplaner/in", "Unternehmer/in/Handwerker/in",
+    "Behörde/Amt", "Lieferant/in", "intern",
 ]
+
+# Scalar-Felder, die per Mehrfachauswahl gemeinsam bearbeitet werden koennen -
+# Telefonnummern/E-Mails/Adressen/URLs/Ordner bleiben bewusst aussen vor (kein
+# klares "gleich oder verschieden"-Konzept bei unterschiedlicher Anzahl je Kontakt).
+FELDER_MEHRFACHBEARBEITUNG = ["vorname", "nachname", "firma", "rolle", "kategorie", "notizen"]
 
 
 def _funktion_optionen(conn) -> list:
@@ -163,8 +170,16 @@ async def kontakt_neu_speichern(request: Request):
     return RedirectResponse(url="/kontakte", status_code=303)
 
 
+def _liste_url(zurueck_ordner_id: str) -> str:
+    """Baut die URL zur Kontaktliste, die zu einem zuvor aktiven Ordner-Filter
+    zurueckkehrt statt immer auf "Alle Kontakte" zu springen."""
+    if zurueck_ordner_id:
+        return f"/kontakte?ordner_id={zurueck_ordner_id}"
+    return "/kontakte"
+
+
 @router.get("/kontakte/{kontakt_id}/bearbeiten")
-def kontakt_bearbeiten_form(request: Request, kontakt_id: int):
+def kontakt_bearbeiten_form(request: Request, kontakt_id: int, ordner_id: str = ""):
     conn = get_connection()
     try:
         kontakt = queries.get_kontakt(conn, kontakt_id)
@@ -175,11 +190,12 @@ def kontakt_bearbeiten_form(request: Request, kontakt_id: int):
     return templates.TemplateResponse("contact_form.html", {
         "request": request, "kontakt": kontakt, "ordner": ordner, "funktionen": funktionen,
         "action": f"/kontakte/{kontakt_id}/bearbeiten", "modal": False,
+        "zurueck_ordner_id": ordner_id,
     })
 
 
 @router.get("/kontakte/{kontakt_id}/bearbeiten-flyover")
-def kontakt_bearbeiten_flyover(request: Request, kontakt_id: int):
+def kontakt_bearbeiten_flyover(request: Request, kontakt_id: int, ordner_id: str = ""):
     """Wie kontakt_bearbeiten_form, liefert aber nur das Formular-Fragment fuer
     den Flyover (htmx laedt es in ein Overlay statt die Seite zu wechseln)."""
     conn = get_connection()
@@ -192,6 +208,7 @@ def kontakt_bearbeiten_flyover(request: Request, kontakt_id: int):
     return templates.TemplateResponse("kontakt_bearbeiten_modal.html", {
         "request": request, "kontakt": kontakt, "ordner": ordner, "funktionen": funktionen,
         "action": f"/kontakte/{kontakt_id}/bearbeiten", "modal": True,
+        "zurueck_ordner_id": ordner_id,
     })
 
 
@@ -200,6 +217,7 @@ async def kontakt_bearbeiten_speichern(request: Request, kontakt_id: int):
     form = await request.form()
     daten = _parse_kontakt_form(form)
     ordner_ids = [int(o) for o in form.getlist("ordner_ids")]
+    zurueck_ordner_id = form.get("zurueck_ordner_id", "").strip()
     conn = get_connection()
     try:
         alte_ordner_ids = {o["id"] for o in queries.get_kontakt(conn, kontakt_id)["projekte"]}
@@ -210,11 +228,11 @@ async def kontakt_bearbeiten_speichern(request: Request, kontakt_id: int):
             radicale.push_projekt(conn, oid)
     finally:
         conn.close()
-    return RedirectResponse(url="/kontakte", status_code=303)
+    return RedirectResponse(url=_liste_url(zurueck_ordner_id), status_code=303)
 
 
 @router.post("/kontakte/{kontakt_id}/loeschen")
-def kontakt_loeschen(kontakt_id: int):
+def kontakt_loeschen(kontakt_id: int, zurueck_ordner_id: str = Form("")):
     conn = get_connection()
     try:
         betroffene_ordner_ids = {o["id"] for o in queries.get_kontakt(conn, kontakt_id)["projekte"]}
@@ -224,4 +242,62 @@ def kontakt_loeschen(kontakt_id: int):
             radicale.push_projekt(conn, oid)
     finally:
         conn.close()
-    return RedirectResponse(url="/kontakte", status_code=303)
+    return RedirectResponse(url=_liste_url(zurueck_ordner_id), status_code=303)
+
+
+@router.get("/kontakte/bulk-bearbeiten-flyover")
+def kontakte_bulk_bearbeiten_flyover(request: Request, ids: List[int] = Query(...), ordner_id: str = ""):
+    """Sammel-Bearbeiten fuer mehrere ausgewaehlte Kontakte: fuer jedes Scalar-Feld
+    wird geprueft, ob alle ausgewaehlten Kontakte denselben Wert haben (vorausgefuellt,
+    editierbar) oder ob sich die Werte unterscheiden ("Unterschiedliche Werte" -
+    Feld bleibt leer, ein __gemischt-Flag merkt sich das fuer die Auswertung beim
+    Speichern: nur explizit ausgefuellte Felder werden dann fuer alle uebernommen)."""
+    conn = get_connection()
+    try:
+        kontakte = [queries.get_kontakt(conn, kid) for kid in ids]
+        ordner = queries.list_projekte(conn)
+        funktionen = _funktion_optionen(conn)
+    finally:
+        conn.close()
+
+    felder = {}
+    for feld in FELDER_MEHRFACHBEARBEITUNG:
+        werte = {k[feld] for k in kontakte}
+        if len(werte) == 1:
+            felder[feld] = {"wert": werte.pop(), "gemischt": False}
+        else:
+            felder[feld] = {"wert": "", "gemischt": True}
+
+    return templates.TemplateResponse("kontakt_bulk_bearbeiten_modal.html", {
+        "request": request, "kontakte": kontakte, "ids": ids, "felder": felder,
+        "ordner": ordner, "funktionen": funktionen, "zurueck_ordner_id": ordner_id,
+    })
+
+
+@router.post("/kontakte/bulk-bearbeiten")
+async def kontakte_bulk_bearbeiten_speichern(request: Request):
+    form = await request.form()
+    ids = [int(i) for i in form.getlist("ids")]
+    zurueck_ordner_id = form.get("zurueck_ordner_id", "").strip()
+
+    felder = {}
+    for feld in FELDER_MEHRFACHBEARBEITUNG:
+        war_gemischt = form.get(f"{feld}__gemischt", "") == "1"
+        wert = form.get(feld, "").strip()
+        if war_gemischt and not wert:
+            continue  # unangetastetes "Unterschiedliche Werte"-Feld: nichts aendern
+        felder[feld] = wert
+
+    conn = get_connection()
+    try:
+        betroffene_ordner_ids = set()
+        for kontakt_id in ids:
+            if felder:
+                queries.update_kontakt_felder(conn, kontakt_id, felder)
+            betroffene_ordner_ids |= {o["id"] for o in queries.get_kontakt(conn, kontakt_id)["projekte"]}
+            radicale.push_kontakt(conn, kontakt_id)
+        for oid in betroffene_ordner_ids:
+            radicale.push_projekt(conn, oid)
+    finally:
+        conn.close()
+    return RedirectResponse(url=_liste_url(zurueck_ordner_id), status_code=303)

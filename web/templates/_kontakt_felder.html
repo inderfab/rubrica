@@ -21,8 +21,13 @@
     </div>
     <div class="field">
         <label>Funktion</label>
-        <input type="text" name="kategorie" list="funktion-liste" placeholder="z. B. Bauingenieur/Statik"
-               value="{{ kontakt.kategorie if kontakt else '' }}">
+        <div class="combobox" data-optionen='{{ funktionen|tojson }}'>
+            <input type="text" class="combobox-input" name="kategorie" autocomplete="off"
+                   placeholder="z. B. Bauingenieur/in (Statik)" value="{{ kontakt.kategorie if kontakt else '' }}"
+                   oninput="rubricaComboboxInput(event)" onfocus="rubricaComboboxInput(event)"
+                   onblur="rubricaComboboxBlur(event)">
+            <ul class="combobox-liste"></ul>
+        </div>
     </div>
     <div class="field">
         <label>Rolle / Titel <span style="color:#86868b">(optional)</span></label>
@@ -30,10 +35,6 @@
                placeholder="z. B. Geschäftsführer">
     </div>
 </div>
-
-<datalist id="funktion-liste">
-    {% for f in funktionen %}<option value="{{ f }}">{% endfor %}
-</datalist>
 
 <fieldset>
     <legend>Telefon</legend>
