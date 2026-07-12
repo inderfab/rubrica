@@ -265,6 +265,11 @@ def delete_projekt(conn: sqlite3.Connection, projekt_id: int) -> None:
         conn.execute("DELETE FROM projekte WHERE id = ?", (projekt_id,))
 
 
+def rename_projekt(conn: sqlite3.Connection, projekt_id: int, neuer_name: str) -> None:
+    with conn:
+        conn.execute("UPDATE projekte SET name = ? WHERE id = ?", (neuer_name, projekt_id))
+
+
 def list_vorschlaege(conn: sqlite3.Connection, status: str = "offen") -> list[dict]:
     rows = conn.execute(
         "SELECT * FROM vorschlaege WHERE status = ? ORDER BY created_at", (status,)

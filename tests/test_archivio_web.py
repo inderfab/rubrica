@@ -58,3 +58,30 @@ def test_uebernehmen_erzeugt_keine_dubletten_bei_zweitem_lauf(tmp_db, archivio_d
     client.post("/review/archivio-uebernehmen", follow_redirects=False)
     client.post("/review/archivio-uebernehmen", follow_redirects=False)
     assert len(queries.list_vorschlaege(tmp_db, status="offen")) == 1
+
+
+def test_einzeln_uebernehmen_erzeugt_nur_diesen_vorschlag(tmp_db, archivio_db, monkeypatch):
+    monkeypatch.setattr(settings, "_settings", {"archivio": {"db_path": archivio_db, "min_mails": 2}})
+    r = TestClient(app).post("/review/archivio-uebernehmen-einzeln",
+                              data={"email": "anna@beispiel.ch"}, follow_redirects=False)
+    assert r.status_code == 303
+    vorschlaege = queries.list_vorschlaege(tmp_db, status="offen")
+    assert len(vorschlaege) == 1
+    assert vorschlaege[0]["rohdaten"]["emails"][0]["email"] == "anna@beispiel.ch"
+
+
+def test_ablehnen_verhindert_erneutes_erscheinen(tmp_db, archivio_db, monkeypatch):
+    monkeypatch.setattr(settings, "_settings", {"archivio": {"db_path": archivio_db, "min_mails": 2}})
+    client = TestClient(app)
+    r = client.post("/review/archivio-ablehnen", data={"email": "anna@beispiel.ch"}, follow_redirects=False)
+    assert r.status_code == 303
+
+    # abgelehnter Vorschlag existiert (Status abgelehnt), taucht aber in der
+    # offenen Review-Queue nicht auf
+    assert len(queries.list_vorschlaege(tmp_db, status="offen")) == 0
+    assert len(queries.list_vorschlaege(tmp_db, status="abgelehnt")) == 1
+
+    # und erscheint bei einem erneuten Scan nicht wieder als Kandidat
+    r2 = client.get("/review/archivio-vorschau")
+    assert "anna@beispiel.ch" not in r2.text
+    assert "0</strong> Vorschlag" in r2.text

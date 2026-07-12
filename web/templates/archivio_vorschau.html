@@ -20,23 +20,35 @@
 {% if kandidaten %}
 <table>
     <thead>
-        <tr><th>Name</th><th>Firma</th><th>Telefon</th><th>E-Mail</th><th>Anzahl Mails</th></tr>
+        <tr><th>Name</th><th>Firma</th><th>Telefon</th><th>E-Mail</th><th>Anzahl Mails</th><th></th></tr>
     </thead>
     <tbody>
         {% for k in kandidaten %}
+        {% set mail = k.emails[0].email %}
         <tr>
             <td>{{ k.vorname }} {{ k.nachname }}</td>
             <td>{{ k.firma }}</td>
             <td>{% for t in k.telefonnummern %}{{ t.nummer }}{% if not loop.last %}, {% endif %}{% endfor %}</td>
-            <td>{% for e in k.emails %}{{ e.email }}{% if not loop.last %}, {% endif %}{% endfor %}</td>
+            <td>{{ mail }}</td>
             <td>{{ k.anzahl_mails }}</td>
+            <td class="actions">
+                <form method="post" action="/review/archivio-uebernehmen-einzeln">
+                    <input type="hidden" name="email" value="{{ mail }}">
+                    <button type="submit">Übernehmen</button>
+                </form>
+                <form method="post" action="/review/archivio-ablehnen">
+                    <input type="hidden" name="email" value="{{ mail }}">
+                    <button type="submit" class="secondary">Ablehnen</button>
+                </form>
+            </td>
         </tr>
         {% endfor %}
     </tbody>
 </table>
 
-<form method="post" action="/review/archivio-uebernehmen" style="margin-top:1rem">
-    <button type="submit">Als Vorschläge in die Review-Queue übernehmen</button>
+<form method="post" action="/review/archivio-uebernehmen" style="margin-top:1rem"
+      onsubmit="return confirm('Wirklich ALLE {{ kandidaten|length }} angezeigten Vorschläge übernehmen?')">
+    <button type="submit" class="secondary">Alle übernehmen</button>
 </form>
 {% else %}
 <p class="empty">Keine Kandidaten gefunden (bei so wenig gescannten E-Mails ist das normal).</p>

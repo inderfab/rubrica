@@ -573,12 +573,50 @@ die Adoption abwürgen). Später: sicherer Remote-Zugriff für On-Site-Erfassung
       0 Kandidaten (vorher 2, beide waren unvollstaendig — jetzt korrekt durch den strengeren Filter
       ausgeschlossen).
 
+- **Archivio-Vorschau: einzeln übernehmen/ablehnen (2026-07-12):** Nutzer-Feedback — bisher gab es nur
+  "alle übernehmen". Neue Routen `POST /review/archivio-uebernehmen-einzeln` und
+  `POST /review/archivio-ablehnen` (je per E-Mail-Adresse identifiziert, die durch die strenge
+  Vollstaendigkeitspruefung immer vorhanden ist). Ablehnen legt einen Vorschlag mit Status `abgelehnt` an
+  (kein neuer Mechanismus noetig — nutzt die bestehende `vorschlaege`-Tabelle); `archivio_bridge`s
+  Dublettenpruefung wurde erweitert, sodass **jeder** bereits per Archivio-Vorschau entschiedene Kandidat
+  (uebernommen ODER abgelehnt) nicht wieder auftaucht, nicht nur bereits bestehende Kontakte. "Alle
+  übernehmen" bleibt zusaetzlich als Bulk-Option bestehen. 6 neue Tests.
+- **Ordner: Bearbeiten-Button (2026-07-12):** `/ordner` hatte keine Umbenennen-Funktion. Neue Route
+  `POST /ordner/{id}/bearbeiten` (`db.queries.rename_projekt`) + inline editierbarer Name in der Liste
+  (JS-Toggle zwischen Anzeige und Eingabefeld, kein Flyover noetig fuer ein einzelnes Feld). 3 Tests.
+- **Ordner-Checkliste im Kontakt-Formular als vertikale Liste:** war ein zeilenweise umbrechendes Grid,
+  bei 30+ Ordnern unuebersichtlich (Nutzer-Feedback, Screenshot). Jetzt eine scrollbare, alphabetisch
+  sortierte vertikale Liste (`.ordner-checkliste`, max-height 220px) — in `_kontakt_bearbeiten_form.html`
+  und `_kontakt_felder.html` (Neu-Anlegen) gleichermassen.
+
+**Offener Punkt (zurueckgestellt, 2026-07-12): Archivio-Mailscanner soll Signatur separat speichern.**
+Wurde ausfuehrlich mit dem Nutzer besprochen, aber bewusst NICHT von mir umgesetzt — der Nutzer aendert
+Archivio (anderes, produktiv laufendes Projekt unter `/Users/fi/archivio`) selbst, separat von dieser
+Session. Gesammeltes Wissen fuer naechstes Mal:
+  - **Ursache** (siehe oben): `scanner/mail_scanner.py::_strip_signature` schneidet bei IMAP-gescannten
+    Mails alles nach der Grussformel ab, bevor der Text in `document_content.content` landet. Der Rohtext
+    wird nirgends aufbewahrt (`build_email_record` haelt `raw_text` nur transient im Speicher,
+    `save_mail_to_db` persistiert ausschliesslich `cleaned_text`).
+  - **Vom Nutzer vorgeschlagene Loesungsansaetze** (beide in Archivio, nicht Rubrica):
+    (a) **Empfohlen:** die abgeschnittene Signatur zusaetzlich SEPARAT speichern (neue Spalte/Tabelle in
+    Archivios Schema, z. B. `document_content.signature` oder eigene Tabelle) — `content` bleibt fuer
+    Archivios eigene Volltextsuche wie bisher signaturbereinigt (kein Rauschen durch wiederkehrende
+    Signaturen/Disclaimer), Rubrica koennte die separate Signatur-Spalte gezielt lesen.
+    (b) **Einfacher, aber mit Trade-off:** Signatur gar nicht mehr abschneiden, `content` enthaelt
+    kuenftig die volle Mail — weniger Aenderungsaufwand, aber Archivios eigene Suche bekommt mehr
+    Rauschen (Nutzer: "hinnehmbar").
+  - **Reichweite:** wirkt so oder so nur auf KUENFTIG gescannte Mails. Die bereits gescannten 156 Mails
+    (nur in der lokalen Mac-Studio-Dev-Instanz, nicht die eigentliche Produktivinstanz auf dem iMac) bleiben
+    mit abgeschnittener Signatur — Rohtext ist fuer die bereits verarbeiteten IMAP-Mails nicht mehr
+    rekonstruierbar. Der Nutzer wird das Postfach auf dem iMac (Produktivinstanz) zu gegebener Zeit selbst
+    neu scannen lassen, nachdem die Archivio-Aenderung dort umgesetzt ist.
+  - Sobald das erledigt ist: `archivio_bridge/anbindung.py` muss ggf. angepasst werden, um die neue
+    Signatur-Quelle zu lesen (falls Archivio Option (a) waehlt, eine zusaetzliche Spalte in der SQL-Abfrage
+    beruecksichtigen statt `_letzte_zeilen(dc.content)`).
+
 Bekannte Einschränkung: Entwicklungsumgebung läuft unter Python 3.9 (Systemversion) statt der ursprünglich in Abschnitt 6 vermuteten 3.12 — FastAPI-Routenparameter deshalb mit `typing.Optional[int]` statt `int | None` (siehe `CLAUDE.md`). Dies betrifft nur die lokale Entwicklungsumgebung; das produktive `.pkg` bringt sein eigenes Python 3.13 mit und ist davon unabhängig.
 
-Nächste sinnvolle Schritte: Neues `.pkg` (Bearbeiten-Flyover + Archivio-Qualitaetsfix + Menubar-App +
-Einstellungsseite + reportlab) auf dem iMac installieren. Auf dem iMac unter „Einstellungen" `archivio.db_path`
-auf `/Users/pas/Library/Application Support/Archivio/archivio.db` setzen, falls Archivio dort auch aktiv
-genutzt werden soll. Danach: mehr Postfächer/Projekte in Archivio scannen lassen (idealerweise auch aus dem
-Dateisystem statt nur IMAP, da dort die Signatur nicht abgeschnitten wird), um die Archivio-Vorschau
-ertragreicher zu machen.
+Nächste sinnvolle Schritte: Notion-aehnliches visuelles Redesign (siehe naechster Abschnitt, in Arbeit) und
+Behebung des gemeldeten Layout-Versatzes (Nav-Balken vs. zentrierter Content). Danach: neues `.pkg` auf dem
+iMac installieren; unter „Einstellungen" `archivio.db_path` setzen, falls Archivio dort genutzt werden soll.
 (z. B. einzelne Kandidaten abwaehlen koennen, statt alles-oder-nichts).
