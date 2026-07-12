@@ -26,6 +26,7 @@ cp requirements.txt         "$APP/Contents/Resources/"
 cp config.yaml.example      "$APP/Contents/Resources/"
 cp VERSION                  "$APP/Contents/Resources/"
 cp scripts/radicale_set_password.py "$APP/Contents/Resources/"
+cp scripts/generate-cert.sh         "$APP/Contents/Resources/"
 
 # ── Gemeinsame venv-Bootstrap-Logik (von beiden Launchern eingebunden) ──────
 cat > "$APP/Contents/Resources/bootstrap_venv.sh" <<'BOOTSTRAP'
@@ -109,12 +110,11 @@ mkdir -p "$DATA_DIR/radicale"
 
 TLS_DIR="$DATA_DIR/radicale-tls"
 if [ ! -f "$TLS_DIR/cert.pem" ]; then
-  mkdir -p "$TLS_DIR"
-  /usr/bin/openssl req -x509 -newkey rsa:2048 -nodes \
-    -keyout "$TLS_DIR/key.pem" -out "$TLS_DIR/cert.pem" \
-    -days 3650 -subj "/CN=$HOSTNAME_LOCAL" \
-    -addext "subjectAltName=DNS:$HOSTNAME_LOCAL,DNS:localhost,IP:127.0.0.1" 2>/dev/null
-  echo "$(date): Selbstsigniertes Zertifikat fuer $HOSTNAME_LOCAL erstellt"
+  # Erzeugt eine lokale CA + Apple-konformes Leaf-Zertifikat. Normalerweise hat
+  # das bereits das Postinstall-Skript erledigt (inkl. CA-Vertrauensstellung);
+  # dies ist der Fallback fuer einen manuellen App-Start ohne .pkg-Installation.
+  /bin/bash "$RESOURCES/generate-cert.sh" "$TLS_DIR" "$HOSTNAME_LOCAL"
+  echo "$(date): TLS-Zertifikat fuer $HOSTNAME_LOCAL erstellt (CA ggf. noch als vertrauenswuerdig zu markieren)"
 fi
 
 HTPASSWD_PATH="$DATA_DIR/radicale-htpasswd"
@@ -199,6 +199,25 @@ CURRENT_USER=$(stat -f "%Su" /dev/console 2>/dev/null || echo "")
 [ -z "$CURRENT_USER" ] || [ "$CURRENT_USER" = "root" ] && exit 0
 
 xattr -cr "/Applications/Rubrica Server.app" 2>/dev/null || true
+
+# ── TLS-Zertifikat erzeugen und lokale CA systemweit vertrauen ────────────────
+# Muss VOR dem Start der launchd-Dienste geschehen, damit Radicale das fertige
+# Zertifikat vorfindet. Erzeugung laeuft als Nutzer (Dateien gehoeren dann dem
+# Nutzer, Radicale kann key.pem lesen); die CA-Vertrauensstellung laeuft als root
+# und braucht daher keinen interaktiven Dialog. Ohne diesen Schritt lehnt der
+# Kontakte-Sync-Daemon von macOS die Verbindung still ab (siehe docs/konzept.md 9).
+APP_RES="/Applications/Rubrica Server.app/Contents/Resources"
+DATA_DIR="/Users/$CURRENT_USER/Library/Application Support/Rubrica"
+TLS_DIR="$DATA_DIR/radicale-tls"
+HOSTNAME_LOCAL="$(sudo -u "$CURRENT_USER" scutil --get LocalHostName 2>/dev/null || hostname).local"
+if [ ! -f "$TLS_DIR/cert.pem" ]; then
+  sudo -u "$CURRENT_USER" mkdir -p "$TLS_DIR"
+  sudo -u "$CURRENT_USER" /bin/bash "$APP_RES/generate-cert.sh" "$TLS_DIR" "$HOSTNAME_LOCAL"
+fi
+if [ -f "$TLS_DIR/ca-cert.pem" ]; then
+  security add-trusted-cert -d -r trustRoot -p ssl \
+    -k /Library/Keychains/System.keychain "$TLS_DIR/ca-cert.pem" 2>/dev/null || true
+fi
 
 USER_UID=$(id -u "$CURRENT_USER")
 LA_DIR="/Users/$CURRENT_USER/Library/LaunchAgents"
