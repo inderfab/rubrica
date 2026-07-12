@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Archivio-Vorschau – Rubrica{% endblock %}
+{% block content %}
+<h1>Archivio-Vorschau</h1>
+<p class="empty">
+    Zeigt Kontaktvorschläge aus bereits von Archivio erfassten E-Mail-Signaturen –
+    <strong>rein lesend</strong>, es wird noch nichts gespeichert. Nur Absender mit mehreren
+    E-Mails und einer Signatur mit Telefonnummer <em>und</em> Firma werden vorgeschlagen
+    (bewusst streng, um die Kontaktliste nicht zu überschwemmen). Bereits vorhandene
+    Kontakte werden automatisch übersprungen.
+</p>
+
+{% if fehler %}
+<p class="fehler">{{ fehler }}</p>
+{% else %}
+<p><strong>{{ kandidaten|length }}</strong> Vorschlag/Vorschläge gefunden.</p>
+
+{% if kandidaten %}
+<table>
+    <thead>
+        <tr><th>Name</th><th>Firma</th><th>Telefon</th><th>E-Mail</th><th>Anzahl Mails</th></tr>
+    </thead>
+    <tbody>
+        {% for k in kandidaten %}
+        <tr>
+            <td>{{ k.vorname }} {{ k.nachname }}</td>
+            <td>{{ k.firma }}</td>
+            <td>{% for t in k.telefonnummern %}{{ t.nummer }}{% if not loop.last %}, {% endif %}{% endfor %}</td>
+            <td>{% for e in k.emails %}{{ e.email }}{% if not loop.last %}, {% endif %}{% endfor %}</td>
+            <td>{{ k.anzahl_mails }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<form method="post" action="/review/archivio-uebernehmen" style="margin-top:1rem">
+    <button type="submit">Als Vorschläge in die Review-Queue übernehmen</button>
+</form>
+{% else %}
+<p class="empty">Keine Kandidaten gefunden (bei so wenig gescannten E-Mails ist das normal).</p>
+{% endif %}
+{% endif %}
+{% endblock %}

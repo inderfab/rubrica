@@ -458,9 +458,45 @@ grösserer Schritt). Bewusst *nicht* jetzt: Notion-Pendenzen-Kopplung (eher umst
 später dünne Einbahn-Brücke Kontakte→Notion, wenn Schmerz bewiesen) und schwere Rechte-Bürokratie (Freigabe-Gate
 vor Erfassung würde die Adoption abwürgen). Später: sicherer Remote-Zugriff für On-Site-Erfassung.
 
+- **`.pkg`-Rebuild + Testinstall auf dem Mac Studio (2026-07-12):** Neues `.pkg` mit `reportlab` gebaut und
+  probeweise installiert (Dienste danach bewusst wieder gestoppt — der iMac bleibt die einzige aktive
+  Instanz). Dabei **Bug gefunden + behoben:** `scripts/build-pkg.sh` kopierte das `export/`-Verzeichnis nie
+  ins App-Bundle (`Contents/Resources`), obwohl `web/export.py` es importiert — Symptom: Server-Dienst
+  startete nicht (`ModuleNotFoundError: No module named 'export'`, Exit 1). Nach Fix neu gebaut und
+  vollständig end-to-end gegen die echte `.pkg`-Installation verifiziert: Export (PDF/CSV/vCard), Signatur-
+  Parsen und Kontakt-Neuanlage funktionieren alle korrekt mit dem eingebetteten Python; Produktions-DB
+  danach unverändert (Testkontakt angelegt und wieder gelöscht, 1503→1503).
+- **Archivio-Anbindung, erste Stufe (2026-07-12):** Neues Modul `archivio_bridge/anbindung.py` (bewusst
+  nicht `archivio` genannt, um Verwechslung mit dem Referenzprojekt `/Users/fi/archivio` zu vermeiden) liest
+  read-only aus Archivios SQLite-DB (Tabellen `documents`/`document_content`/`mails`, bereits text-
+  extrahierte E-Mails) und erzeugt daraus Kandidaten für die Review-Queue. Strenger Vorfilter wie in der
+  strategischen Richtung festgelegt: nur Absender mit ≥ `archivio.min_mails` E-Mails (echte Korrespondenz),
+  nur wenn die per `importer/signatur.py` geparste Signatur **sowohl Telefonnummer als auch Firma** enthält,
+  bereits vorhandene E-Mail-Adressen werden übersprungen. Schreibt selbst nichts — neue Route
+  `/review/archivio-vorschau` (GET, reine Vorschau ohne DB-Schreibzugriff) + `/review/archivio-uebernehmen`
+  (POST, erzeugt `vorschlaege` mit `quelle='archivio'`, dublettensicher gegenüber bereits offenen Archivio-
+  Vorschlägen). Konfiguration über `archivio.db_path`/`archivio.min_mails` in `config.yaml` (leer = aus).
+  9 Tests (5 Modul-Ebene mit synthetischer Archivio-Test-DB, 4 Web-Ebene inkl. Dubletten-Schutz).
+  **Gegen echte Daten verifiziert** (Projekt `215_Flurhofstrasse`, 156 bereits gescannte E-Mails, 17
+  Absender, 9 mit ≥2 Mails): **2 valide Kandidaten** gefunden, beide mit Name/Firma/Telefon/Mail, aus
+  echter mehrfacher Korrespondenz (5 bzw. 26 Mails) — Verifikation bewusst nur mit aggregierten
+  Kennzahlen (Feld vorhanden ja/nein, Längen, Anzahl), nie mit echtem Klartext im Chat/Terminal-Output.
+  Kleine Fundgrösse liegt am Datenbestand: bisher ist nur ein einziges Projekt-Postfach in Archivio
+  gescannt (`mail_scan_config.active=1` bei nur 3 von 59 Ordnern) — mehr Ertrag braucht mehr gescannte
+  Postfächer in Archivio selbst (liegt ausserhalb von Rubrica).
+
+**Strategische Richtung (mit Nutzer abgestimmt, 2026-07-12):** Kernproblem ist *Wissenszentralisierung* —
+Kontakte werden nicht erfasst, darum kennt z. B. die Geschäftsleitung Ansprechpartner nicht. Zwei Hebel:
+(1) reibungslose *aktive* Erfassung (Web-Formular + Signatur-Einfügen, umgesetzt) und (2) *passive* Erfassung
+via Archivio (E-Mail-Signaturen → **gefilterte Vorschläge** in die Review-Queue, umgesetzt siehe oben;
+hohe Präzision statt Vollständigkeit, um Explosion der Kontaktzahl zu vermeiden). Bewusst *nicht* jetzt:
+Notion-Pendenzen-Kopplung (eher umständlich als hilfreich; höchstens später dünne Einbahn-Brücke
+Kontakte→Notion, wenn Schmerz bewiesen) und schwere Rechte-Bürokratie (Freigabe-Gate vor Erfassung würde
+die Adoption abwürgen). Später: sicherer Remote-Zugriff für On-Site-Erfassung.
+
 Bekannte Einschränkung: Entwicklungsumgebung läuft unter Python 3.9 (Systemversion) statt der ursprünglich in Abschnitt 6 vermuteten 3.12 — FastAPI-Routenparameter deshalb mit `typing.Optional[int]` statt `int | None` (siehe `CLAUDE.md`). Dies betrifft nur die lokale Entwicklungsumgebung; das produktive `.pkg` bringt sein eigenes Python 3.13 mit und ist davon unabhängig.
 
-Nächste sinnvolle Schritte: `.pkg` mit den neuen Abhängigkeiten (**reportlab**) neu bauen und auf dem iMac
-ausrollen — der Export **und** die Signatur-Erfassung funktionieren in Produktion erst nach diesem Rebuild
-(reportlab fehlt sonst; die Signatur-Erfassung selbst hat keine neue Abhängigkeit, läuft also auch ohne, aber
-das gemeinsame Ausrollen ist sauberer). Danach: Archivio-Anbindung als gefilterte Vorschläge (Prio 4).
+Nächste sinnvolle Schritte: Neues `.pkg` (mit reportlab-Fix + Archivio-Anbindung) auf dem iMac installieren.
+Danach: mehr Postfächer/Projekte in Archivio scannen lassen, um die Archivio-Vorschau ertragreicher zu
+machen; UI-Komfort für die Archivio-Vorschau ausbauen (z. B. einzelne Kandidaten abwählen können, statt
+alles-oder-nichts).
