@@ -95,13 +95,15 @@
 
 <fieldset>
     <legend>Ordner (Projekte)</legend>
-    {% for o in ordner %}
-    <label style="display:inline-block; margin-right: 1rem;">
-        <input type="checkbox" name="ordner_ids" value="{{ o.id }}"
-            {% if o.id in ausgewaehlte_ordner %}checked{% endif %}>
-        {{ o.name }}
-    </label>
-    {% endfor %}
+    <div class="ordner-checkliste">
+        {% for o in ordner %}
+        <label>
+            <input type="checkbox" name="ordner_ids" value="{{ o.id }}"
+                {% if o.id in ausgewaehlte_ordner %}checked{% endif %}>
+            {{ o.name }}
+        </label>
+        {% endfor %}
+    </div>
     {% if not ordner %}<p class="empty">Noch keine Ordner angelegt.</p>{% endif %}
 </fieldset>
 

@@ -29,6 +29,7 @@ in Rubrica behebbar (liegt in Archivios eigener Pipeline). Gegenmassnahmen hier:
 """
 from __future__ import annotations
 
+import json
 import re
 import sqlite3
 
@@ -59,7 +60,9 @@ def _ist_vollstaendig(daten: dict) -> bool:
 
 class _BestehenderBestand:
     """Vorberechnete Indizes des bestehenden Kontaktbestands fuer die
-    Dublettenpruefung (E-Mail, Name, Telefonnummer)."""
+    Dublettenpruefung (E-Mail, Name, Telefonnummer) - UND bereits per Archivio-
+    Vorschau entschiedene Vorschlaege (egal ob uebernommen oder abgelehnt), damit
+    einmal abgelehnte Kandidaten nicht erneut auftauchen."""
 
     def __init__(self, conn: sqlite3.Connection):
         self.mails = {r["email"].lower() for r in conn.execute("SELECT email FROM emails")}
@@ -71,6 +74,14 @@ class _BestehenderBestand:
         self.telefone = {
             _normalisiere_telefon(r["nummer"]) for r in conn.execute("SELECT nummer FROM telefonnummern")
         }
+        for row in conn.execute("SELECT rohdaten FROM vorschlaege WHERE quelle = 'archivio'"):
+            try:
+                rohdaten = json.loads(row["rohdaten"])
+            except (TypeError, ValueError):
+                continue
+            for e in rohdaten.get("emails", []):
+                if e.get("email"):
+                    self.mails.add(e["email"].lower())
 
     def ist_dublette(self, daten: dict) -> bool:
         mail_adressen = {e["email"].lower() for e in daten["emails"]}

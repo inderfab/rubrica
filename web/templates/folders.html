@@ -14,9 +14,21 @@
     <tbody>
         {% for o in ordner %}
         <tr>
-            <td><a href="/kontakte?ordner_id={{ o.id }}">{{ o.name }}</a></td>
-            <td>{{ o.anzahl_kontakte }}</td>
             <td>
+                <span id="ordner-anzeige-{{ o.id }}">
+                    <a href="/kontakte?ordner_id={{ o.id }}">{{ o.name }}</a>
+                </span>
+                <form method="post" action="/ordner/{{ o.id }}/bearbeiten"
+                      id="ordner-bearbeiten-{{ o.id }}" class="tel-row" style="display:none">
+                    <input type="text" name="name" value="{{ o.name }}" required>
+                    <button type="submit">Speichern</button>
+                    <button type="button" class="secondary"
+                            onclick="ordnerBearbeitenAbbrechen({{ o.id }})">Abbrechen</button>
+                </form>
+            </td>
+            <td>{{ o.anzahl_kontakte }}</td>
+            <td class="actions">
+                <button type="button" class="secondary" onclick="ordnerBearbeitenStarten({{ o.id }})">Bearbeiten</button>
                 <form method="post" action="/ordner/{{ o.id }}/loeschen" onsubmit="return confirm('Ordner wirklich löschen?')">
                     <button type="submit" class="danger">Löschen</button>
                 </form>
@@ -28,4 +40,15 @@
 {% else %}
 <p class="empty">Noch keine Ordner angelegt.</p>
 {% endif %}
+
+<script>
+function ordnerBearbeitenStarten(id) {
+    document.getElementById('ordner-anzeige-' + id).style.display = 'none';
+    document.getElementById('ordner-bearbeiten-' + id).style.display = 'flex';
+}
+function ordnerBearbeitenAbbrechen(id) {
+    document.getElementById('ordner-bearbeiten-' + id).style.display = 'none';
+    document.getElementById('ordner-anzeige-' + id).style.display = 'inline';
+}
+</script>
 {% endblock %}

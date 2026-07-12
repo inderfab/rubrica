@@ -38,6 +38,19 @@ def ordner_neu(name: str = Form(...)):
     return RedirectResponse(url="/ordner", status_code=303)
 
 
+@router.post("/ordner/{ordner_id}/bearbeiten")
+def ordner_bearbeiten(ordner_id: int, name: str = Form(...)):
+    name = name.strip()
+    if name:
+        conn = get_connection()
+        try:
+            queries.rename_projekt(conn, ordner_id, name)
+            radicale.push_projekt(conn, ordner_id)
+        finally:
+            conn.close()
+    return RedirectResponse(url="/ordner", status_code=303)
+
+
 @router.post("/ordner/{ordner_id}/loeschen")
 def ordner_loeschen(ordner_id: int):
     conn = get_connection()
