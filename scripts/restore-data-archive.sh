@@ -60,6 +60,19 @@ rm -rf "$COLL/.Radicale.cache"
 cp "$WORK/kontakte-vcf/"*.vcf "$COLL/"
 rm -rf "$WORK"
 
+# Radicale erkennt ein Verzeichnis nur dann als CardDAV-Adressbuch (statt als
+# generische WebDAV-Collection), wenn .Radicale.props den Tag VADDRESSBOOK
+# enthaelt. Ein reines mkdir (wie oben) legt diese Datei NICHT an - normalerweise
+# entsteht sie erst durch Radicales eigene MKCOL-Verarbeitung (siehe
+# sync/radicale.py _MKCOL_BODY). Ohne sie meldet PROPFIND den Ordner zwar mit
+# 207 OK, aber ohne CR:addressbook-resourcetype - macOS Kontakte.app erkennt ihn
+# dann bei der Discovery nicht als synchronisierbares Adressbuch und sendet nie
+# einen REPORT (das Symptom: Verbindung klappt, Kontakte bleiben dauerhaft leer).
+if [ ! -f "$COLL/.Radicale.props" ]; then
+  printf '{"D:displayname": "Rubrica", "tag": "VADDRESSBOOK"}' > "$COLL/.Radicale.props"
+  echo "→ .Radicale.props angelegt (fehlte - Adressbuch-Kennzeichnung nachgetragen)"
+fi
+
 echo "→ Rubrica-Dienste neu starten…"
 launchctl bootstrap "gui/$UIDN" "$LA_DIR/ch.strut.rubrica.server.plist" 2>/dev/null || true
 launchctl bootstrap "gui/$UIDN" "$LA_DIR/ch.strut.rubrica.radicale.plist" 2>/dev/null || true
