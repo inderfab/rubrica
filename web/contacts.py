@@ -1,6 +1,6 @@
 from typing import Optional
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Response
 from fastapi.responses import RedirectResponse
 
 from db import queries
@@ -87,6 +87,10 @@ def kontakte_liste(request: Request, suche: str = "", ordner_id: str = "", kateg
     try:
         kontakte = queries.list_kontakte(conn, suche=suche, projekt_id=ordner_id_int, kategorie=kategorie)
         ordner = queries.list_projekte(conn)
+        for o in ordner:
+            o["anzahl_kontakte"] = conn.execute(
+                "SELECT COUNT(*) FROM kontakte_projekte WHERE projekt_id = ?", (o["id"],)
+            ).fetchone()[0]
         kategorien = sorted({k["kategorie"] for k in conn.execute("SELECT DISTINCT kategorie FROM kontakte WHERE kategorie != ''")})
     finally:
         conn.close()
@@ -94,6 +98,20 @@ def kontakte_liste(request: Request, suche: str = "", ordner_id: str = "", kateg
         "request": request, "kontakte": kontakte, "ordner": ordner,
         "kategorien": kategorien, "suche": suche, "ordner_id": ordner_id_int, "kategorie": kategorie,
     })
+
+
+@router.post("/kontakte/{kontakt_id}/ordner/{ordner_id}/hinzufuegen")
+def kontakt_ordner_hinzufuegen(kontakt_id: int, ordner_id: int):
+    """Fuegt einen Kontakt einem Ordner hinzu (Drag&Drop in der Kontaktliste) -
+    ergaenzt bestehende Ordner-Zuordnungen, ersetzt sie nicht."""
+    conn = get_connection()
+    try:
+        queries.add_kontakt_projekt(conn, kontakt_id, ordner_id)
+        radicale.push_kontakt(conn, kontakt_id)
+        radicale.push_projekt(conn, ordner_id)
+    finally:
+        conn.close()
+    return Response(status_code=204)
 
 
 @router.get("/kontakte/neu")

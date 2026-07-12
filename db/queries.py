@@ -236,6 +236,17 @@ def set_kontakt_projekte(conn: sqlite3.Connection, kontakt_id: int, projekt_ids:
             )
 
 
+def add_kontakt_projekt(conn: sqlite3.Connection, kontakt_id: int, projekt_id: int) -> None:
+    """Fuegt EIN Ordner zu einem Kontakt hinzu, ohne bestehende Zuordnungen zu
+    entfernen (im Gegensatz zu set_kontakt_projekte, das die ganze Liste ersetzt).
+    Fuer die Drag&Drop-Zuordnung in der Kontaktliste."""
+    with conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO kontakte_projekte (kontakt_id, projekt_id) VALUES (?, ?)",
+            (kontakt_id, projekt_id),
+        )
+
+
 def list_projekte(conn: sqlite3.Connection) -> list[dict]:
     return [dict(r) for r in conn.execute("SELECT * FROM projekte ORDER BY name")]
 

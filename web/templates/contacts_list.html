@@ -5,55 +5,87 @@
     <h1>Kontakte</h1>
     <a href="/kontakte/neu" class="btn">+ Neuer Kontakt</a>
 </div>
+<p class="empty" style="margin-top:-0.5rem">
+    Tipp: Kontakt in der Liste anklicken, um ihn zu bearbeiten. Einen Kontakt per Ziehen (Drag &amp; Drop)
+    auf einen Ordner links legen, um ihn diesem Ordner hinzuzufügen.
+</p>
 
-<form class="filter" hx-get="/kontakte" hx-target="#kontakte-ergebnis" hx-select="#kontakte-ergebnis"
-      hx-push-url="true"
-      hx-trigger="keyup changed delay:300ms from:input[name='suche'], change from:select">
-    <input type="text" name="suche" placeholder="Name oder Firma suchen…" value="{{ suche }}">
-    <select name="ordner_id">
-        <option value="">Alle Ordner</option>
+<div class="kontakte-layout">
+    <aside class="ordner-sidebar">
+        <a class="ordner-eintrag {% if not ordner_id %}aktiv{% endif %}" href="/kontakte">
+            Alle Kontakte
+        </a>
         {% for o in ordner %}
-        <option value="{{ o.id }}" {% if ordner_id == o.id %}selected{% endif %}>{{ o.name }}</option>
+        <a class="ordner-eintrag {% if ordner_id == o.id %}aktiv{% endif %}"
+           href="/kontakte?ordner_id={{ o.id }}"
+           ondragover="event.preventDefault(); this.classList.add('drop-hover')"
+           ondragleave="this.classList.remove('drop-hover')"
+           ondrop="rubricaOrdnerDrop(event, {{ o.id }})">
+            {{ o.name }} <span class="ordner-anzahl">{{ o.anzahl_kontakte }}</span>
+        </a>
         {% endfor %}
-    </select>
-    <select name="kategorie">
-        <option value="">Alle Funktionen</option>
-        {% for k in kategorien %}
-        <option value="{{ k }}" {% if kategorie == k %}selected{% endif %}>{{ k }}</option>
-        {% endfor %}
-    </select>
-</form>
+        {% if not ordner %}<p class="empty">Noch keine <a href="/ordner">Ordner</a> angelegt.</p>{% endif %}
+    </aside>
 
-<div id="kontakte-ergebnis">
-    {% if kontakte %}
-    <table>
-        <thead>
-            <tr>
-                <th>Name</th><th>Firma</th><th>Funktion</th><th>Rolle</th>
-                <th>Telefon</th><th>E-Mail</th><th>Ordner</th><th></th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for k in kontakte %}
-            <tr>
-                <td><a href="/kontakte/{{ k.id }}/bearbeiten">{{ k.vorname }} {{ k.nachname }}</a></td>
-                <td>{{ k.firma }}</td>
-                <td>{{ k.kategorie }}</td>
-                <td>{{ k.rolle }}</td>
-                <td>{% for t in k.telefonnummern %}<a href="tel:{{ t.nummer }}">{{ t.nummer }}</a>{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
-                <td>{% for e in k.emails %}<a href="mailto:{{ e.email }}">{{ e.email }}</a>{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
-                <td>{% for o in k.projekte %}<span class="tag">{{ o.name }}</span>{% endfor %}</td>
-                <td>
-                    <form method="post" action="/kontakte/{{ k.id }}/loeschen" onsubmit="return confirm('Kontakt wirklich löschen?')">
-                        <button type="submit" class="danger">Löschen</button>
-                    </form>
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-    {% else %}
-    <p class="empty">Keine Kontakte gefunden.</p>
-    {% endif %}
+    <div class="kontakte-hauptbereich">
+        <form class="filter" hx-get="/kontakte" hx-target="#kontakte-ergebnis" hx-select="#kontakte-ergebnis"
+              hx-push-url="true"
+              hx-trigger="keyup changed delay:300ms from:input[name='suche'], change from:select">
+            <input type="hidden" name="ordner_id" value="{{ ordner_id or '' }}">
+            <input type="text" name="suche" placeholder="Name oder Firma suchen…" value="{{ suche }}">
+            <select name="kategorie">
+                <option value="">Alle Funktionen</option>
+                {% for k in kategorien %}
+                <option value="{{ k }}" {% if kategorie == k %}selected{% endif %}>{{ k }}</option>
+                {% endfor %}
+            </select>
+        </form>
+
+        <div id="kontakte-ergebnis">
+            {% if kontakte %}
+            <table>
+                <thead>
+                    <tr>
+                        <th></th><th>Name</th><th>Firma</th><th>Funktion</th><th>Rolle</th>
+                        <th>Telefon</th><th>E-Mail</th><th>Ordner</th><th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for k in kontakte %}
+                    <tr draggable="true" ondragstart="event.dataTransfer.setData('text/plain', '{{ k.id }}')"
+                        class="kontakt-zeile" title="Zum Zuordnen auf einen Ordner links ziehen">
+                        <td class="zieh-griff">⠿</td>
+                        <td><a href="/kontakte/{{ k.id }}/bearbeiten">{{ k.vorname }} {{ k.nachname }}</a></td>
+                        <td>{{ k.firma }}</td>
+                        <td>{{ k.kategorie }}</td>
+                        <td>{{ k.rolle }}</td>
+                        <td>{% for t in k.telefonnummern %}<a href="tel:{{ t.nummer }}">{{ t.nummer }}</a>{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
+                        <td>{% for e in k.emails %}<a href="mailto:{{ e.email }}">{{ e.email }}</a>{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
+                        <td>{% for o in k.projekte %}<span class="tag">{{ o.name }}</span>{% endfor %}</td>
+                        <td>
+                            <form method="post" action="/kontakte/{{ k.id }}/loeschen" onsubmit="return confirm('Kontakt wirklich löschen?')">
+                                <button type="submit" class="danger">Löschen</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="empty">Keine Kontakte gefunden.</p>
+            {% endif %}
+        </div>
+    </div>
 </div>
+
+<script>
+function rubricaOrdnerDrop(event, ordnerId) {
+    event.preventDefault();
+    event.currentTarget.classList.remove('drop-hover');
+    const kontaktId = event.dataTransfer.getData('text/plain');
+    if (!kontaktId) return;
+    fetch(`/kontakte/${kontaktId}/ordner/${ordnerId}/hinzufuegen`, { method: 'POST' })
+        .then(() => location.reload());
+}
+</script>
 {% endblock %}

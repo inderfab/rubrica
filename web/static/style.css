@@ -57,3 +57,33 @@ label { display: block; font-size: 0.85rem; color: #515154; margin-bottom: 0.2re
 .diff-old { color: #86868b; text-decoration: line-through; }
 .diff-new { color: #0071e3; font-weight: 600; }
 .tag { display: inline-block; background: #eceef0; border-radius: 4px; padding: 0.1rem 0.5rem; font-size: 0.8rem; margin-right: 0.25rem; }
+
+/* Kontakte-Ansicht: Ordner-Seitenleiste + Hauptbereich (Drag & Drop) */
+.kontakte-layout { display: flex; gap: 1.25rem; align-items: flex-start; }
+.ordner-sidebar {
+    flex: 0 0 220px;
+    background: #fff;
+    border-radius: 8px;
+    padding: 0.5rem;
+    display: flex;
+    flex-direction: column;
+}
+.ordner-eintrag {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.45rem 0.6rem;
+    border-radius: 6px;
+    color: #1d1d1f;
+    text-decoration: none;
+    font-size: 0.9rem;
+}
+.ordner-eintrag:hover { background: #eceef0; }
+.ordner-eintrag.aktiv { background: #0071e3; color: #fff; }
+.ordner-eintrag.aktiv .ordner-anzahl { background: rgba(255,255,255,0.25); color: #fff; }
+.ordner-eintrag.drop-hover { background: #0071e3; color: #fff; outline: 2px dashed #fff; outline-offset: -3px; }
+.ordner-anzahl { background: #eceef0; border-radius: 10px; padding: 0.05rem 0.5rem; font-size: 0.75rem; }
+.kontakte-hauptbereich { flex: 1; min-width: 0; }
+.kontakt-zeile { cursor: grab; }
+.kontakt-zeile:active { cursor: grabbing; }
+.zieh-griff { color: #c7c7cc; width: 1.5rem; text-align: center; user-select: none; }
