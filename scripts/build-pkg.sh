@@ -91,7 +91,7 @@ _build_python "x86_64-apple-darwin"  "x86_64"
 # ── Bundle-Struktur ───────────────────────────────────────────────────────────
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Frameworks"
 
-for dir in web db config importer sync; do
+for dir in web db config importer sync export; do
   cp -r "$dir" "$APP/Contents/Resources/"
 done
 find "$APP/Contents/Resources" -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
