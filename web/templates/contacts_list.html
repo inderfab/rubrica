@@ -6,8 +6,8 @@
     <a href="/kontakte/neu" class="btn">+ Neuer Kontakt</a>
 </div>
 <p class="empty" style="margin-top:-0.5rem">
-    Tipp: Kontakt in der Liste anklicken, um ihn zu bearbeiten. Einen Kontakt per Ziehen (Drag &amp; Drop)
-    auf einen Ordner links legen, um ihn diesem Ordner hinzuzufügen.
+    Tipp: „Bearbeiten" öffnet den Kontakt zum Anpassen. Einen Kontakt am Ziehgriff „⠿" auf einen Ordner
+    links ziehen (Drag &amp; Drop), um ihn diesem Ordner hinzuzufügen.
 </p>
 
 <div class="kontakte-layout">
@@ -54,16 +54,22 @@
                     {% for k in kontakte %}
                     <tr class="kontakt-zeile">
                         <td class="zieh-griff" draggable="true"
-                            ondragstart="event.dataTransfer.setData('text/plain', '{{ k.id }}')"
+                            ondragstart="rubricaDragStart(event, '{{ k.id }}', '{{ (k.vorname ~ ' ' ~ k.nachname)|trim|e }}')"
                             title="Zum Zuordnen auf einen Ordner links ziehen">⠿</td>
-                        <td><a href="/kontakte/{{ k.id }}/bearbeiten">{{ k.vorname }} {{ k.nachname }}</a></td>
+                        <td>{{ k.vorname }} {{ k.nachname }}</td>
                         <td>{{ k.firma }}</td>
                         <td>{{ k.kategorie }}</td>
                         <td>{{ k.rolle }}</td>
                         <td>{% for t in k.telefonnummern %}<a href="tel:{{ t.nummer }}">{{ t.nummer }}</a>{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
                         <td>{% for e in k.emails %}<a href="mailto:{{ e.email }}">{{ e.email }}</a>{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
                         <td>{% for o in k.projekte %}<span class="tag">{{ o.name }}</span>{% endfor %}</td>
-                        <td>
+                        <td class="actions">
+                            <button type="button" class="secondary"
+                                    hx-get="/kontakte/{{ k.id }}/bearbeiten-flyover"
+                                    hx-target="#kontakt-modal-inhalt" hx-swap="innerHTML"
+                                    onclick="rubricaModalOeffnen()">
+                                Bearbeiten
+                            </button>
                             <form method="post" action="/kontakte/{{ k.id }}/loeschen" onsubmit="return confirm('Kontakt wirklich löschen?')">
                                 <button type="submit" class="danger">Löschen</button>
                             </form>
@@ -79,6 +85,12 @@
     </div>
 </div>
 
+<div id="kontakt-modal-overlay" class="modal-overlay" onclick="if (event.target === this) rubricaModalSchliessen()">
+    <div class="modal-panel">
+        <div id="kontakt-modal-inhalt"></div>
+    </div>
+</div>
+
 <script>
 function rubricaOrdnerDrop(event, ordnerId) {
     event.preventDefault();
@@ -87,6 +99,27 @@ function rubricaOrdnerDrop(event, ordnerId) {
     if (!kontaktId) return;
     fetch(`/kontakte/${kontaktId}/ordner/${ordnerId}/hinzufuegen`, { method: 'POST' })
         .then(() => location.reload());
+}
+
+function rubricaDragStart(event, kontaktId, name) {
+    event.dataTransfer.setData('text/plain', kontaktId);
+    // Eigenes, groesseres Zieh-Abbild mit Namen, damit waehrend des Ziehens
+    // erkennbar bleibt, welcher Kontakt gerade bewegt wird (der Ziehgriff allein
+    // zeigt nur das "⠿"-Symbol).
+    const geist = document.createElement('div');
+    geist.textContent = '⠿ ' + name;
+    geist.style.cssText = 'position:absolute; top:-1000px; left:-1000px; padding:0.3rem 0.7rem; ' +
+        'background:#0071e3; color:#fff; border-radius:6px; font-size:0.85rem; white-space:nowrap;';
+    document.body.appendChild(geist);
+    event.dataTransfer.setDragImage(geist, 10, 10);
+    setTimeout(() => document.body.removeChild(geist), 0);
+}
+
+function rubricaModalOeffnen() {
+    document.getElementById('kontakt-modal-overlay').classList.add('sichtbar');
+}
+function rubricaModalSchliessen() {
+    document.getElementById('kontakt-modal-overlay').classList.remove('sichtbar');
 }
 </script>
 {% endblock %}

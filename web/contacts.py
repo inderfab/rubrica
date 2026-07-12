@@ -174,7 +174,24 @@ def kontakt_bearbeiten_form(request: Request, kontakt_id: int):
         conn.close()
     return templates.TemplateResponse("contact_form.html", {
         "request": request, "kontakt": kontakt, "ordner": ordner, "funktionen": funktionen,
-        "action": f"/kontakte/{kontakt_id}/bearbeiten",
+        "action": f"/kontakte/{kontakt_id}/bearbeiten", "modal": False,
+    })
+
+
+@router.get("/kontakte/{kontakt_id}/bearbeiten-flyover")
+def kontakt_bearbeiten_flyover(request: Request, kontakt_id: int):
+    """Wie kontakt_bearbeiten_form, liefert aber nur das Formular-Fragment fuer
+    den Flyover (htmx laedt es in ein Overlay statt die Seite zu wechseln)."""
+    conn = get_connection()
+    try:
+        kontakt = queries.get_kontakt(conn, kontakt_id)
+        ordner = queries.list_projekte(conn)
+        funktionen = _funktion_optionen(conn)
+    finally:
+        conn.close()
+    return templates.TemplateResponse("kontakt_bearbeiten_modal.html", {
+        "request": request, "kontakt": kontakt, "ordner": ordner, "funktionen": funktionen,
+        "action": f"/kontakte/{kontakt_id}/bearbeiten", "modal": True,
     })
 
 

@@ -102,3 +102,30 @@ def test_lange_tracking_links_werden_ignoriert():
 def test_kurze_url_bleibt_erhalten():
     d = parse_signatur("Max Muster\nhttps://muster.ch/team")
     assert d["urls"][0]["url"] == "https://muster.ch/team"
+
+
+def test_funktionszeile_wird_nicht_als_name_uebernommen():
+    d = parse_signatur("Dipl. Ing. Arch.\nBEISPIEL AG FH ETH SIA\n043 111 11 55\nmuster@beispiel.ch")
+    assert d["vorname"] == "" and d["nachname"] == ""
+
+
+def test_newsletter_absatz_wird_nicht_als_firma_uebernommen():
+    absatz = ("Sie erhalten diese E-Mail, weil Sie bei uns als Kunde hinterlegt und als "
+              "Newsletter-Abonnent eingetragen sind. Um Sie ueber die Neuigkeiten der Beispiel AG "
+              "zu informieren, senden wir Ihnen diesen Newsletter.")
+    d = parse_signatur(absatz + "\n072000000")
+    assert d["firma"] == ""
+
+
+def test_unplausible_telefonnummer_wird_verworfen():
+    # "011 8544 000" saehe wie eine Nummer aus, ist aber keine gueltige CH-Vorwahl
+    # (zweite Ziffer nach der 0 darf nicht 0 oder 1 sein).
+    d = parse_signatur("Beispiel AG\n011 8544 000")
+    assert d["telefonnummern"] == []
+
+
+def test_gueltige_ch_nummern_bleiben_erhalten():
+    d = parse_signatur("Muster AG\n+41 52 111 11 33\n044 111 11 44")
+    nummern = {t["nummer"] for t in d["telefonnummern"]}
+    assert any("52 111 11 33" in n for n in nummern)
+    assert any("44 111 11 44" in n for n in nummern)

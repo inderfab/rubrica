@@ -84,3 +84,19 @@ def test_kontakte_liste_zeigt_ordner_sidebar_mit_anzahl(tmp_db):
     assert r.status_code == 200
     assert "Testordner" in r.text
     assert "ordner-sidebar" in r.text
+
+
+def test_kontakte_liste_zeigt_bearbeiten_button_kein_namenslink(tmp_db):
+    queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster"})
+    r = _client(tmp_db).get("/kontakte")
+    assert "Bearbeiten" in r.text
+    assert 'href="/kontakte/1/bearbeiten"' not in r.text  # Name ist kein Link mehr
+
+
+def test_bearbeiten_flyover_liefert_nur_fragment(tmp_db):
+    kontakt_id = queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster", "firma": "Testfirma"})
+    r = _client(tmp_db).get(f"/kontakte/{kontakt_id}/bearbeiten-flyover")
+    assert r.status_code == 200
+    assert "Testfirma" in r.text
+    assert 'value="Anna"' in r.text
+    assert "<nav>" not in r.text  # kein volles Seiten-Layout, nur das Formular-Fragment
