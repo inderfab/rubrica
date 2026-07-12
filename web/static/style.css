@@ -1,68 +1,114 @@
+/* Notion-aehnliche, ruhige Optik: helle linke Seitenleiste statt schwarzem
+   Top-Balken, dezente Rahmen statt Schatten, gedeckte Akzentfarbe. Die
+   Seitenleiste hat eine feste Breite und der Inhalt nimmt den Rest der
+   Fensterbreite ein - kein zentrierter, schmalerer Content-Block mehr neben
+   einer volle-Breite-Navigation (behebt den gemeldeten Versatz zwischen
+   Nav-Balken und Tabelle). */
+:root {
+    --text: #37352f;
+    --text-hell: #787774;
+    --rand: #e9e9e7;
+    --flaeche-sidebar: #fbfbfa;
+    --flaeche-hover: #efefee;
+    --akzent: #2f3437;
+    --akzent-hover: #000;
+    --gefahr: #eb5757;
+    --gefahr-hover: #d84343;
+}
+
 * { box-sizing: border-box; }
+
 body {
     font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
     margin: 0;
-    color: #1d1d1f;
-    background: #f5f5f7;
+    color: var(--text);
+    background: #fff;
 }
-nav {
-    background: #1d1d1f;
-    padding: 0.75rem 1.5rem;
-    display: flex;
-    gap: 1.5rem;
-    align-items: center;
+
+.app-shell { display: flex; min-height: 100vh; align-items: stretch; }
+
+.global-sidebar {
+    flex: 0 0 232px;
+    background: var(--flaeche-sidebar);
+    border-right: 1px solid var(--rand);
+    padding: 1rem 0.75rem;
 }
-nav a {
-    color: #f5f5f7;
-    text-decoration: none;
-    font-size: 0.95rem;
+.global-sidebar .brand {
+    font-weight: 700;
+    font-size: 1rem;
+    color: var(--text);
+    padding: 0.4rem 0.6rem 1rem;
 }
-nav a:hover { text-decoration: underline; }
-nav .brand { font-weight: 600; margin-right: 1rem; }
-main { padding: 1.5rem 2rem; max-width: 1100px; margin: 0 auto; }
-h1 { font-size: 1.4rem; margin-top: 0; }
-table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 8px; overflow: hidden; }
-th, td { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid #e5e5ea; font-size: 0.9rem; }
-th { background: #eceef0; font-weight: 600; }
-tr:last-child td { border-bottom: none; }
-form.filter { display: flex; gap: 0.75rem; margin-bottom: 1rem; flex-wrap: wrap; }
-input, select, textarea {
+.global-sidebar nav { display: flex; flex-direction: column; gap: 0.1rem; }
+.global-sidebar nav a {
+    display: block;
     padding: 0.4rem 0.6rem;
-    border: 1px solid #d2d2d7;
     border-radius: 6px;
+    color: var(--text);
+    text-decoration: none;
     font-size: 0.9rem;
 }
+.global-sidebar nav a:hover { background: var(--flaeche-hover); }
+.global-sidebar nav a.aktiv { background: var(--rand); font-weight: 600; }
+
+.app-content { flex: 1; min-width: 0; padding: 2rem 2.5rem; }
+
+h1 { font-size: 1.6rem; font-weight: 700; margin-top: 0; color: var(--text); }
+
+table { width: 100%; border-collapse: collapse; background: #fff; }
+th, td { text-align: left; padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--rand); font-size: 0.9rem; }
+th { font-weight: 600; color: var(--text-hell); border-bottom: 1px solid var(--rand); }
+tbody tr:hover { background: #fafafa; }
+tr:last-child td { border-bottom: none; }
+
+form.filter { display: flex; gap: 0.75rem; margin-bottom: 1rem; flex-wrap: wrap; }
+
+input, select, textarea {
+    padding: 0.4rem 0.6rem;
+    border: 1px solid var(--rand);
+    border-radius: 6px;
+    font-size: 0.9rem;
+    color: var(--text);
+    background: #fff;
+}
+input:focus, select:focus, textarea:focus { outline: 2px solid #cfe0ff; border-color: #9db8e8; }
+
 button, .btn {
     padding: 0.4rem 0.9rem;
-    border: none;
+    border: 1px solid transparent;
     border-radius: 6px;
-    background: #0071e3;
+    background: var(--akzent);
     color: #fff;
     font-size: 0.9rem;
     cursor: pointer;
     text-decoration: none;
     display: inline-block;
 }
-button.secondary, .btn.secondary { background: #d2d2d7; color: #1d1d1f; }
-button.danger, .btn.danger { background: #d70015; }
+button:hover, .btn:hover { background: var(--akzent-hover); }
+button.secondary, .btn.secondary { background: #fff; color: var(--text); border-color: var(--rand); }
+button.secondary:hover, .btn.secondary:hover { background: var(--flaeche-hover); }
+button.danger, .btn.danger { background: #fff; color: var(--gefahr); border-color: var(--rand); }
+button.danger:hover, .btn.danger:hover { background: #fdf1f1; border-color: var(--gefahr); }
+
 .tel-row, .mail-row { display: flex; gap: 0.5rem; margin-bottom: 0.4rem; }
-fieldset { border: 1px solid #d2d2d7; border-radius: 8px; margin-bottom: 1rem; padding: 1rem; }
-legend { font-weight: 600; padding: 0 0.4rem; }
+fieldset { border: 1px solid var(--rand); border-radius: 8px; margin-bottom: 1rem; padding: 1rem; }
+legend { font-weight: 600; padding: 0 0.4rem; color: var(--text); }
 .actions { display: flex; gap: 0.5rem; }
-.empty { color: #86868b; padding: 1rem 0; }
-.fehler { color: #d70015; padding: 0.5rem 0; }
-label { display: block; font-size: 0.85rem; color: #515154; margin-bottom: 0.2rem; }
+.empty { color: var(--text-hell); padding: 1rem 0; }
+.fehler { color: var(--gefahr); padding: 0.5rem 0; }
+label { display: block; font-size: 0.85rem; color: var(--text-hell); margin-bottom: 0.2rem; }
 .field { margin-bottom: 0.75rem; }
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
-.diff-old { color: #86868b; text-decoration: line-through; }
-.diff-new { color: #0071e3; font-weight: 600; }
-.tag { display: inline-block; background: #eceef0; border-radius: 4px; padding: 0.1rem 0.5rem; font-size: 0.8rem; margin-right: 0.25rem; }
+.diff-old { color: var(--text-hell); text-decoration: line-through; }
+.diff-new { color: var(--akzent); font-weight: 600; }
+.tag { display: inline-block; background: var(--flaeche-hover); border-radius: 4px; padding: 0.1rem 0.5rem; font-size: 0.8rem; margin-right: 0.25rem; }
 
 /* Kontakte-Ansicht: Ordner-Seitenleiste + Hauptbereich (Drag & Drop) */
 .kontakte-layout { display: flex; gap: 1.25rem; align-items: flex-start; }
 .ordner-sidebar {
     flex: 0 0 220px;
-    background: #fff;
+    background: var(--flaeche-sidebar);
+    border: 1px solid var(--rand);
     border-radius: 8px;
     padding: 0.5rem;
     display: flex;
@@ -74,17 +120,17 @@ label { display: block; font-size: 0.85rem; color: #515154; margin-bottom: 0.2re
     align-items: center;
     padding: 0.45rem 0.6rem;
     border-radius: 6px;
-    color: #1d1d1f;
+    color: var(--text);
     text-decoration: none;
     font-size: 0.9rem;
 }
-.ordner-eintrag:hover { background: #eceef0; }
-.ordner-eintrag.aktiv { background: #0071e3; color: #fff; }
+.ordner-eintrag:hover { background: var(--flaeche-hover); }
+.ordner-eintrag.aktiv { background: var(--akzent); color: #fff; }
 .ordner-eintrag.aktiv .ordner-anzahl { background: rgba(255,255,255,0.25); color: #fff; }
-.ordner-eintrag.drop-hover { background: #0071e3; color: #fff; outline: 2px dashed #fff; outline-offset: -3px; }
-.ordner-anzahl { background: #eceef0; border-radius: 10px; padding: 0.05rem 0.5rem; font-size: 0.75rem; }
+.ordner-eintrag.drop-hover { background: var(--akzent); color: #fff; outline: 2px dashed #fff; outline-offset: -3px; }
+.ordner-anzahl { background: var(--flaeche-hover); border-radius: 10px; padding: 0.05rem 0.5rem; font-size: 0.75rem; }
 .kontakte-hauptbereich { flex: 1; min-width: 0; }
-.zieh-griff { color: #c7c7cc; width: 1.5rem; text-align: center; user-select: none; cursor: grab; }
+.zieh-griff { color: #b9b9b6; width: 1.5rem; text-align: center; user-select: none; cursor: grab; }
 .zieh-griff:active { cursor: grabbing; }
 
 /* Flyover-Modal fuer Kontakt-Bearbeiten */
@@ -92,7 +138,7 @@ label { display: block; font-size: 0.85rem; color: #515154; margin-bottom: 0.2re
     display: none;
     position: fixed;
     inset: 0;
-    background: rgba(0,0,0,0.4);
+    background: rgba(15,15,15,0.45);
     z-index: 100;
     align-items: flex-start;
     justify-content: center;
@@ -101,7 +147,8 @@ label { display: block; font-size: 0.85rem; color: #515154; margin-bottom: 0.2re
 }
 .modal-overlay.sichtbar { display: flex; }
 .modal-panel {
-    background: #f5f5f7;
+    background: #fff;
+    border: 1px solid var(--rand);
     border-radius: 10px;
     padding: 1.5rem;
     max-width: 800px;
@@ -118,9 +165,9 @@ label { display: block; font-size: 0.85rem; color: #515154; margin-bottom: 0.2re
     display: flex;
     flex-direction: column;
     gap: 0.35rem;
-    border: 1px solid #e5e5ea;
+    border: 1px solid var(--rand);
     border-radius: 6px;
     padding: 0.6rem 0.8rem;
     background: #fff;
 }
-.ordner-checkliste label { display: flex; align-items: center; gap: 0.4rem; font-size: 0.9rem; margin: 0; }
+.ordner-checkliste label { display: flex; align-items: center; gap: 0.4rem; font-size: 0.9rem; margin: 0; color: var(--text); }

@@ -614,9 +614,25 @@ Session. Gesammeltes Wissen fuer naechstes Mal:
     Signatur-Quelle zu lesen (falls Archivio Option (a) waehlt, eine zusaetzliche Spalte in der SQL-Abfrage
     beruecksichtigen statt `_letzte_zeilen(dc.content)`).
 
+- **Visuelles Redesign an Notion angelehnt (2026-07-12):** Nutzer-Feedback: Optik sollte generell mehr wie
+  Notion aussehen; ausserdem gemeldeter Layout-Bug ("links viel Abstand, rechts ist der schwarze Balken
+  nicht gleich lang wie die Tabelle darunter"). Ursache des Bugs: `nav` spannte die volle Fensterbreite auf,
+  `main` war separat mit `max-width:1100px; margin:0 auto` zentriert — auf breiten Bildschirmen liefen beide
+  Elemente auseinander. Fix zugleich mit dem Redesign: `base.html` umgebaut auf `.app-shell` (Flex) mit
+  **linker globaler Seitenleiste** (`.global-sidebar`, feste Breite 232px, ersetzt den schwarzen Top-Balken)
+  + `.app-content` (nimmt den Rest der Breite ein, keine separate Zentrierung mehr) — Sidebar und Inhalt
+  spannen dadurch IMMER gemeinsam die volle Fensterbreite auf, der Versatz ist strukturell nicht mehr
+  moeglich. Aktive Seite wird serverseitig markiert (`request.url.path` in `base.html`). Farbpalette/
+  Typografie an Notion angelehnt (CSS-Variablen in `style.css`: gedeckte Grautoene `--flaeche-sidebar`
+  `#fbfbfa`, dezente Rahmen `--rand` `#e9e9e7` statt Schatten, dunkler statt knallblauer Primaerbutton
+  `--akzent` `#2f3437`, sekundaere Buttons weiss mit Rahmen). Bestehende Seiten-Layouts (Ordner-Sidebar in
+  der Kontaktliste, Modal-Flyover, Ordner-Checkliste) unveraendert in Struktur, nur neu eingefaerbt.
+  Alle 72 Tests weiterhin gruen, live verifiziert (Sidebar + aktive Markierung pro Seite, alle bestehenden
+  Funktionen/Klassen intakt).
+
 Bekannte Einschränkung: Entwicklungsumgebung läuft unter Python 3.9 (Systemversion) statt der ursprünglich in Abschnitt 6 vermuteten 3.12 — FastAPI-Routenparameter deshalb mit `typing.Optional[int]` statt `int | None` (siehe `CLAUDE.md`). Dies betrifft nur die lokale Entwicklungsumgebung; das produktive `.pkg` bringt sein eigenes Python 3.13 mit und ist davon unabhängig.
 
-Nächste sinnvolle Schritte: Notion-aehnliches visuelles Redesign (siehe naechster Abschnitt, in Arbeit) und
-Behebung des gemeldeten Layout-Versatzes (Nav-Balken vs. zentrierter Content). Danach: neues `.pkg` auf dem
-iMac installieren; unter „Einstellungen" `archivio.db_path` setzen, falls Archivio dort genutzt werden soll.
-(z. B. einzelne Kandidaten abwaehlen koennen, statt alles-oder-nichts).
+Nächste sinnvolle Schritte: Neues `.pkg` (Notion-Redesign + Archivio einzeln übernehmen/ablehnen + Ordner-
+Bearbeiten + alle bisherigen Fixes) auf dem iMac installieren; unter „Einstellungen" `archivio.db_path`
+setzen, falls Archivio dort genutzt werden soll. Danach: Archivio-Scanner-Anpassung (Signatur separat
+speichern, siehe offener Punkt oben) durch den Nutzer selbst, gefolgt von einem Postfach-Rescan auf dem iMac.
