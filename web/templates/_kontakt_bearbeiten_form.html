@@ -3,6 +3,7 @@
    (kontakt_bearbeiten_modal.html). Erwartet: kontakt, ordner, funktionen, action,
    modal (bool - steuert ob "Abbrechen" navigiert oder das Modal schliesst). #}
 <form method="post" action="{{ action }}">
+    <input type="hidden" name="zurueck_ordner_id" value="{{ zurueck_ordner_id or '' }}">
     <div class="grid-2">
         <div class="field">
             <label>Vorname</label>
@@ -22,11 +23,13 @@
         </div>
         <div class="field">
             <label>Funktion</label>
-            <input type="text" name="kategorie" list="funktion-liste"
-                   value="{{ kontakt.kategorie if kontakt else '' }}" placeholder="z. B. Bauingenieur/Statik">
-            <datalist id="funktion-liste">
-                {% for f in funktionen %}<option value="{{ f }}">{% endfor %}
-            </datalist>
+            <div class="combobox" data-optionen='{{ funktionen|tojson }}'>
+                <input type="text" class="combobox-input" name="kategorie" autocomplete="off"
+                       value="{{ kontakt.kategorie if kontakt else '' }}" placeholder="z. B. Bauingenieur/in (Statik)"
+                       oninput="rubricaComboboxInput(event)" onfocus="rubricaComboboxInput(event)"
+                       onblur="rubricaComboboxBlur(event)">
+                <ul class="combobox-liste"></ul>
+            </div>
         </div>
     </div>
 

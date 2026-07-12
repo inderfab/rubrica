@@ -1,0 +1,71 @@
+{# Sammel-Bearbeiten mehrerer ausgewaehlter Kontakte. Erwartet: kontakte (list),
+   ids (list von ids), felder (dict pro Scalar-Feld: {wert, gemischt}), ordner,
+   funktionen, zurueck_ordner_id.
+   Felder mit gemischt=True zeigen "Unterschiedliche Werte" als Platzhalter und
+   bleiben leer - wird das Feld so belassen, bleibt der bestehende (unterschiedliche)
+   Wert je Kontakt unangetastet. Wird etwas eingetippt, gilt der neue Wert fuer
+   alle ausgewaehlten Kontakte. #}
+<h2 style="margin-top:0">{{ kontakte|length }} Kontakte bearbeiten</h2>
+<p class="empty" style="margin-top:-0.5rem">
+    {% for k in kontakte %}{{ (k.vorname ~ ' ' ~ k.nachname)|trim }}{% if not loop.last %}, {% endif %}{% endfor %}
+</p>
+
+<form method="post" action="/kontakte/bulk-bearbeiten">
+    <input type="hidden" name="zurueck_ordner_id" value="{{ zurueck_ordner_id or '' }}">
+    {% for id in ids %}<input type="hidden" name="ids" value="{{ id }}">{% endfor %}
+
+    <div class="grid-2">
+        <div class="field">
+            <label>Vorname</label>
+            <input type="text" name="vorname" class="{{ 'gemischt' if felder.vorname.gemischt else '' }}"
+                   value="{{ felder.vorname.wert }}"
+                   placeholder="{{ 'Unterschiedliche Werte' if felder.vorname.gemischt else '' }}">
+            <input type="hidden" name="vorname__gemischt" value="{{ '1' if felder.vorname.gemischt else '0' }}">
+        </div>
+        <div class="field">
+            <label>Nachname</label>
+            <input type="text" name="nachname" class="{{ 'gemischt' if felder.nachname.gemischt else '' }}"
+                   value="{{ felder.nachname.wert }}"
+                   placeholder="{{ 'Unterschiedliche Werte' if felder.nachname.gemischt else '' }}">
+            <input type="hidden" name="nachname__gemischt" value="{{ '1' if felder.nachname.gemischt else '0' }}">
+        </div>
+        <div class="field">
+            <label>Firma</label>
+            <input type="text" name="firma" class="{{ 'gemischt' if felder.firma.gemischt else '' }}"
+                   value="{{ felder.firma.wert }}"
+                   placeholder="{{ 'Unterschiedliche Werte' if felder.firma.gemischt else '' }}">
+            <input type="hidden" name="firma__gemischt" value="{{ '1' if felder.firma.gemischt else '0' }}">
+        </div>
+        <div class="field">
+            <label>Rolle</label>
+            <input type="text" name="rolle" class="{{ 'gemischt' if felder.rolle.gemischt else '' }}"
+                   value="{{ felder.rolle.wert }}"
+                   placeholder="{{ 'Unterschiedliche Werte' if felder.rolle.gemischt else '' }}">
+            <input type="hidden" name="rolle__gemischt" value="{{ '1' if felder.rolle.gemischt else '0' }}">
+        </div>
+        <div class="field">
+            <label>Funktion</label>
+            <div class="combobox" data-optionen='{{ funktionen|tojson }}'>
+                <input type="text" class="combobox-input {{ 'gemischt' if felder.kategorie.gemischt else '' }}"
+                       name="kategorie" autocomplete="off" value="{{ felder.kategorie.wert }}"
+                       placeholder="{{ 'Unterschiedliche Werte' if felder.kategorie.gemischt else 'z. B. Bauingenieur/in (Statik)' }}"
+                       oninput="rubricaComboboxInput(event)" onfocus="rubricaComboboxInput(event)"
+                       onblur="rubricaComboboxBlur(event)">
+                <ul class="combobox-liste"></ul>
+            </div>
+            <input type="hidden" name="kategorie__gemischt" value="{{ '1' if felder.kategorie.gemischt else '0' }}">
+        </div>
+    </div>
+
+    <div class="field">
+        <label>Notizen</label>
+        <textarea name="notizen" rows="4" style="width:100%" class="{{ 'gemischt' if felder.notizen.gemischt else '' }}"
+                  placeholder="{{ 'Unterschiedliche Werte' if felder.notizen.gemischt else '' }}">{{ felder.notizen.wert }}</textarea>
+        <input type="hidden" name="notizen__gemischt" value="{{ '1' if felder.notizen.gemischt else '0' }}">
+    </div>
+
+    <div class="actions">
+        <button type="submit">Speichern</button>
+        <button type="button" class="secondary" onclick="rubricaModalSchliessen()">Abbrechen</button>
+    </div>
+</form>

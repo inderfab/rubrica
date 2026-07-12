@@ -13,8 +13,14 @@ def test_neu_formular_erreichbar(tmp_db):
     r = _client(tmp_db).get("/kontakte/neu")
     assert r.status_code == 200
     assert "Neuer Kontakt" in r.text
-    assert 'id="funktion-liste"' in r.text
-    assert "Bauingenieur/Statik" in r.text  # vordefinierte Funktion im datalist
+    assert 'class="combobox"' in r.text
+    assert "Bauingenieur/in (Statik)" in r.text  # vordefinierte Funktion, geschlechtsneutral
+
+
+def test_funktionen_liste_ist_geschlechtsneutral(tmp_db):
+    from web.contacts import FUNKTIONEN
+    assert "Architekt" not in FUNKTIONEN  # nur "Architekt/in" soll vorkommen
+    assert "Architekt/in" in FUNKTIONEN
 
 
 def test_signatur_parsen_fragment(tmp_db):
@@ -100,3 +106,102 @@ def test_bearbeiten_flyover_liefert_nur_fragment(tmp_db):
     assert "Testfirma" in r.text
     assert 'value="Anna"' in r.text
     assert "<nav>" not in r.text  # kein volles Seiten-Layout, nur das Formular-Fragment
+
+
+def test_bearbeiten_flyover_gibt_ordner_id_ins_formular(tmp_db):
+    kontakt_id = queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster"})
+    ordner_id = queries.get_or_create_projekt(tmp_db, "Testordner")
+    r = _client(tmp_db).get(f"/kontakte/{kontakt_id}/bearbeiten-flyover?ordner_id={ordner_id}")
+    assert f'value="{ordner_id}"' in r.text
+
+
+def test_bearbeiten_speichern_bleibt_im_ordner(tmp_db):
+    kontakt_id = queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster"})
+    ordner_id = queries.get_or_create_projekt(tmp_db, "Testordner")
+    client = _client(tmp_db)
+    r = client.post(f"/kontakte/{kontakt_id}/bearbeiten", data={
+        "vorname": "Anna", "nachname": "Muster", "firma": "", "rolle": "", "kategorie": "",
+        "notizen": "", "zurueck_ordner_id": str(ordner_id),
+    }, follow_redirects=False)
+    assert r.status_code == 303
+    assert r.headers["location"] == f"/kontakte?ordner_id={ordner_id}"
+
+
+def test_bearbeiten_speichern_ohne_ordner_kontext_geht_auf_alle(tmp_db):
+    kontakt_id = queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster"})
+    r = _client(tmp_db).post(f"/kontakte/{kontakt_id}/bearbeiten", data={
+        "vorname": "Anna", "nachname": "Muster", "firma": "", "rolle": "", "kategorie": "",
+        "notizen": "", "zurueck_ordner_id": "",
+    }, follow_redirects=False)
+    assert r.headers["location"] == "/kontakte"
+
+
+def test_loeschen_bleibt_im_ordner(tmp_db):
+    kontakt_id = queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster"})
+    ordner_id = queries.get_or_create_projekt(tmp_db, "Testordner")
+    r = _client(tmp_db).post(f"/kontakte/{kontakt_id}/loeschen",
+                              data={"zurueck_ordner_id": str(ordner_id)}, follow_redirects=False)
+    assert r.headers["location"] == f"/kontakte?ordner_id={ordner_id}"
+
+
+def test_bulk_bearbeiten_flyover_markiert_unterschiedliche_werte(tmp_db):
+    k1 = queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster", "firma": "Firma A"})
+    k2 = queries.create_kontakt(tmp_db, {"vorname": "Bob", "nachname": "Beispiel", "firma": "Firma A"})
+    r = _client(tmp_db).get(f"/kontakte/bulk-bearbeiten-flyover?ids={k1}&ids={k2}")
+    assert r.status_code == 200
+    assert 'value="Firma A"' in r.text  # gleiche Firma -> vorausgefuellt
+    assert "Unterschiedliche Werte" in r.text  # unterschiedliche Vornamen
+
+
+def test_bulk_bearbeiten_speichern_wendet_ausgefuelltes_feld_auf_alle_an(tmp_db):
+    k1 = queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster", "firma": "Alt A"})
+    k2 = queries.create_kontakt(tmp_db, {"vorname": "Bob", "nachname": "Beispiel", "firma": "Alt B"})
+    client = _client(tmp_db)
+    r = client.post("/kontakte/bulk-bearbeiten", data={
+        "ids": [str(k1), str(k2)],
+        "vorname": "", "vorname__gemischt": "1",
+        "nachname": "", "nachname__gemischt": "1",
+        "firma": "Neue Firma", "firma__gemischt": "1",
+        "rolle": "", "rolle__gemischt": "0",
+        "kategorie": "", "kategorie__gemischt": "0",
+        "notizen": "", "notizen__gemischt": "0",
+        "zurueck_ordner_id": "",
+    }, follow_redirects=False)
+    assert r.status_code == 303
+
+    kontakt1 = queries.get_kontakt(tmp_db, k1)
+    kontakt2 = queries.get_kontakt(tmp_db, k2)
+    assert kontakt1["firma"] == "Neue Firma"
+    assert kontakt2["firma"] == "Neue Firma"
+    assert kontakt1["vorname"] == "Anna"  # unangetastet gelassenes "gemischt"-Feld bleibt erhalten
+    assert kontakt2["vorname"] == "Bob"
+
+
+def test_update_kontakt_felder_laesst_kontaktdaten_arrays_unangetastet(tmp_db):
+    kontakt_id = queries.create_kontakt(tmp_db, {
+        "vorname": "Anna", "nachname": "Muster",
+        "telefonnummern": [{"typ": "mobil", "nummer": "079 000 00 00"}],
+    })
+    queries.update_kontakt_felder(tmp_db, kontakt_id, {"firma": "Neue Firma", "rolle": "Chefin"})
+    kontakt = queries.get_kontakt(tmp_db, kontakt_id)
+    assert kontakt["firma"] == "Neue Firma"
+    assert kontakt["rolle"] == "Chefin"
+    assert kontakt["telefonnummern"][0]["nummer"] == "079 000 00 00"  # unveraendert
+
+
+def test_bulk_bearbeiten_speichern_laesst_gleiche_felder_unveraendert_wenn_nicht_editiert(tmp_db):
+    k1 = queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster", "rolle": "Chefin"})
+    k2 = queries.create_kontakt(tmp_db, {"vorname": "Bob", "nachname": "Beispiel", "rolle": "Chefin"})
+    client = _client(tmp_db)
+    client.post("/kontakte/bulk-bearbeiten", data={
+        "ids": [str(k1), str(k2)],
+        "vorname": "", "vorname__gemischt": "1",
+        "nachname": "", "nachname__gemischt": "1",
+        "firma": "", "firma__gemischt": "0",
+        "rolle": "Chefin", "rolle__gemischt": "0",
+        "kategorie": "", "kategorie__gemischt": "0",
+        "notizen": "", "notizen__gemischt": "0",
+        "zurueck_ordner_id": "",
+    }, follow_redirects=False)
+    assert queries.get_kontakt(tmp_db, k1)["rolle"] == "Chefin"
+    assert queries.get_kontakt(tmp_db, k2)["rolle"] == "Chefin"

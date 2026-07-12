@@ -171,3 +171,48 @@ label { display: block; font-size: 0.85rem; color: var(--text-hell); margin-bott
     background: #fff;
 }
 .ordner-checkliste label { display: flex; align-items: center; gap: 0.4rem; font-size: 0.9rem; margin: 0; color: var(--text); }
+
+/* Combobox fuer die Funktion-Auswahl (ersetzt natives <datalist>, um eine
+   "Neuer Eintrag erstellen"-Option anzeigen zu koennen). */
+.combobox { position: relative; }
+.combobox-input { width: 100%; }
+.combobox-liste {
+    display: none;
+    position: absolute;
+    top: calc(100% + 2px);
+    left: 0;
+    right: 0;
+    z-index: 20;
+    margin: 0;
+    padding: 0.25rem;
+    list-style: none;
+    background: #fff;
+    border: 1px solid var(--rand);
+    border-radius: 6px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.08);
+    max-height: 220px;
+    overflow-y: auto;
+}
+.combobox-liste.sichtbar { display: block; }
+.combobox-liste li { padding: 0.4rem 0.5rem; border-radius: 4px; font-size: 0.9rem; cursor: pointer; }
+.combobox-liste li:hover { background: var(--flaeche-hover); }
+.combobox-liste li.combobox-neu { color: var(--akzent); font-weight: 600; border-top: 1px solid var(--rand); margin-top: 0.2rem; padding-top: 0.5rem; }
+
+/* Sammel-Bearbeiten-Leiste, erscheint sobald Kontakte per Checkbox ausgewaehlt sind */
+.sammel-leiste {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    background: var(--akzent);
+    color: #fff;
+    padding: 0.6rem 1rem;
+    border-radius: 8px;
+    margin-bottom: 0.75rem;
+}
+.sammel-leiste button.secondary { background: #fff; color: var(--akzent); border-color: transparent; }
+
+/* Platzhalter fuer Felder mit unterschiedlichen Werten beim Sammel-Bearbeiten */
+input.gemischt::placeholder, textarea.gemischt::placeholder { color: var(--text-hell); font-style: italic; }
