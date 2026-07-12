@@ -347,8 +347,30 @@ Umgesetzt und end-to-end im Browser verifiziert (2026-07-10):
   `add-trusted-cert`-Aufruf vorhanden). End-to-End auf dem Mac Studio bestätigt: Account im Modus
   "Manuell" (nur Hostname) synchronisiert alle 1535 Karten + 32 Gruppen korrekt in Kontakte.app.
   `scripts/fix-macos-trust.sh` steht für bestehende Installationen ohne neuen Postinstall bereit.
+- **Eingebettetes Python im `.pkg` (2026-07-12):** `build-pkg.sh` lädt jetzt analog zu Archivios
+  `build_server_app.sh` universelles Python 3.13 via `python-build-standalone` (arm64 **und** x86_64,
+  Cache über MD5-Hash von `requirements.txt`), installiert alle Abhängigkeiten hinein und kopiert beide
+  Umgebungen nach `Contents/Frameworks/rubrica-python-{arch}/` ins App-Bundle (Ad-hoc-Codesignierung der
+  `.so`/`.dylib`/Binaries für Gatekeeper). Beide Launcher (`Rubrica Server`, `Rubrica Radicale`) bevorzugen
+  das eingebettete Python der laufenden Architektur (`uname -m`) und fallen nur, falls für diese Architektur
+  kein eingebettetes Python mitgeliefert wurde, auf den alten System-Python+venv-Weg zurück
+  (`bootstrap_venv.sh`, unverändert als Fallback erhalten). Grund: **kein** Abhängigkeit mehr von der
+  jeweils auf iMac/Mac Studio installierten Python-Version — iMac und Mac Studio können unterschiedliche
+  oder gar keine Python-Installation haben, ohne dass es zu Versions-/Paketkonflikten kommt.
+  `.pkg`-Größe dadurch von 46 KB auf ~92 MB gestiegen (zwei komplette Python-Laufzeiten inkl. FastAPI/
+  Uvicorn/Radicale/bcrypt/vobject) — bewusst in Kauf genommen für Robustheit, deutlich kleiner als Archivios
+  ~290 MB (kein PyMuPDF/PyObjC). Lokal auf dem Mac Studio installiert und verifiziert: beide Prozesse laufen
+  nachweislich unter `Contents/Frameworks/rubrica-python-arm64/bin/python3` (nicht mehr unter dem alten
+  venv), Web-UI (200) und CardDAV (207) funktionieren, alle 1503 Kontakte/32 Ordner/1535 Radicale-Karten
+  unverändert erhalten. Altes, jetzt ungenutztes venv unter `~/Library/Application Support/Rubrica/.venv`
+  entfernt.
+  - **Stolperstein:** `launchctl bootstrap` im Postinstall-Skript schlug fehl, als das `.pkg` über
+    `osascript … with administrator privileges` (GUI-Passwortdialog statt Terminal-`sudo`) installiert
+    wurde — die LaunchAgents wurden zwar als Plist geschrieben, aber nicht in die GUI-Sitzung eingehängt.
+    Workaround: einmalig manuell `launchctl bootstrap gui/<uid> <plist>` je Dienst. Für den iMac-Rollout
+    testen, ob Installation über Doppelklick/Finder (statt osascript-Fernsteuerung) davon unberührt ist.
 
-Bekannte Einschränkung: Entwicklungsumgebung läuft unter Python 3.9 (Systemversion) statt der ursprünglich in Abschnitt 6 vermuteten 3.12 — FastAPI-Routenparameter deshalb mit `typing.Optional[int]` statt `int | None` (siehe `CLAUDE.md`).
+Bekannte Einschränkung: Entwicklungsumgebung läuft unter Python 3.9 (Systemversion) statt der ursprünglich in Abschnitt 6 vermuteten 3.12 — FastAPI-Routenparameter deshalb mit `typing.Optional[int]` statt `int | None` (siehe `CLAUDE.md`). Dies betrifft nur die lokale Entwicklungsumgebung; das produktive `.pkg` bringt sein eigenes Python 3.13 mit und ist davon unabhängig.
 
 Nächste sinnvolle Schritte: `.pkg` auf dem echten iMac installieren (Account beim Einrichten im Modus
 "Manuell" mit nur dem Hostnamen anlegen, siehe Abschnitt 9), danach Phase 3 (Excel/PDF-Export).
