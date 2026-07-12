@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Export – Rubrica{% endblock %}
+{% block content %}
+<h1>Export</h1>
+<p class="empty">
+    Kontaktliste eines Ordners als formatierte PDF-Liste, Excel-Tabelle (CSV) und/oder
+    vCard-Datei zum direkten Import in Kontakte.app exportieren.
+</p>
+
+{% if fehler == "formate" %}
+<p class="fehler">Bitte mindestens ein Format auswählen.</p>
+{% endif %}
+
+<form method="post" action="/export">
+    <div class="field">
+        <label>Ordner</label>
+        <select name="ordner_id">
+            <option value="">Alle Kontakte</option>
+            {% for o in ordner %}
+            <option value="{{ o.id }}">{{ o.name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <fieldset>
+        <legend>Format(e)</legend>
+        <label style="display:inline-block; margin-right: 1rem;">
+            <input type="checkbox" name="formate" value="pdf" checked> PDF (formatierte Liste)
+        </label>
+        <label style="display:inline-block; margin-right: 1rem;">
+            <input type="checkbox" name="formate" value="csv" checked> CSV (Excel/Tabelle)
+        </label>
+        <label style="display:inline-block; margin-right: 1rem;">
+            <input type="checkbox" name="formate" value="vcard" checked> vCard (Kontakte/.vcf)
+        </label>
+    </fieldset>
+
+    <button type="submit">Exportieren</button>
+</form>
+{% endblock %}
