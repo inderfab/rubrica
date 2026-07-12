@@ -86,3 +86,26 @@ label { display: block; font-size: 0.85rem; color: #515154; margin-bottom: 0.2re
 .kontakte-hauptbereich { flex: 1; min-width: 0; }
 .zieh-griff { color: #c7c7cc; width: 1.5rem; text-align: center; user-select: none; cursor: grab; }
 .zieh-griff:active { cursor: grabbing; }
+
+/* Flyover-Modal fuer Kontakt-Bearbeiten */
+.modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 100;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 3rem 1rem;
+    overflow-y: auto;
+}
+.modal-overlay.sichtbar { display: flex; }
+.modal-panel {
+    background: #f5f5f7;
+    border-radius: 10px;
+    padding: 1.5rem;
+    max-width: 800px;
+    width: 100%;
+    max-height: calc(100vh - 6rem);
+    overflow-y: auto;
+}

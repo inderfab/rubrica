@@ -5,9 +5,11 @@
 <p class="empty">
     Zeigt Kontaktvorschläge aus bereits von Archivio erfassten E-Mail-Signaturen –
     <strong>rein lesend</strong>, es wird noch nichts gespeichert. Nur Absender mit mehreren
-    E-Mails und einer Signatur mit Telefonnummer <em>und</em> Firma werden vorgeschlagen
-    (bewusst streng, um die Kontaktliste nicht zu überschwemmen). Bereits vorhandene
-    Kontakte werden automatisch übersprungen.
+    E-Mails werden geprüft, und nur wenn Name, Firma, Telefonnummer <em>und</em> E-Mail
+    <strong>alle vollständig</strong> erkannt wurden (bewusst streng, um die Kontaktliste nicht mit
+    unvollständigen Einträgen zu überschwemmen). Bereits vorhandene Kontakte (per E-Mail, Name
+    oder Telefonnummer erkannt) werden automatisch übersprungen. Wenige oder keine Vorschläge sind
+    normal, u. a. weil Archivios eigener Mail-Scanner E-Mail-Signaturen teilweise abschneidet.
 </p>
 
 {% if fehler %}

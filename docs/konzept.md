@@ -539,12 +539,46 @@ die Adoption abwürgen). Später: sicherer Remote-Zugriff für On-Site-Erfassung
   darüber erfolgreich aufgerufen (0 Kandidaten, weil die zuvor gefundenen 2 Personen als Kontakt bereits
   vorhanden sind — Dublettenschutz korrekt gegen den vollen 1503-Kontakte-Bestand verifiziert).
 
+- **Bearbeiten-Flyover + Drag-Ziehbild + Archivio-Qualitaet (2026-07-12, Nutzer-Feedback nach Live-Test):**
+  - **Bearbeiten war nicht auffindbar:** Name-Klick funktionierte fuer den Nutzer trotz Drag&Drop-Fix nicht
+    zuverlaessig. Neu: expliziter **„Bearbeiten"-Button links vom „Löschen"-Button**, oeffnet den Kontakt als
+    **Flyover** (Modal-Overlay) statt Seitenwechsel — per htmx-Fragment (`kontakt_bearbeiten_modal.html`,
+    gemeinsames Formular-Include `_kontakt_bearbeiten_form.html`, geteilt mit der Vollseite
+    `contact_form.html`, keine doppelte Logik). Name in der Liste ist wieder reiner Text (kein Link mehr) -
+    Bearbeiten geht ausschliesslich ueber den Button.
+  - **Ziehbild beim Drag&Drop:** Der Ziehgriff „⠿" allein zeigte waehrend des Ziehens nicht, welcher Kontakt
+    gerade bewegt wird. Custom Drag-Image (`DataTransfer.setDragImage`) zeigt jetzt „⠿ Vorname Nachname"
+    waehrend des Ziehens.
+  - **Archivio-Kandidatenqualitaet grundlegend ueberarbeitet** nach konkretem Nutzer-Feedback (Funktions-
+    zeile als Name, fehlende E-Mail, Newsletter-Text als Firma, unplausible Telefonnummer, bereits
+    bestehende Kontakte tauchten erneut auf):
+    - **Ursachenklaerung (Nutzerfrage beantwortet):** Ja, Archivio hat einen Signatur-Entferner. In
+      `archivio/scanner/mail_scanner.py` schneidet `_strip_signature` bei IMAP-gescannten Mails ALLES nach
+      einer Grussformel ("Freundliche Grüsse" etc.) ab, bevor der Text ueberhaupt in Archivios DB landet —
+      der Rohtext wird nirgends aufbewahrt, das ist fuer IMAP-Mails unwiederbringlich (nur bei
+      `.eml`-Dateien im Dateisystem-Scan bleibt die Signatur intakt). Erklaert fehlende E-Mails/Namen direkt
+      an der Quelle, nicht in Rubrica behebbar.
+    - **`importer/signatur.py` gehaertet:** Regex-Bug behoben (`\bdipl\.\b` matcht nie, wenn ein Punkt von
+      einem Leerzeichen gefolgt wird — beide Nicht-Wortzeichen, keine Wortgrenze); Namens-Erkennung lehnt
+      jetzt Zeilen ab, die wie eine Funktion/Titel aussehen (`_ROLLE_KENNUNG`-Ueberschneidung); Firma auf
+      max. 80 Zeichen begrenzt (verhindert Newsletter-Absaetze als "Firma"); neue
+      `_ist_plausible_telefonnummer()` verwirft Zahlenfolgen mit ungueltiger Schweizer Vorwahl (zweite
+      Ziffer nach der Landes-/Trunk-Null darf nie 0 oder 1 sein — verwirft z. B. "011 8544 000").
+    - **`archivio_bridge/anbindung.py` strenger gefasst:** verlangt jetzt ALLE VIER Felder vollstaendig
+      (Vor- UND Nachname, Firma, mind. 1 Telefonnummer, mind. 1 E-Mail) statt nur Telefon+Firma; probiert
+      bis zu 5 Mails je Absender (nicht nur die neueste), falls eine durch Archivios Signatur-Kappung
+      unvollstaendig ist; Dublettenpruefung jetzt zusaetzlich per Name und Telefonnummer (nicht nur E-Mail).
+    - 9 neue/aktualisierte Tests fuer `archivio_bridge` (16 fuer `signatur.py` insgesamt), alle synthetisch
+      nachgebaut aus den konkret gemeldeten Faellen. Live gegen den echten Archivio-Bestand erneut verifiziert:
+      0 Kandidaten (vorher 2, beide waren unvollstaendig — jetzt korrekt durch den strengeren Filter
+      ausgeschlossen).
+
 Bekannte Einschränkung: Entwicklungsumgebung läuft unter Python 3.9 (Systemversion) statt der ursprünglich in Abschnitt 6 vermuteten 3.12 — FastAPI-Routenparameter deshalb mit `typing.Optional[int]` statt `int | None` (siehe `CLAUDE.md`). Dies betrifft nur die lokale Entwicklungsumgebung; das produktive `.pkg` bringt sein eigenes Python 3.13 mit und ist davon unabhängig.
 
-Nächste sinnvolle Schritte: Neues `.pkg` (Menubar-App + Drag&Drop-Fix + Einstellungsseite + reportlab +
-Archivio-Anbindung) auf dem iMac installieren (Menubar-App-Migration entlaedt dabei automatisch den alten
-Radicale-Agent). Auf dem iMac unter „Einstellungen" `archivio.db_path` auf
-`/Users/pas/Library/Application Support/Archivio/archivio.db` setzen, falls Archivio dort auch aktiv genutzt
-werden soll. Danach: mehr Postfächer/Projekte in Archivio scannen lassen, um die Archivio-Vorschau
-ertragreicher zu machen; UI-Komfort fuer die Archivio-Vorschau ausbauen
+Nächste sinnvolle Schritte: Neues `.pkg` (Bearbeiten-Flyover + Archivio-Qualitaetsfix + Menubar-App +
+Einstellungsseite + reportlab) auf dem iMac installieren. Auf dem iMac unter „Einstellungen" `archivio.db_path`
+auf `/Users/pas/Library/Application Support/Archivio/archivio.db` setzen, falls Archivio dort auch aktiv
+genutzt werden soll. Danach: mehr Postfächer/Projekte in Archivio scannen lassen (idealerweise auch aus dem
+Dateisystem statt nur IMAP, da dort die Signatur nicht abgeschnitten wird), um die Archivio-Vorschau
+ertragreicher zu machen.
 (z. B. einzelne Kandidaten abwaehlen koennen, statt alles-oder-nichts).

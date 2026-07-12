@@ -82,3 +82,76 @@ def test_kandidat_enthaelt_anzahl_mails(archivio_db, tmp_db):
     kandidaten = hole_kandidaten(archivio_db, tmp_db, min_mails=2)
     anna = next(k for k in kandidaten if k["emails"] and k["emails"][0]["email"] == "anna@beispiel.ch")
     assert anna["anzahl_mails"] == 2
+
+
+def test_dublette_per_name_auch_bei_anderer_mailadresse_erkannt(archivio_db, tmp_db):
+    # Gleicher Name wie "Anna Beispiel", aber andere Mailadresse hinterlegt -
+    # muss trotzdem als Dublette erkannt werden (nicht nur per E-Mail-Abgleich).
+    queries.create_kontakt(tmp_db, {
+        "vorname": "Anna", "nachname": "Beispiel",
+        "emails": [{"typ": "arbeit", "email": "andere-adresse@example.com"}],
+    })
+    kandidaten = hole_kandidaten(archivio_db, tmp_db, min_mails=2)
+    mails = {k["emails"][0]["email"] for k in kandidaten if k["emails"]}
+    assert "anna@beispiel.ch" not in mails
+
+
+def test_dublette_per_telefon_erkannt(archivio_db, tmp_db):
+    kontakt_id = queries.create_kontakt(tmp_db, {"vorname": "Jemand", "nachname": "Anders"})
+    queries.update_kontakt(tmp_db, kontakt_id, {
+        "vorname": "Jemand", "nachname": "Anders",
+        "telefonnummern": [{"typ": "arbeit", "nummer": "044 123 45 67"}],
+    })
+    kandidaten = hole_kandidaten(archivio_db, tmp_db, min_mails=2)
+    mails = {k["emails"][0]["email"] for k in kandidaten if k["emails"]}
+    assert "anna@beispiel.ch" not in mails
+
+
+def test_kandidat_ohne_email_wird_ausgeschlossen(tmp_path, tmp_db):
+    pfad = tmp_path / "archivio-ohne-email.db"
+    conn = sqlite3.connect(pfad)
+    conn.executescript("""
+        CREATE TABLE documents (id INTEGER PRIMARY KEY, source_type TEXT);
+        CREATE TABLE document_content (document_id INTEGER, content TEXT);
+        CREATE TABLE mails (document_id INTEGER, sender TEXT, date TEXT);
+    """)
+    # Signatur ohne erkennbare E-Mail-Adresse, Absenderadresse selbst ist ungueltig
+    # (kein Absender im klassischen Sinn, z.B. eine Mailingliste) -> kein Fallback moeglich.
+    sig = "Peter Muster\nMuster AG\n044 123 45 67"
+    for i, datum in enumerate(["2026-01-01", "2026-01-02"], start=1):
+        conn.execute("INSERT INTO documents (id, source_type) VALUES (?, 'email')", (i,))
+        conn.execute("INSERT INTO document_content (document_id, content) VALUES (?, ?)", (i, sig))
+        conn.execute("INSERT INTO mails (document_id, sender, date) VALUES (?, 'nicht-e-mail-artig', ?)", (i, datum))
+    conn.commit()
+    conn.close()
+
+    kandidaten = hole_kandidaten(str(pfad), tmp_db, min_mails=2)
+    assert kandidaten == []
+
+
+def test_mehrere_versuche_pro_absender_bei_unvollstaendiger_erster_mail(tmp_path, tmp_db):
+    """Simuliert Archivios Signatur-Kappung: die neueste Mail eines Absenders ist
+    unvollstaendig (E-Mail fehlt, z.B. weil sie nach der Grussformel abgeschnitten
+    wurde), eine aeltere Mail desselben Absenders liefert aber ein vollstaendiges
+    Ergebnis - hole_kandidaten soll dann die aeltere Mail verwenden."""
+    pfad = tmp_path / "archivio-mehrere-versuche.db"
+    conn = sqlite3.connect(pfad)
+    conn.executescript("""
+        CREATE TABLE documents (id INTEGER PRIMARY KEY, source_type TEXT);
+        CREATE TABLE document_content (document_id INTEGER, content TEXT);
+        CREATE TABLE mails (document_id INTEGER, sender TEXT, date TEXT);
+    """)
+    sig_gekappt = "Peter Muster\nMuster AG\n044 123 45 67"  # keine E-Mail (abgeschnitten)
+    sig_vollstaendig = "Peter Muster\nMuster AG\n044 123 45 67\npeter@muster.ch"
+    conn.execute("INSERT INTO documents (id, source_type) VALUES (1, 'email')")
+    conn.execute("INSERT INTO document_content (document_id, content) VALUES (1, ?)", (sig_gekappt,))
+    conn.execute("INSERT INTO mails (document_id, sender, date) VALUES (1, 'peter@muster.ch', '2026-01-05')")
+    conn.execute("INSERT INTO documents (id, source_type) VALUES (2, 'email')")
+    conn.execute("INSERT INTO document_content (document_id, content) VALUES (2, ?)", (sig_vollstaendig,))
+    conn.execute("INSERT INTO mails (document_id, sender, date) VALUES (2, 'peter@muster.ch', '2026-01-01')")
+    conn.commit()
+    conn.close()
+
+    kandidaten = hole_kandidaten(str(pfad), tmp_db, min_mails=2)
+    assert len(kandidaten) == 1
+    assert kandidaten[0]["emails"][0]["email"] == "peter@muster.ch"

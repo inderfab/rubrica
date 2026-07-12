@@ -38,9 +38,12 @@ _FIRMA_KENNUNG = re.compile(
 
 # ── Funktion/Rolle-Schluesselwoerter ─────────────────────────────────────────
 _ROLLE_KENNUNG = re.compile(
+    # "dipl\." separat: das abschliessende \b der Gruppe greift nie nach einem
+    # Punkt (nicht-Wortzeichen), wenn danach ein Leerzeichen folgt - beide Seiten
+    # sind dann Nicht-Wortzeichen, also keine Wortgrenze.
     r"\b(Geschäftsführer\w*|Inhaber\w*|Partner\w*|Projektleiter\w*|Bauleiter\w*|"
     r"Architekt\w*|Ingenieur\w*|Geolog\w*|Planer\w*|Sachbearbeiter\w*|"
-    r"dipl\.|CEO|Leiter\w*|Vorsitzende\w*)\b",
+    r"CEO|Leiter\w*|Vorsitzende\w*)\b|\bdipl\.",
     re.IGNORECASE,
 )
 
@@ -75,6 +78,27 @@ def _telefon_typ(kontext: str) -> str:
 def _normalisiere_nummer(roh: str) -> str:
     nummer = re.sub(r"[^\d+]", " ", roh)
     return re.sub(r"\s+", " ", nummer).strip()
+
+
+def _ist_plausible_telefonnummer(normalisiert: str) -> bool:
+    """Grobe Plausibilitaetspruefung fuer Schweizer/internationale Nummern -
+    verwirft Zahlenfolgen, die zufaellig wie eine Nummer aussehen (Copyright-
+    Jahr + ID, Referenznummern etc. aus Newsletter-Fusszeilen o.ae.), aber
+    keine echte Rufnummer sind. Schweizer Vorwahlen/Mobilvorwahlen beginnen nie
+    mit einer 0 oder 1 als zweiter Ziffer (z.B. "011..." ist ungueltig)."""
+    ziffern = re.sub(r"\D", "", normalisiert)
+    if normalisiert.startswith("+41"):
+        rest = ziffern[2:]  # "41..." -> Laendervorwahl abschneiden
+        return len(rest) == 9 and rest[0] not in "01"
+    if ziffern.startswith("0041"):
+        rest = ziffern[4:]
+        return len(rest) == 9 and rest[0] not in "01"
+    if normalisiert.startswith("+"):
+        # andere Laendervorwahl - grobe Plausibilitaet (Laenge), keine Detailpruefung.
+        return 8 <= len(ziffern) <= 15
+    if ziffern.startswith("0"):
+        return len(ziffern) == 10 and ziffern[1] not in "01"
+    return False
 
 
 def parse_signatur(text: str) -> dict:
@@ -112,6 +136,8 @@ def parse_signatur(text: str) -> dict:
             ziffern = re.sub(r"\D", "", normalisiert)
             if len(ziffern) < 9:  # zu kurz fuer eine echte Rufnummer
                 continue
+            if not _ist_plausible_telefonnummer(normalisiert):
+                continue
             if normalisiert in gesehene_nummern:
                 continue
             gesehene_nummern.add(normalisiert)
@@ -124,7 +150,11 @@ def parse_signatur(text: str) -> dict:
     firma = ""
     rolle = ""
     for zeile in zeilen_nonempty:
-        if not firma and _FIRMA_KENNUNG.search(zeile) and "@" not in zeile and not _URL.search(zeile):
+        # Laengen-Obergrenze: eine echte Firmenzeile ist kurz. Verhindert, dass ganze
+        # Absaetze (z.B. Newsletter-Fusszeilen, die zufaellig "AG" enthalten) als
+        # Firma uebernommen werden.
+        if (not firma and len(zeile) <= 80 and _FIRMA_KENNUNG.search(zeile)
+                and "@" not in zeile and not _URL.search(zeile)):
             firma = zeile
         if not rolle and _ROLLE_KENNUNG.search(zeile) and _FIRMA_KENNUNG.search(zeile) is None:
             rolle = zeile
@@ -150,6 +180,11 @@ def parse_signatur(text: str) -> dict:
         if _KEIN_NAME.search(zeile) or _GRUSSFORMEL.search(zeile):
             continue
         if zeile == firma:
+            continue
+        # Eine Funktions-/Titelzeile ("Dipl. Ing. Arch.", "Gesamtprojektleiter HLKS")
+        # ist kein Personenname, auch wenn sie oberflaechlich wie einer aussieht
+        # (mehrere grossgeschriebene Woerter).
+        if _ROLLE_KENNUNG.search(zeile):
             continue
         worte = zeile.split()
         if 2 <= len(worte) <= 4 and all(w[:1].isupper() for w in worte if w):
