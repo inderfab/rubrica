@@ -50,6 +50,7 @@ fieldset { border: 1px solid #d2d2d7; border-radius: 8px; margin-bottom: 1rem; p
 legend { font-weight: 600; padding: 0 0.4rem; }
 .actions { display: flex; gap: 0.5rem; }
 .empty { color: #86868b; padding: 1rem 0; }
+.fehler { color: #d70015; padding: 0.5rem 0; }
 label { display: block; font-size: 0.85rem; color: #515154; margin-bottom: 0.2rem; }
 .field { margin-bottom: 0.75rem; }
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }

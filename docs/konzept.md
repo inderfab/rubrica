@@ -153,7 +153,16 @@ Feldumfang bewusst an der tatsächlichen Nutzung im bestehenden Apple-Adressbuch
 - Bestehende lokale Gruppen aus dem Import können optional als erste Ordner übernommen werden (Apple-Gruppen-vCards mit `X-ADDRESSBOOKSERVER-KIND`/`MEMBER`, in der Praxis am bestehenden Adressbuch verifiziert: ~32 Gruppen bei 1538 Kontakten).
 
 ### 5.7 Export
-- Excel- und PDF-Export direkt aus der zentralen DB, bei Bedarf gefiltert nach Ordner/Kategorie.
+- **Umgesetzt (Phase 3, 2026-07-12):** `/export` — Nutzer wählt einen Ordner (oder "Alle Kontakte") und
+  ein oder mehrere Formate (PDF, CSV, vCard), Rubrica liefert alle gewählten Dateien gebündelt als ein
+  einziges ZIP-Archiv (`Ordnername_JJJJ-MM-TT.zip`) zum Download. Erzeugung in `export/generator.py`:
+  - **PDF:** formatierte Liste (reportlab), pro Kontakt ein zusammenhängender Block (Name, Firma/Rolle,
+    Telefon/E-Mail/Adresse/Web, Notizen), Titel + Datum + Anzahl Kontakte im Kopf.
+  - **CSV:** Excel-kompatibel (Semikolon-getrennt, UTF-8 mit BOM für korrekte Umlaut-Darstellung in Excel).
+  - **vCard:** eine `.vcf`-Datei mit allen Kontakten des Ordners (Mehrfach-vCard, direkt per Doppelklick in
+    Kontakte.app importierbar) — nutzt dieselbe `kontakt_zu_vcard()`-Funktion wie der CardDAV-Sync
+    (`sync/radicale.py`), keine doppelte Formatierungslogik.
+  - Neue Abhängigkeit `reportlab==5.0.0` in `requirements.txt`.
 
 ## 6. Vorgeschlagener Tech-Stack
 
@@ -184,7 +193,7 @@ Geklärt: Zugriff erfolgt vorerst ausschließlich lokal im Büro-LAN, kein Remot
 | 0 | Import bestehender Adressbücher (alle Mitarbeiter-Exporte) + Dedup über Review-Queue |
 | 1 | Zentrale DB + Web-UI für manuelle Eingabe (löst das Kernproblem bereits) |
 | 2 | Radicale-Anbindung inkl. Apple-Gruppen-Spike – **zuerst isoliert testen**, bevor der Rest darauf aufbaut |
-| 3 | Export-Funktionen (Excel/PDF) |
+| 3 ✅ | Export-Funktionen (PDF/CSV/vCard, pro Ordner, siehe Abschnitt 5.7) |
 | 4 *(zurückgestellt)* | Archivio-Integration: zunächst Schema-Sichtung + Extraktionslogik für Adressdaten aus Freitext, danach Matching-Engine. Startet erst, wenn Phase 1–3 stehen und Archivios SQL-Schema bekannt ist |
 
 ## 9. Offene Punkte / Risiken
@@ -410,9 +419,18 @@ Umgesetzt und end-to-end im Browser verifiziert (2026-07-10):
     AddressBook-Sources-Cache (`~/Library/Application Support/AddressBook/Sources/*/Metadata/*.abcdp`).
     Der lokale Testserver auf dem Mac Studio wurde gestoppt (nicht deinstalliert), um Doppelbetrieb mit
     divergierenden Datenständen zu vermeiden — der iMac ist jetzt die einzige aktive Instanz.
+- **Phase 3: Export (2026-07-12):** siehe Abschnitt 5.7 für die Details. Neues Modul `export/generator.py`
+  (PDF/CSV/vCard-Erzeugung, 5 Tests in `tests/test_export.py`) + `web/export.py` (Route `/export`,
+  Formular- und ZIP-Logik) + Template `web/templates/export.html` + Nav-Link in `base.html`. Lokal end-to-end
+  gegen echte Daten getestet (Ordner mit 10 echten Kontakten exportiert, alle drei Formate im ZIP korrekt:
+  CSV mit korrekten Umlauten, 10 vCards, gültiges PDF). Alle 27 Tests (bestehend + neu) grün.
+  **Hinweis:** Das produktive `.pkg` auf dem iMac/Mac Studio wurde noch nicht mit der neuen
+  `reportlab`-Abhängigkeit neu gebaut/installiert — vor Nutzung des Exports in Produktion `.pkg` neu bauen
+  und ausrollen (`scripts/build-pkg.sh`, danach Installation + `.venv`/eingebettetes Python aktualisieren).
 
 Bekannte Einschränkung: Entwicklungsumgebung läuft unter Python 3.9 (Systemversion) statt der ursprünglich in Abschnitt 6 vermuteten 3.12 — FastAPI-Routenparameter deshalb mit `typing.Optional[int]` statt `int | None` (siehe `CLAUDE.md`). Dies betrifft nur die lokale Entwicklungsumgebung; das produktive `.pkg` bringt sein eigenes Python 3.13 mit und ist davon unabhängig.
 
-Nächste sinnvolle Schritte: Phase 3 (Excel/PDF-Export). Optional: weitere Arbeitsstationen im Büro als
-CardDAV-Clients gegen den iMac einrichten (gleiches Vorgehen: Modus "Manuell", nur Hostname, iMac-CA einmalig
-vertrauen).
+Nächste sinnvolle Schritte: `.pkg` mit der neuen Export-Funktion (reportlab) neu bauen und auf dem iMac
+ausrollen. Optional: weitere Arbeitsstationen im Büro als CardDAV-Clients gegen den iMac einrichten (gleiches
+Vorgehen: Modus "Manuell", nur Hostname, iMac-CA einmalig vertrauen). Danach Phase 4 (Archivio-Integration,
+zurückgestellt).

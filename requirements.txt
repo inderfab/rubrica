@@ -14,3 +14,6 @@ vobject==0.9.7
 # CardDAV-Server (Phase 2)
 radicale==3.7.6
 bcrypt==4.2.1           # fuer htpasswd-Auth (radicale.auth.htpasswd)
+
+# Export (Phase 3)
+reportlab==5.0.0        # PDF-Erzeugung
