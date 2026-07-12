@@ -85,3 +85,20 @@ def test_kompakte_signatur_mit_labels():
     assert typen == {"arbeit", "fax", "mobil"}
     assert d["firma"] == "GeoTest AG"
     assert d["emails"][0]["email"] == "hans.meier@geotest.ch"
+
+
+def test_lange_tracking_links_werden_ignoriert():
+    """SharePoint/OneDrive-Freigabelinks (kodierte Query-Strings, oft >100 Zeichen)
+    sollen nicht als Homepage uebernommen werden - gefunden bei Haertung an echten
+    (anonymisiert analysierten) E-Mail-Signaturen."""
+    tracking_link = "https://firma-my.sharepoint.com/personal/x/_layouts/15/onedrive.aspx" + "?id=" + "a" * 150
+    sig = f"Max Muster\nMuster AG\nwww.muster.ch\n{tracking_link}"
+    d = parse_signatur(sig)
+    urls = [u["url"] for u in d["urls"]]
+    assert "www.muster.ch" in urls
+    assert not any(len(u) > 120 for u in urls)
+
+
+def test_kurze_url_bleibt_erhalten():
+    d = parse_signatur("Max Muster\nhttps://muster.ch/team")
+    assert d["urls"][0]["url"] == "https://muster.ch/team"

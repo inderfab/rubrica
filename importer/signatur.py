@@ -97,6 +97,12 @@ def parse_signatur(text: str) -> dict:
             # E-Mail-Domain nicht faelschlich als URL zaehlen
             if "@" in u:
                 continue
+            # Lange Tracking-/Freigabe-Links (SharePoint, OneDrive u.ae. mit
+            # kodierten Query-Strings) nicht als "Homepage" uebernehmen - echte
+            # Firmen-Homepages sind kurz, solche Links koennen mehrere hundert
+            # Zeichen lang sein und wuerden das Formularfeld verunstalten.
+            if len(u) > 120:
+                continue
             if u.lower() not in gesehene_urls:
                 gesehene_urls.add(u.lower())
                 urls.append({"typ": "homepage", "url": u})
