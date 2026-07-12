@@ -22,8 +22,12 @@
             <input type="text" name="rolle" value="{{ kontakt.rolle if kontakt else '' }}">
         </div>
         <div class="field">
-            <label>Kategorie</label>
-            <input type="text" name="kategorie" value="{{ kontakt.kategorie if kontakt else '' }}" placeholder="z. B. Fachplaner, Unternehmer">
+            <label>Funktion</label>
+            <input type="text" name="kategorie" list="funktion-liste"
+                   value="{{ kontakt.kategorie if kontakt else '' }}" placeholder="z. B. Bauingenieur/Statik">
+            <datalist id="funktion-liste">
+                {% for f in funktionen %}<option value="{{ f }}">{% endfor %}
+            </datalist>
         </div>
     </div>
 

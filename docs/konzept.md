@@ -114,7 +114,20 @@ Feldumfang bewusst an der tatsächlichen Nutzung im bestehenden Apple-Adressbuch
 
 ### 5.1 Zentrale App (Backend + Web-UI)
 - Verwaltet CRUD auf Kontakte (inkl. Telefonnummern, E-Mails, Adressen, URLs, Notizen), Ordner.
-- **Bewusst keine Funktion zum Neuanlegen von Kontakten in der App.** Neue Kontakte entstehen weiterhin in Kontakte.app (gewohntes Tool, volle Apple-Feldpalette) und kommen ausschliesslich über den Import (siehe 5.6) in die App. Die Web-UI dient dem Bearbeiten bestehender Kontakte (Rubrica-eigene Felder wie Kategorie/Ordner-Zuordnung, Korrekturen an importierten Daten).
+- **Direktes Neuanlegen von Kontakten über die Web-UI (`/kontakte/neu`, umgesetzt 2026-07-12).**
+  *Revidiert die ursprüngliche Entscheidung „bewusst keine Neuanlage".* Grund: Das Kernproblem des Büros
+  ist, dass Kontakte **gar nicht erst erfasst** werden (Wissen bleibt bei Einzelpersonen). „In Kontakte.app
+  anlegen → exportieren → importieren" ist genau die Reibung, die das verhindert. Ein Web-Formular zum
+  Neuanlegen braucht **keinen** bidirektionalen Sync (Rubrica bleibt Single Source of Truth, pusht einseitig
+  zu Apple) und ist daher voll mit dem Architekturprinzip vereinbar. Das Formular ist bewusst minimal und
+  mobiltauglich. **Reibungssenker: E-Mail-Signatur einfügen** → `importer/signatur.py` parst sie und füllt
+  die Felder vor (danach editierbar). Kontakte werden **direkt angelegt** (kein Freigabe-Gate — Reibung
+  würde die Erfassung verhindern), nachträglich korrigierbar; Duplikat-Bereinigung ist Admin-Aufgabe über
+  die Review-Queue (Ausbau geplant). Der bisherige Weg (Import aus Kontakte.app, 5.6) bleibt zusätzlich
+  bestehen.
+- **Feld „Funktion"** (Fachrichtung: Architekt, Bauingenieur, Geologe, div. Planer …) pro Kontakt, damit der
+  Chef nach Ansprechpartner-Rolle filtern/exportieren kann. Auswahlliste + Freitext (nicht erzwungen).
+  Technisch im bestehenden Feld `kategorie` gespeichert (nur UI-Label „Funktion"), keine DB-Migration.
 - Stellt die Review-Queue als UI bereit (offene Vorschläge bestätigen/ablehnen/zusammenführen).
 - **Push-Sync nach Radicale** (`sync/radicale.py`): bei jeder Kontakt-Änderung/-Löschung, Ordner-Zuordnung
   oder Vorschlag-Bestätigung schreibt die App die betroffene(n) vCard(s) per CardDAV `PUT` (Legt die
@@ -147,7 +160,7 @@ Feldumfang bewusst an der tatsächlichen Nutzung im bestehenden Apple-Adressbuch
 
 ### 5.6 Import bestehender Adressbücher — dauerhafter Eingabeweg, nicht nur Einmal-Migration
 - Export als `.vcf` aus Kontakte.app (Ablage → Exportieren → vCard exportieren) bei jedem Mitarbeiter. Sowohl Einzel-Export (ein Kontakt) als auch Batch-Export (alle/mehrere Kontakte in einer Datei) werden unterstützt; mehrere Dateien gleichzeitig hochladbar.
-- **Das bleibt dauerhaft der einzige Weg, Kontakte anzulegen/zu aktualisieren — nicht nur für die initiale Migration.** Grund: eine echte bidirektionale CardDAV-Synchronisation (Kontakte.app ↔ App) würde das Kernprinzip "nie automatisches Überschreiben" aushebeln, weil Änderungen aus Kontakte.app dann ungeprüft durchschlagen würden. Auch nach Phase 2 bleibt Radicale nur Ausgaberichtung (App → Apple Kontakte für Klickwahl); die Rückrichtung bleibt bewusst Export → Import → Review-Queue.
+- **Import bleibt *ein* Weg der Erfassung (neben der direkten Web-Neuanlage, siehe 5.1), aber der einzige aus Kontakte.app zurück.** Grund: eine echte bidirektionale CardDAV-Synchronisation (Kontakte.app ↔ App) würde das Kernprinzip "nie automatisches Überschreiben" aushebeln, weil Änderungen aus Kontakte.app dann ungeprüft durchschlagen würden. Radicale bleibt nur Ausgaberichtung (App → Apple Kontakte für Klickwahl); die Rückrichtung aus Kontakte.app bleibt bewusst Export → Import → Review-Queue. (Direktes Neuanlegen in der Web-UI umgeht Kontakte.app ganz und ist davon unberührt.)
 - Import-Parser mappt vCard-Felder auf das Datenmodell: Name, Firma, Rolle, Telefonnummern, E-Mails, Postadressen (ADR), Homepage/URLs, Notizen (NOTE).
 - Da mehrere, teils überlappende Mitarbeiter-Kopien existieren: alle Exporte importieren und dieselbe Review-Queue-Logik (siehe `VORSCHLAEGE`-Tabelle) für die Dedup-/Zusammenführung nutzen – keine zweite Logik nötig, auch nicht für die spätere Archivio-Integration. Matching-Reihenfolge: exakte E-Mail → normalisierte Telefonnummer → exakter Vor-/Nachname.
 - Bestehende lokale Gruppen aus dem Import können optional als erste Ordner übernommen werden (Apple-Gruppen-vCards mit `X-ADDRESSBOOKSERVER-KIND`/`MEMBER`, in der Praxis am bestehenden Adressbuch verifiziert: ~32 Gruppen bei 1538 Kontakten).
@@ -430,7 +443,24 @@ Umgesetzt und end-to-end im Browser verifiziert (2026-07-10):
 
 Bekannte Einschränkung: Entwicklungsumgebung läuft unter Python 3.9 (Systemversion) statt der ursprünglich in Abschnitt 6 vermuteten 3.12 — FastAPI-Routenparameter deshalb mit `typing.Optional[int]` statt `int | None` (siehe `CLAUDE.md`). Dies betrifft nur die lokale Entwicklungsumgebung; das produktive `.pkg` bringt sein eigenes Python 3.13 mit und ist davon unabhängig.
 
-Nächste sinnvolle Schritte: `.pkg` mit der neuen Export-Funktion (reportlab) neu bauen und auf dem iMac
-ausrollen. Optional: weitere Arbeitsstationen im Büro als CardDAV-Clients gegen den iMac einrichten (gleiches
-Vorgehen: Modus "Manuell", nur Hostname, iMac-CA einmalig vertrauen). Danach Phase 4 (Archivio-Integration,
-zurückgestellt).
+- **Erfassung / Kontakt-Neuanlage (2026-07-12):** siehe Abschnitt 5.1. `importer/signatur.py` (Signatur →
+  Kontaktfelder, 10 Tests), `web/contacts.py` (Routen `/kontakte/neu`, `/kontakte/signatur-parsen`), Templates
+  `contact_new.html` + Fragment `_kontakt_felder.html`, Feld „Funktion" in Neuanlage/Bearbeiten/Liste/Filter/
+  Export. 3 Web-Smoke-Tests, alle 40 Tests grün. Lokal end-to-end verifiziert (Anlegen inkl.
+  Signatur-Vorbefüllung, Funktion in Liste, danach sauber gelöscht — Produktiv-DB unverändert).
+
+**Strategische Richtung (mit Nutzer abgestimmt, 2026-07-12):** Kernproblem ist *Wissenszentralisierung* —
+Kontakte werden nicht erfasst, darum kennt z. B. die Geschäftsleitung Ansprechpartner nicht. Zwei Hebel:
+(1) reibungslose *aktive* Erfassung (Web-Formular + Signatur-Einfügen, umgesetzt) und (2) *passive* Erfassung
+via Archivio (E-Mail-Signaturen → **gefilterte Vorschläge** in die Review-Queue, `vorschlaege.quelle='archivio'`
+existiert bereits; hohe Präzision statt Vollständigkeit, um Explosion der Kontaktzahl zu vermeiden — nächster
+grösserer Schritt). Bewusst *nicht* jetzt: Notion-Pendenzen-Kopplung (eher umständlich als hilfreich; höchstens
+später dünne Einbahn-Brücke Kontakte→Notion, wenn Schmerz bewiesen) und schwere Rechte-Bürokratie (Freigabe-Gate
+vor Erfassung würde die Adoption abwürgen). Später: sicherer Remote-Zugriff für On-Site-Erfassung.
+
+Bekannte Einschränkung: Entwicklungsumgebung läuft unter Python 3.9 (Systemversion) statt der ursprünglich in Abschnitt 6 vermuteten 3.12 — FastAPI-Routenparameter deshalb mit `typing.Optional[int]` statt `int | None` (siehe `CLAUDE.md`). Dies betrifft nur die lokale Entwicklungsumgebung; das produktive `.pkg` bringt sein eigenes Python 3.13 mit und ist davon unabhängig.
+
+Nächste sinnvolle Schritte: `.pkg` mit den neuen Abhängigkeiten (**reportlab**) neu bauen und auf dem iMac
+ausrollen — der Export **und** die Signatur-Erfassung funktionieren in Produktion erst nach diesem Rebuild
+(reportlab fehlt sonst; die Signatur-Erfassung selbst hat keine neue Abhängigkeit, läuft also auch ohne, aber
+das gemeinsame Ausrollen ist sauberer). Danach: Archivio-Anbindung als gefilterte Vorschläge (Prio 4).

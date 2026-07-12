@@ -1,0 +1,111 @@
+{# Feld-Fragment fuer die Kontakt-Neuanlage. Wird initial leer gerendert und vom
+   Signatur-Parser (htmx) vorbefuellt zurueckgegeben. Erwartet: kontakt (dict oder None),
+   funktionen (list), ordner (list), ausgewaehlte_ordner (list von ids). #}
+{% set tels = (kontakt.telefonnummern if kontakt else []) or [] %}
+{% set mails = (kontakt.emails if kontakt else []) or [] %}
+{% set urls = (kontakt.urls if kontakt else []) or [] %}
+{% set adr = (kontakt.adressen[0] if kontakt and kontakt.adressen else {}) %}
+
+<div class="grid-2">
+    <div class="field">
+        <label>Vorname</label>
+        <input type="text" name="vorname" value="{{ kontakt.vorname if kontakt else '' }}">
+    </div>
+    <div class="field">
+        <label>Nachname</label>
+        <input type="text" name="nachname" value="{{ kontakt.nachname if kontakt else '' }}">
+    </div>
+    <div class="field">
+        <label>Firma</label>
+        <input type="text" name="firma" value="{{ kontakt.firma if kontakt else '' }}">
+    </div>
+    <div class="field">
+        <label>Funktion</label>
+        <input type="text" name="kategorie" list="funktion-liste" placeholder="z. B. Bauingenieur/Statik"
+               value="{{ kontakt.kategorie if kontakt else '' }}">
+    </div>
+    <div class="field">
+        <label>Rolle / Titel <span style="color:#86868b">(optional)</span></label>
+        <input type="text" name="rolle" value="{{ kontakt.rolle if kontakt else '' }}"
+               placeholder="z. B. Geschäftsführer">
+    </div>
+</div>
+
+<datalist id="funktion-liste">
+    {% for f in funktionen %}<option value="{{ f }}">{% endfor %}
+</datalist>
+
+<fieldset>
+    <legend>Telefon</legend>
+    {% for i in range([tels|length, 3]|max) %}
+    {% set t = tels[i] if i < tels|length else {'typ': '', 'nummer': ''} %}
+    <div class="tel-row">
+        <select name="telefon_typ">
+            {% for opt in ['arbeit', 'mobil', 'fax', 'privat'] %}
+            <option value="{{ opt }}" {% if t.typ == opt %}selected{% endif %}>{{ opt }}</option>
+            {% endfor %}
+        </select>
+        <input type="text" name="telefon_nummer" value="{{ t.nummer }}" placeholder="Telefonnummer">
+    </div>
+    {% endfor %}
+</fieldset>
+
+<fieldset>
+    <legend>E-Mail</legend>
+    {% for i in range([mails|length, 2]|max) %}
+    {% set m = mails[i] if i < mails|length else {'typ': '', 'email': ''} %}
+    <div class="mail-row">
+        <select name="email_typ">
+            {% for opt in ['arbeit', 'privat'] %}
+            <option value="{{ opt }}" {% if m.typ == opt %}selected{% endif %}>{{ opt }}</option>
+            {% endfor %}
+        </select>
+        <input type="email" name="email_adresse" value="{{ m.email }}" placeholder="E-Mail">
+    </div>
+    {% endfor %}
+</fieldset>
+
+<fieldset>
+    <legend>Adresse <span style="color:#86868b; font-weight:normal">(optional)</span></legend>
+    <input type="hidden" name="adresse_typ" value="arbeit">
+    <div class="field">
+        <label>Strasse</label>
+        <input type="text" name="adresse_strasse" value="{{ adr.strasse if adr else '' }}">
+    </div>
+    <div class="grid-2">
+        <div class="field">
+            <label>PLZ</label>
+            <input type="text" name="adresse_plz" value="{{ adr.plz if adr else '' }}">
+        </div>
+        <div class="field">
+            <label>Ort</label>
+            <input type="text" name="adresse_ort" value="{{ adr.ort if adr else '' }}">
+        </div>
+    </div>
+    <input type="hidden" name="adresse_region" value="{{ adr.region if adr else '' }}">
+    <input type="hidden" name="adresse_land" value="{{ adr.land if adr else '' }}">
+</fieldset>
+
+<fieldset>
+    <legend>Homepage <span style="color:#86868b; font-weight:normal">(optional)</span></legend>
+    {% set u = urls[0] if urls else {'url': ''} %}
+    <input type="hidden" name="url_typ" value="homepage">
+    <input type="text" name="url_adresse" value="{{ u.url }}" placeholder="www.beispiel.ch" style="width:100%">
+</fieldset>
+
+<fieldset>
+    <legend>Ordner (Projekte)</legend>
+    {% for o in ordner %}
+    <label style="display:inline-block; margin-right: 1rem;">
+        <input type="checkbox" name="ordner_ids" value="{{ o.id }}"
+            {% if o.id in ausgewaehlte_ordner %}checked{% endif %}>
+        {{ o.name }}
+    </label>
+    {% endfor %}
+    {% if not ordner %}<p class="empty">Noch keine Ordner angelegt.</p>{% endif %}
+</fieldset>
+
+<fieldset>
+    <legend>Notizen <span style="color:#86868b; font-weight:normal">(optional)</span></legend>
+    <textarea name="notizen" rows="2" style="width:100%">{{ kontakt.notizen if kontakt else '' }}</textarea>
+</fieldset>

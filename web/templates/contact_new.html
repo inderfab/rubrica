@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Neuer Kontakt – Rubrica{% endblock %}
+{% block content %}
+<h1>Neuer Kontakt</h1>
+
+<fieldset>
+    <legend>Aus E-Mail-Signatur übernehmen <span style="color:#86868b; font-weight:normal">(optional)</span></legend>
+    <p class="empty" style="padding:0 0 0.5rem">
+        Signatur aus einer E-Mail hier einfügen und „Felder ausfüllen" klicken –
+        Name, Firma, Telefon, Adresse usw. werden automatisch übernommen und können danach angepasst werden.
+    </p>
+    <textarea id="signatur" name="signatur" rows="5" style="width:100%"
+              placeholder="Signatur hier einfügen…"></textarea>
+    <div style="margin-top:0.5rem">
+        <button type="button" class="secondary"
+                hx-post="/kontakte/signatur-parsen"
+                hx-include="#signatur"
+                hx-target="#kontakt-felder"
+                hx-swap="innerHTML">
+            Felder ausfüllen
+        </button>
+    </div>
+</fieldset>
+
+<form method="post" action="/kontakte/neu">
+    <div id="kontakt-felder">
+        {% include "_kontakt_felder.html" %}
+    </div>
+    <div class="actions">
+        <button type="submit">Kontakt anlegen</button>
+        <a href="/kontakte" class="btn secondary">Abbrechen</a>
+    </div>
+</form>
+{% endblock %}
