@@ -369,8 +369,50 @@ Umgesetzt und end-to-end im Browser verifiziert (2026-07-10):
     wurde — die LaunchAgents wurden zwar als Plist geschrieben, aber nicht in die GUI-Sitzung eingehängt.
     Workaround: einmalig manuell `launchctl bootstrap gui/<uid> <plist>` je Dienst. Für den iMac-Rollout
     testen, ob Installation über Doppelklick/Finder (statt osascript-Fernsteuerung) davon unberührt ist.
+- **Produktiv-Rollout auf dem iMac erfolgreich abgeschlossen (2026-07-12):** `.pkg` auf dem iMac (Intel,
+  x86_64) installiert und verifiziert — eingebettetes Python lief dort korrekt nativ (`rubrica-python-x86_64`,
+  Python 3.13.14), bestätigt die Architektur-Unabhängigkeit des neuen Pakets. Mehrere Probleme dabei
+  gefunden und gelöst:
+  - **Port-Konflikt mit Archivio:** Archivio belegt auf dem iMac bereits Port 8000 (Rubricas alter
+    Standard-Port) — `[Errno 48] address already in use`. Rubricas Web-Server-Port fest auf **8001** verlegt
+    (`config.yaml.example`, `scripts/dev.sh`, `scripts/build-pkg.sh`-Launcher), um Konflikte auf gemeinsam
+    genutzten Maschinen generell zu vermeiden.
+  - **Datenmigration Mac Studio → iMac:** Da jede `.pkg`-Installation eine eigene, leere Datenbank anlegt,
+    mussten die 1503 Kontakte/32 Ordner separat übertragen werden (kein SSH-Zugriff auf den iMac gewünscht).
+    Neues `scripts/restore-data-archive.sh`: spielt ein Archiv (`rubrica.db` + Radicale-vCards) auf der
+    Zielinstallation ein, ohne Zertifikat/Passwort/Config anzutasten (bleiben pro Maschine eigenständig).
+  - **Altes, nicht-konformes Zertifikat auf dem iMac:** Von einem noch früheren Installationsversuch (vor
+    dem CA-Fix) lag dort schon ein `cert.pem` — der Postinstall überspringt die Neuerzeugung, wenn die
+    Datei schon existiert. Musste einmalig manuell nachgeholt werden (altes Zertifikat entfernen,
+    `generate-cert.sh` erneut ausführen, neue CA per `security add-trusted-cert` vertrauen — sowohl auf dem
+    iMac selbst als auch auf dem Mac Studio, da jede Installation ihre **eigene** CA erzeugt und Clients
+    diese jeweils einzeln vertrauen müssen).
+  - **Kritischer Bug in `restore-data-archive.sh` gefunden (behoben, siehe Commit `3a4629b`):** Das Skript
+    legte den Collection-Ordner per rohem `mkdir` an, statt Radicales eigene MKCOL-Verarbeitung zu nutzen.
+    Dadurch fehlte `.Radicale.props` (Tag `VADDRESSBOOK`) — PROPFIND/Login/Discovery funktionierten
+    einwandfrei (207 OK), aber macOS Kontakte.app erkannte den Ordner mangels korrektem
+    `resourcetype: CR:addressbook` nicht als synchronisierbares Adressbuch und sendete nie einen `REPORT`.
+    Exaktes Symptom wie das ursprüngliche TLS-Problem aus Abschnitt 9 ("Verbindung klappt, Kontakte bleiben
+    leer"), diesmal aber bei sauberem Zertifikat — wichtige Erkenntnis: **dasselbe äußere Symptom kann
+    mehrere unabhängige Ursachen haben** (TLS-Vertrauen UND Collection-Metadaten UND Cache-Timeout, siehe
+    unten, traten in dieser Session alle drei nacheinander auf). Fix: `restore-data-archive.sh` schreibt
+    `.Radicale.props` jetzt automatisch nach, falls sie fehlt.
+  - **Cache-Kaltstart-Timeout:** Nach dem Löschen von `.Radicale.cache` (Teil der Migration) brauchte
+    Radicale beim ersten Zugriff auf die 1535-Karten-Collection auf dem iMac **138 bzw. 55 Sekunden**, um
+    den Cache neu aufzubauen (`PROPFIND ... depth 1` im Log) — deutlich über dem Timeout, den macOS'
+    Kontakte-Sync-Daemon offenbar zulässt, wodurch der Client vor Erhalt der (verspäteten) Antwort bereits
+    aufgegeben hatte. Nach einmaligem "Aufwärmen" des Caches lief ein erneuter Versuch (Kontakte.app
+    beenden, `contactsd` zurücksetzen, neu öffnen) in Sekunden durch. Merke für künftige Migrationen: nach
+    dem Löschen von `.Radicale.cache` einmal die Collection warm anfragen (z. B. per `curl PROPFIND`),
+    bevor man macOS synchronisieren lässt.
+  - **Ergebnis:** Kontakte.app auf dem Mac Studio synchronisiert erfolgreich gegen den Rubrica-Server auf
+    dem iMac (`Windows.local`) — alle 1503 Kontakte angekommen, verifiziert über den lokalen
+    AddressBook-Sources-Cache (`~/Library/Application Support/AddressBook/Sources/*/Metadata/*.abcdp`).
+    Der lokale Testserver auf dem Mac Studio wurde gestoppt (nicht deinstalliert), um Doppelbetrieb mit
+    divergierenden Datenständen zu vermeiden — der iMac ist jetzt die einzige aktive Instanz.
 
 Bekannte Einschränkung: Entwicklungsumgebung läuft unter Python 3.9 (Systemversion) statt der ursprünglich in Abschnitt 6 vermuteten 3.12 — FastAPI-Routenparameter deshalb mit `typing.Optional[int]` statt `int | None` (siehe `CLAUDE.md`). Dies betrifft nur die lokale Entwicklungsumgebung; das produktive `.pkg` bringt sein eigenes Python 3.13 mit und ist davon unabhängig.
 
-Nächste sinnvolle Schritte: `.pkg` auf dem echten iMac installieren (Account beim Einrichten im Modus
-"Manuell" mit nur dem Hostnamen anlegen, siehe Abschnitt 9), danach Phase 3 (Excel/PDF-Export).
+Nächste sinnvolle Schritte: Phase 3 (Excel/PDF-Export). Optional: weitere Arbeitsstationen im Büro als
+CardDAV-Clients gegen den iMac einrichten (gleiches Vorgehen: Modus "Manuell", nur Hostname, iMac-CA einmalig
+vertrauen).
