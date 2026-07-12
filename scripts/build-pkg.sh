@@ -99,6 +99,7 @@ cp requirements.txt         "$APP/Contents/Resources/"
 cp config.yaml.example      "$APP/Contents/Resources/"
 cp VERSION                  "$APP/Contents/Resources/"
 cp scripts/radicale_set_password.py "$APP/Contents/Resources/"
+cp menubar/app.py                   "$APP/Contents/Resources/rubrica_menubar.py"
 cp scripts/generate-cert.sh         "$APP/Contents/Resources/"
 
 # ── Python-Umgebungen ins Bundle kopieren und bereinigen ─────────────────────
@@ -168,10 +169,9 @@ if [ -z "$PYTHON" ]; then
 fi
 
 if [ ! -x "$VENV/bin/python3" ]; then
-  # Server und Radicale laufen als zwei separate launchd-Dienste und starten beide
-  # bei RunAtLoad gleichzeitig - ohne Sperre wuerden beide gleichzeitig versuchen,
-  # dasselbe venv aufzubauen ("File exists"-Fehler). mkdir ist auf POSIX atomar,
-  # daher als einfache Lockdatei nutzbar.
+  # Nur ein Prozess baut das venv (die Menubar-App startet Server+Radicale selbst
+  # als Kindprozesse) - Lock bleibt trotzdem als einfache Absicherung bestehen,
+  # falls z.B. ein alter und ein neuer Launcher kurzzeitig ueberlappen.
   LOCK_DIR="$DATA_DIR/.venv-setup.lock"
   while ! mkdir "$LOCK_DIR" 2>/dev/null; do
     sleep 1
@@ -194,15 +194,20 @@ if [ ! -f "$DATA_DIR/config.yaml" ]; then
 fi
 BOOTSTRAP
 
-# ── Launcher: Web-Server ─────────────────────────────────────────────────────
+# ── Launcher: Menubar-App (startet + ueberwacht Web-Server und Radicale) ─────
+# Nur noch EIN launchd-Job/Prozess: die Menubar-App startet Web-Server und
+# Radicale selbst als Kindprozesse (siehe menubar/app.py) und ueberwacht sie.
+# Vorteil ggue. zwei separaten launchd-Diensten: sichtbares Status-Icon und ein
+# "Beenden", das beide Kindprozesse UND den launchd-Job selbst sauber beendet -
+# mit KeepAlive=true wuerde ein einfaches Killen sonst sofort neu gestartet.
 cat > "$APP/Contents/MacOS/Rubrica Server" <<'LAUNCHER'
 #!/usr/bin/env bash
 BUNDLE="$(cd "$(dirname "$0")/.." && pwd)"
 RESOURCES="$BUNDLE/Resources"
 DATA_DIR="$HOME/Library/Application Support/Rubrica"
 mkdir -p "$DATA_DIR/logs"
-exec >> "$DATA_DIR/logs/server.log" 2>&1
-echo "$(date): Rubrica Server v$(cat "$RESOURCES/VERSION" 2>/dev/null) starting"
+exec >> "$DATA_DIR/logs/menubar-launcher.log" 2>&1
+echo "$(date): Rubrica Menubar-App v$(cat "$RESOURCES/VERSION" 2>/dev/null) starting"
 
 # ── 1. Eingebettetes Python (immer bevorzugt) ────────────────────────────────
 ARCH=$(uname -m)
@@ -221,67 +226,9 @@ fi
 
 cd "$RESOURCES"
 export RUBRICA_DATA_DIR="$DATA_DIR"
-exec "$RUBRICA_PYTHON" -m uvicorn web.main:app --host 0.0.0.0 --port 8001
+exec "$RUBRICA_PYTHON" rubrica_menubar.py
 LAUNCHER
 chmod +x "$APP/Contents/MacOS/Rubrica Server"
-
-# ── Launcher: Radicale (CardDAV) ─────────────────────────────────────────────
-cat > "$APP/Contents/MacOS/Rubrica Radicale" <<'LAUNCHER'
-#!/usr/bin/env bash
-BUNDLE="$(cd "$(dirname "$0")/.." && pwd)"
-RESOURCES="$BUNDLE/Resources"
-DATA_DIR="$HOME/Library/Application Support/Rubrica"
-mkdir -p "$DATA_DIR/logs"
-exec >> "$DATA_DIR/logs/radicale.log" 2>&1
-echo "$(date): Rubrica Radicale starting"
-
-# ── 1. Eingebettetes Python (immer bevorzugt) ────────────────────────────────
-ARCH=$(uname -m)
-EMBEDDED_PY="$BUNDLE/Frameworks/rubrica-python-$ARCH/bin/python3"
-if [ -x "$EMBEDDED_PY" ]; then
-  echo "$(date): Eingebettetes Python ($ARCH): $("$EMBEDDED_PY" --version 2>&1)"
-  RUBRICA_PYTHON="$EMBEDDED_PY"
-else
-  echo "$(date): Kein eingebettetes Python für $ARCH — Fallback auf System-Python/venv"
-  source "$RESOURCES/bootstrap_venv.sh"
-fi
-
-HOSTNAME_LOCAL="$(scutil --get LocalHostName 2>/dev/null || hostname).local"
-mkdir -p "$DATA_DIR/radicale"
-
-TLS_DIR="$DATA_DIR/radicale-tls"
-if [ ! -f "$TLS_DIR/cert.pem" ]; then
-  # Erzeugt eine lokale CA + Apple-konformes Leaf-Zertifikat. Normalerweise hat
-  # das bereits das Postinstall-Skript erledigt (inkl. CA-Vertrauensstellung);
-  # dies ist der Fallback fuer einen manuellen App-Start ohne .pkg-Installation.
-  /bin/bash "$RESOURCES/generate-cert.sh" "$TLS_DIR" "$HOSTNAME_LOCAL"
-  echo "$(date): TLS-Zertifikat fuer $HOSTNAME_LOCAL erstellt (CA ggf. noch als vertrauenswuerdig zu markieren)"
-fi
-
-HTPASSWD_PATH="$DATA_DIR/radicale-htpasswd"
-if [ ! -f "$HTPASSWD_PATH" ]; then
-  GENERATED_PW=$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 16)
-  "$RUBRICA_PYTHON" "$RESOURCES/radicale_set_password.py" "$(whoami)" "$GENERATED_PW"
-  {
-    echo "Rubrica CardDAV-Zugangsdaten (generiert $(date))"
-    echo "Server:   $HOSTNAME_LOCAL"
-    echo "Port:     8443"
-    echo "Benutzer: $(whoami)"
-    echo "Passwort: $GENERATED_PW"
-    echo "Pfad:     /$(whoami)/kontakte/"
-  } > "$DATA_DIR/RADICALE-ZUGANGSDATEN.txt"
-  chmod 600 "$DATA_DIR/RADICALE-ZUGANGSDATEN.txt"
-  osascript -e "display alert \"Rubrica CardDAV eingerichtet\" message \"Server: $HOSTNAME_LOCAL\nPort: 8443\nBenutzer: $(whoami)\nPasswort: $GENERATED_PW\nPfad: /$(whoami)/kontakte/\n\nAuch gespeichert in:\n$DATA_DIR/RADICALE-ZUGANGSDATEN.txt\"" 2>/dev/null || true
-fi
-
-CONFIG_PATH="$DATA_DIR/radicale.conf"
-if [ ! -f "$CONFIG_PATH" ]; then
-  sed "s|__RUBRICA_DATA_DIR__|$DATA_DIR|g" "$RESOURCES/config/radicale.conf.example" > "$CONFIG_PATH"
-fi
-
-exec "$RUBRICA_PYTHON" -m radicale --config "$CONFIG_PATH"
-LAUNCHER
-chmod +x "$APP/Contents/MacOS/Rubrica Radicale"
 
 # ── Info.plist ────────────────────────────────────────────────────────────────
 cat > "$APP/Contents/Info.plist" <<PLIST
@@ -398,7 +345,16 @@ PLISTEOF
 }
 
 _install_agent "ch.strut.rubrica.server" "/Applications/Rubrica Server.app/Contents/MacOS/Rubrica Server"
-_install_agent "ch.strut.rubrica.radicale" "/Applications/Rubrica Server.app/Contents/MacOS/Rubrica Radicale"
+
+# Migration: fruehere Versionen installierten Radicale als eigenen zweiten
+# launchd-Dienst. Den alten Agent entladen und dessen Plist entfernen, sonst
+# liefe eine verwaiste zweite Radicale-Instanz neben der, die die Menubar-App
+# jetzt selbst als Kindprozess startet (Port-Konflikt auf 8443).
+ALTE_RADICALE_PLIST="$LA_DIR/ch.strut.rubrica.radicale.plist"
+if [ -f "$ALTE_RADICALE_PLIST" ]; then
+  sudo -u "$CURRENT_USER" launchctl bootout "gui/$USER_UID/ch.strut.rubrica.radicale" 2>/dev/null || true
+  rm -f "$ALTE_RADICALE_PLIST"
+fi
 
 exit 0
 POSTINSTALL

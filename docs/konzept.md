@@ -494,9 +494,39 @@ Notion-Pendenzen-Kopplung (eher umständlich als hilfreich; höchstens später d
 Kontakte→Notion, wenn Schmerz bewiesen) und schwere Rechte-Bürokratie (Freigabe-Gate vor Erfassung würde
 die Adoption abwürgen). Später: sicherer Remote-Zugriff für On-Site-Erfassung.
 
+- **Menubar-App ersetzt zwei separate launchd-Dienste (2026-07-12):** Bisher liefen Web-Server und Radicale
+  als zwei unabhaengige launchd-Dienste (`ch.strut.rubrica.server`, `ch.strut.rubrica.radicale`) ohne jede
+  sichtbare Statusanzeige. Problem: Kein Weg zu sehen, ob Rubrica laeuft, und ein einfaches Beenden des
+  Prozesses haette wegen `KeepAlive=true` sofort zu einem Neustart durch launchd gefuehrt — ein
+  Drüber-Installieren waere daher nicht sauber gewesen. Neues `menubar/app.py` (rumps, analog zu Archivios
+  `menubar/server_app.py`): **ein einziger** launchd-Job startet diese Menubar-App, die Web-Server und
+  Radicale selbst als Kindprozesse startet, ueberwacht (Neustart bei Absturz, ersetzt die launchd-KeepAlive-
+  Ueberwachung, die jetzt nur noch den Wrapper selbst betrifft) und sauber beendet. Menu zeigt
+  Live-Status (🟢/🔴) fuer beide Dienste, "Rubrica öffnen", "Datenordner öffnen", "Beenden" (stoppt beide
+  Kindprozesse, entlaedt den eigenen launchd-Job via `launchctl bootout`, beendet sich selbst — kein
+  ungewollter Neustart durch KeepAlive). Neue Abhaengigkeit `rumps==0.4.0` (+ pyobjc automatisch via pip),
+  Groessenzuwachs im `.pkg` nur ~5 MB. `scripts/build-pkg.sh` entsprechend umgebaut: nur noch ein Launcher-
+  Binary ("Rubrica Server", jetzt Wrapper statt direktem `uvicorn`-Exec), Postinstall installiert nur noch
+  einen LaunchAgent und raeumt den alten `ch.strut.rubrica.radicale`-Agent von frueheren Installationen auf
+  (Migration). End-to-end auf dem Mac Studio installiert und verifiziert: Status-Icon sichtbar, beide
+  Kindprozesse laufen (Web-UI 200, Radicale-TLS OK), "Beenden" funktioniert sauber.
+- **Kontaktliste: Ordner-Seitenleiste mit Drag & Drop (2026-07-12):** `/kontakte` umgebaut auf ein
+  zweispaltiges Layout (Ordner-Sidebar links mit Kontakt-Anzahl je Ordner, Kontaktliste rechts) — angelehnt
+  an Kontakte.app, wie vom Nutzer gewuenscht, weil das Zuordnen zu Ordnern vorher nicht auffindbar war
+  (nur ueber den Bearbeiten-Link, der optisch nicht auffiel). Kontakt-Zeilen sind per HTML5 Drag&Drop auf
+  einen Ordner in der Sidebar ziehbar (Ziehgriff „⠿"); Ablegen ruft eine neue Route
+  `POST /kontakte/{id}/ordner/{ordner_id}/hinzufuegen` auf, die den Ordner **ergaenzt** statt die gesamte
+  Zuordnung zu ersetzen (neue `db.queries.add_kontakt_projekt`, additive Variante zu `set_kontakt_projekte`).
+  Volle Kontrolle (inkl. Entfernen aus Ordnern) bleibt zusaetzlich ueber das bestehende Bearbeiten-Formular
+  moeglich. 4 neue Tests, gegen echte Produktionsdaten auf dem Mac Studio end-to-end verifiziert (Testkontakt
+  angelegt, per simuliertem Drop einem echten Ordner zugeordnet, Tag erschien korrekt in der Liste, danach
+  sauber geloescht).
+
 Bekannte Einschränkung: Entwicklungsumgebung läuft unter Python 3.9 (Systemversion) statt der ursprünglich in Abschnitt 6 vermuteten 3.12 — FastAPI-Routenparameter deshalb mit `typing.Optional[int]` statt `int | None` (siehe `CLAUDE.md`). Dies betrifft nur die lokale Entwicklungsumgebung; das produktive `.pkg` bringt sein eigenes Python 3.13 mit und ist davon unabhängig.
 
-Nächste sinnvolle Schritte: Neues `.pkg` (mit reportlab-Fix + Archivio-Anbindung) auf dem iMac installieren.
-Danach: mehr Postfächer/Projekte in Archivio scannen lassen, um die Archivio-Vorschau ertragreicher zu
-machen; UI-Komfort für die Archivio-Vorschau ausbauen (z. B. einzelne Kandidaten abwählen können, statt
-alles-oder-nichts).
+Nächste sinnvolle Schritte: Neues `.pkg` (Menubar-App + Drag&Drop + reportlab + Archivio-Anbindung) auf dem
+iMac installieren (Menubar-App-Migration entlaedt dabei automatisch den alten Radicale-Agent). Auf dem iMac
+in `config.yaml` `archivio.db_path` auf `/Users/pas/Library/Application Support/Archivio/archivio.db` setzen,
+falls Archivio dort auch aktiv genutzt werden soll. Danach: mehr Postfächer/Projekte in Archivio scannen
+lassen, um die Archivio-Vorschau ertragreicher zu machen; UI-Komfort fuer die Archivio-Vorschau ausbauen
+(z. B. einzelne Kandidaten abwaehlen koennen, statt alles-oder-nichts).

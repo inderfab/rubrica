@@ -17,3 +17,6 @@ bcrypt==4.2.1           # fuer htpasswd-Auth (radicale.auth.htpasswd)
 
 # Export (Phase 3)
 reportlab==5.0.0        # PDF-Erzeugung
+
+# Menubar-App (nur im gepackten .pkg genutzt, macOS-only)
+rumps==0.4.0
