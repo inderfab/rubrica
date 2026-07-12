@@ -17,7 +17,7 @@ from reportlab.platypus import KeepTogether, Paragraph, SimpleDocTemplate, Space
 from sync.radicale import kontakt_zu_vcard
 
 CSV_SPALTEN = [
-    "Vorname", "Nachname", "Firma", "Rolle", "Kategorie",
+    "Vorname", "Nachname", "Firma", "Funktion", "Rolle",
     "Telefon", "E-Mail", "Adresse", "Homepage", "Notizen",
 ]
 
@@ -56,7 +56,7 @@ def kontakte_csv(kontakte: list[dict]) -> bytes:
     for k in kontakte:
         writer.writerow([
             k.get("vorname", ""), k.get("nachname", ""), k.get("firma", ""),
-            k.get("rolle", ""), k.get("kategorie", ""),
+            k.get("kategorie", ""), k.get("rolle", ""),
             _telefon_text(k), _email_text(k), _adresse_text(k), _url_text(k),
             k.get("notizen", ""),
         ])
@@ -98,7 +98,9 @@ def kontakte_pdf(ordner_name: str, kontakte: list[dict]) -> bytes:
         name = f"{k.get('vorname', '')} {k.get('nachname', '')}".strip() or "(ohne Name)"
         zeilen = [Paragraph(escape(name), _STIL_NAME)]
 
-        untertitel = " – ".join(t for t in (k.get("firma", ""), k.get("rolle", "")) if t)
+        untertitel = " – ".join(
+            t for t in (k.get("firma", ""), k.get("kategorie", ""), k.get("rolle", "")) if t
+        )
         if untertitel:
             zeilen.append(Paragraph(escape(untertitel), _STIL_DETAIL))
 

@@ -5,10 +5,33 @@ from fastapi.responses import RedirectResponse
 
 from db import queries
 from db.connection import get_connection
+from importer.signatur import parse_signatur
 from sync import radicale
 from web.shared import templates
 
 router = APIRouter()
+
+# Vordefinierte Funktionen (Fachrichtungen) fuer das Auswahlfeld. Freitext bleibt
+# moeglich (HTML-datalist) - die Liste ist nur Vorschlag, kein Zwang. Technisch im
+# bestehenden Feld kontakte.kategorie gespeichert (UI-Label "Funktion").
+FUNKTIONEN = [
+    "Architekt", "Innenarchitekt", "Bauingenieur/Statik", "Bauleiter",
+    "Bauherr/Kunde", "Bauherrenvertreter", "Geologe", "Vermessung/Geometer",
+    "Sanitärplaner", "Lüftungsplaner", "Heizungsplaner", "Elektroplaner",
+    "Lichtplaner", "Türplaner", "Brandschutzplaner", "Bauphysik/Akustik",
+    "Landschaftsarchitekt", "Industrieplaner", "Unternehmer/Handwerker",
+    "Behörde/Amt", "Lieferant", "intern",
+]
+
+
+def _funktion_optionen(conn) -> list:
+    """Vordefinierte Funktionen + bereits im Bestand vorkommende Zusatzwerte."""
+    bestehende = {
+        r["kategorie"] for r in conn.execute(
+            "SELECT DISTINCT kategorie FROM kontakte WHERE kategorie != ''"
+        )
+    }
+    return FUNKTIONEN + sorted(bestehende - set(FUNKTIONEN))
 
 
 def _parse_kontakt_form(form) -> dict:
@@ -73,16 +96,66 @@ def kontakte_liste(request: Request, suche: str = "", ordner_id: str = "", kateg
     })
 
 
+@router.get("/kontakte/neu")
+def kontakt_neu_form(request: Request):
+    conn = get_connection()
+    try:
+        ordner = queries.list_projekte(conn)
+        funktionen = _funktion_optionen(conn)
+    finally:
+        conn.close()
+    return templates.TemplateResponse("contact_new.html", {
+        "request": request, "ordner": ordner, "funktionen": funktionen,
+        "kontakt": None, "ausgewaehlte_ordner": [],
+    })
+
+
+@router.post("/kontakte/signatur-parsen")
+async def kontakt_signatur_parsen(request: Request):
+    """htmx-Endpoint: nimmt eine hineinkopierte Signatur, gibt das vorbefuellte
+    Feld-Fragment zurueck (wird ins Formular eingeschwenkt)."""
+    form = await request.form()
+    daten = parse_signatur(form.get("signatur", ""))
+    conn = get_connection()
+    try:
+        ordner = queries.list_projekte(conn)
+        funktionen = _funktion_optionen(conn)
+    finally:
+        conn.close()
+    return templates.TemplateResponse("_kontakt_felder.html", {
+        "request": request, "kontakt": daten, "ordner": ordner,
+        "funktionen": funktionen, "ausgewaehlte_ordner": [],
+    })
+
+
+@router.post("/kontakte/neu")
+async def kontakt_neu_speichern(request: Request):
+    form = await request.form()
+    daten = _parse_kontakt_form(form)
+    ordner_ids = [int(o) for o in form.getlist("ordner_ids")]
+    conn = get_connection()
+    try:
+        kontakt_id = queries.create_kontakt(conn, daten)
+        queries.set_kontakt_projekte(conn, kontakt_id, ordner_ids)
+        radicale.push_kontakt(conn, kontakt_id)
+        for oid in ordner_ids:
+            radicale.push_projekt(conn, oid)
+    finally:
+        conn.close()
+    return RedirectResponse(url="/kontakte", status_code=303)
+
+
 @router.get("/kontakte/{kontakt_id}/bearbeiten")
 def kontakt_bearbeiten_form(request: Request, kontakt_id: int):
     conn = get_connection()
     try:
         kontakt = queries.get_kontakt(conn, kontakt_id)
         ordner = queries.list_projekte(conn)
+        funktionen = _funktion_optionen(conn)
     finally:
         conn.close()
     return templates.TemplateResponse("contact_form.html", {
-        "request": request, "kontakt": kontakt, "ordner": ordner,
+        "request": request, "kontakt": kontakt, "ordner": ordner, "funktionen": funktionen,
         "action": f"/kontakte/{kontakt_id}/bearbeiten",
     })
 

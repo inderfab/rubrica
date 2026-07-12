@@ -1,11 +1,10 @@
 {% extends "base.html" %}
 {% block title %}Kontakte – Rubrica{% endblock %}
 {% block content %}
-<h1>Kontakte</h1>
-<p class="empty">
-    Neue Kontakte werden in Kontakte.app angelegt und über <a href="/import">Import</a> eingespielt.
-    Hier lassen sich bestehende Kontakte bearbeiten (Kategorie, Ordner-Zuordnung, Korrekturen).
-</p>
+<div style="display:flex; justify-content:space-between; align-items:center;">
+    <h1>Kontakte</h1>
+    <a href="/kontakte/neu" class="btn">+ Neuer Kontakt</a>
+</div>
 
 <form class="filter" hx-get="/kontakte" hx-target="#kontakte-ergebnis" hx-select="#kontakte-ergebnis"
       hx-push-url="true"
@@ -18,7 +17,7 @@
         {% endfor %}
     </select>
     <select name="kategorie">
-        <option value="">Alle Kategorien</option>
+        <option value="">Alle Funktionen</option>
         {% for k in kategorien %}
         <option value="{{ k }}" {% if kategorie == k %}selected{% endif %}>{{ k }}</option>
         {% endfor %}
@@ -30,7 +29,7 @@
     <table>
         <thead>
             <tr>
-                <th>Name</th><th>Firma</th><th>Rolle</th><th>Kategorie</th>
+                <th>Name</th><th>Firma</th><th>Funktion</th><th>Rolle</th>
                 <th>Telefon</th><th>E-Mail</th><th>Ordner</th><th></th>
             </tr>
         </thead>
@@ -39,8 +38,8 @@
             <tr>
                 <td><a href="/kontakte/{{ k.id }}/bearbeiten">{{ k.vorname }} {{ k.nachname }}</a></td>
                 <td>{{ k.firma }}</td>
-                <td>{{ k.rolle }}</td>
                 <td>{{ k.kategorie }}</td>
+                <td>{{ k.rolle }}</td>
                 <td>{% for t in k.telefonnummern %}<a href="tel:{{ t.nummer }}">{{ t.nummer }}</a>{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
                 <td>{% for e in k.emails %}<a href="mailto:{{ e.email }}">{{ e.email }}</a>{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
                 <td>{% for o in k.projekte %}<span class="tag">{{ o.name }}</span>{% endfor %}</td>
