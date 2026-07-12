@@ -221,7 +221,7 @@ fi
 
 cd "$RESOURCES"
 export RUBRICA_DATA_DIR="$DATA_DIR"
-exec "$RUBRICA_PYTHON" -m uvicorn web.main:app --host 0.0.0.0 --port 8000
+exec "$RUBRICA_PYTHON" -m uvicorn web.main:app --host 0.0.0.0 --port 8001
 LAUNCHER
 chmod +x "$APP/Contents/MacOS/Rubrica Server"
 
