@@ -17,7 +17,7 @@
         <div class="field">
             <label>Firmenname</label>
             <input type="text" name="export_firmenname" value="{{ export_firmenname }}"
-                   placeholder="z. B. Strut Architekten AG" style="width:100%">
+                   placeholder="z. B. Muster Architektur AG" style="width:100%">
         </div>
         <div class="field">
             <label>Logo</label><br>
@@ -25,12 +25,37 @@
             <img src="/einstellungen/logo" alt="Aktuelles Logo" style="max-height:60px; display:block; margin-bottom:0.5rem;">
             {% endif %}
             <input type="file" name="logo" accept=".png,.jpg,.jpeg,.gif">
+            <p class="empty" style="padding:0.2rem 0 0; font-size:0.8rem;">Unterstützte Formate: PNG, JPG, JPEG, GIF</p>
             {% if logo_vorhanden %}
             <button type="submit" formaction="/einstellungen/logo/entfernen" class="secondary" style="margin-top:0.4rem">
                 Logo entfernen
             </button>
             {% endif %}
         </div>
+    </fieldset>
+
+    <fieldset>
+        <legend>Export – sichtbare Felder</legend>
+        <p class="empty" style="padding:0 0 0.5rem">
+            Standardmässig zeigt der PDF-Export nur geschäftliche Kontaktdaten (Direktwahl, Geschäfts-E-Mail,
+            Geschäftsadresse). Private/mobile Angaben erscheinen nur, wenn hier aktiviert.
+        </p>
+        <label style="display:flex; align-items:center; gap:0.4rem; font-weight:normal; margin-bottom:0.4rem;">
+            <input type="checkbox" name="mobil_zeigen" {% if mobil_zeigen %}checked{% endif %}>
+            Mobilnummer anzeigen
+        </label>
+        <label style="display:flex; align-items:center; gap:0.4rem; font-weight:normal; margin-bottom:0.4rem;">
+            <input type="checkbox" name="privates_telefon_zeigen" {% if privates_telefon_zeigen %}checked{% endif %}>
+            Private Telefonnummer anzeigen
+        </label>
+        <label style="display:flex; align-items:center; gap:0.4rem; font-weight:normal; margin-bottom:0.4rem;">
+            <input type="checkbox" name="private_email_zeigen" {% if private_email_zeigen %}checked{% endif %}>
+            Private E-Mail-Adresse anzeigen
+        </label>
+        <label style="display:flex; align-items:center; gap:0.4rem; font-weight:normal;">
+            <input type="checkbox" name="privatadresse_zeigen" {% if privatadresse_zeigen %}checked{% endif %}>
+            Privatadresse anzeigen
+        </label>
     </fieldset>
 
     <fieldset>

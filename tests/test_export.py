@@ -73,13 +73,96 @@ def test_bkp_zellen_text_bricht_nach_der_nummer_um():
     assert generator._bkp_zellen_text("Bauherrschaft/Kundschaft") == "Bauherrschaft/Kundschaft"
 
 
-def test_telefon_liste_trennt_mobil_von_festnetz():
+def test_direktwahl_pdf_klammert_mobil_aus():
     kontakt = _kontakt(telefonnummern=[
         {"typ": "arbeit", "nummer": "052 123 45 67"},
         {"typ": "mobil", "nummer": "079 123 45 67"},
     ])
-    assert generator._telefon_liste(kontakt, mobil=False) == "052 123 45 67"
-    assert generator._telefon_liste(kontakt, mobil=True) == "079 123 45 67"
+    assert generator._direktwahl_pdf(kontakt, privates_telefon_zeigen=False) == "052 123 45 67"
+    assert generator._mobilnummern_pdf(kontakt) == "079 123 45 67"
+
+
+def test_direktwahl_pdf_erkennt_englische_apple_typen():
+    # Reale Importe (Apple Kontakte.app) taggen meist englisch statt deutsch.
+    kontakt = _kontakt(telefonnummern=[
+        {"typ": "work", "nummer": "052 111 11 11"},
+        {"typ": "cell", "nummer": "079 222 22 22"},
+        {"typ": "home", "nummer": "052 333 33 33"},
+    ])
+    assert generator._direktwahl_pdf(kontakt, privates_telefon_zeigen=False) == "052 111 11 11"
+    assert generator._mobilnummern_pdf(kontakt) == "079 222 22 22"
+    assert generator._direktwahl_pdf(kontakt, privates_telefon_zeigen=True) == "052 111 11 11<br/>052 333 33 33"
+
+
+def test_direktwahl_pdf_private_nummer_nur_mit_flag():
+    kontakt = _kontakt(telefonnummern=[{"typ": "privat", "nummer": "052 999 99 99"}])
+    assert generator._direktwahl_pdf(kontakt, privates_telefon_zeigen=False) == ""
+    assert generator._direktwahl_pdf(kontakt, privates_telefon_zeigen=True) == "052 999 99 99"
+
+
+def test_email_pdf_private_nur_mit_flag_generische_typen_immer_sichtbar():
+    kontakt = _kontakt(emails=[
+        {"typ": "internet", "email": "info@firma.ch"},  # Apple-Standardtyp, keine Unterscheidung moeglich
+        {"typ": "home", "email": "privat@example.com"},
+    ])
+    ohne_privat = generator._email_pdf(kontakt, private_email_zeigen=False)
+    assert "info@firma.ch" in ohne_privat
+    assert "privat@example.com" not in ohne_privat
+    mit_privat = generator._email_pdf(kontakt, private_email_zeigen=True)
+    assert "privat@example.com" in mit_privat
+
+
+def test_adresse_pdf_zeigt_keinen_typ_praefix_fuer_geschaeftsadresse():
+    kontakt = _kontakt(adressen=[{"typ": "work", "strasse": "Teststrasse 1", "plz": "8000", "ort": "Zuerich", "region": "", "land": ""}])
+    text = generator._adresse_pdf(kontakt, privatadresse_zeigen=False)
+    assert "work" not in text.lower()
+    assert "Teststrasse 1" in text
+
+
+def test_adresse_pdf_privatadresse_nur_mit_flag_und_praefix():
+    kontakt = _kontakt(adressen=[
+        {"typ": "work", "strasse": "Buerostrasse 1", "plz": "8000", "ort": "Zuerich", "region": "", "land": ""},
+        {"typ": "home", "strasse": "Heimweg 2", "plz": "8001", "ort": "Zuerich", "region": "", "land": ""},
+    ])
+    ohne_privat = generator._adresse_pdf(kontakt, privatadresse_zeigen=False)
+    assert "Heimweg 2" not in ohne_privat
+    mit_privat = generator._adresse_pdf(kontakt, privatadresse_zeigen=True)
+    assert "Heimweg 2" in mit_privat
+    assert "Privat:" in mit_privat
+
+
+def test_tabellenzeilen_firmenzeile_getrennt_von_mitarbeiterzeilen():
+    firmenkontakt = _kontakt(id=1, vorname="", nachname="", firma="S+K Bauingenieure AG",
+                              kategorie="292 Bauingenieur/in", rolle="",
+                              telefonnummern=[{"typ": "work", "nummer": "052 000 00 00"}],
+                              emails=[{"typ": "internet", "email": "info@sking.ch"}])
+    mitarbeiter = _kontakt(id=2, vorname="Astrid", nachname="Bleuler", firma="S+K Bauingenieure AG",
+                            kategorie="292 Bauingenieur/in", rolle="Partnerin",
+                            telefonnummern=[{"typ": "work", "nummer": "052 111 11 11"}],
+                            emails=[{"typ": "internet", "email": "bleuler@sking.ch"}])
+    zeilen, grenzen = generator._tabellenzeilen(
+        [firmenkontakt, mitarbeiter], mobil_zeigen=False, privates_telefon_zeigen=False,
+        private_email_zeigen=False, privatadresse_zeigen=False,
+    )
+    assert len(zeilen) == 3  # Kopfzeile + Firmenzeile + 1 Mitarbeiterzeile
+    firmenzeile, mitarbeiterzeile = zeilen[1], zeilen[2]
+    assert firmenzeile[2] == "" and firmenzeile[3] == ""  # Sachbearbeitung/Funktion leer
+    assert mitarbeiterzeile[0] == "" and mitarbeiterzeile[1] == ""  # BKP/Unternehmen leer
+    assert grenzen == [1]  # eine Firmengruppe -> Trennlinie beginnt bei Zeile 1
+
+
+def test_tabellenzeilen_ohne_mobil_spalte_wenn_deaktiviert():
+    zeilen, _ = generator._tabellenzeilen(
+        [_kontakt()], mobil_zeigen=False, privates_telefon_zeigen=False,
+        private_email_zeigen=False, privatadresse_zeigen=False,
+    )
+    assert len(zeilen[0]) == 6  # 7 Spalten minus "Mobil"
+
+    zeilen_mit_mobil, _ = generator._tabellenzeilen(
+        [_kontakt()], mobil_zeigen=True, privates_telefon_zeigen=False,
+        private_email_zeigen=False, privatadresse_zeigen=False,
+    )
+    assert len(zeilen_mit_mobil[0]) == 7
 
 
 def test_bkp_sortier_schluessel_ordnet_numerisch_nicht_alphabetisch():

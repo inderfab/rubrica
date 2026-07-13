@@ -67,8 +67,14 @@ async def export_erzeugen(request: Request):
         if "pdf" in formate:
             zf.writestr(
                 f"{basisname}_{datum}.pdf",
-                generator.kontakte_pdf(ordner_name, kontakte, firmenname=firmenname,
-                                        logo_pfad=str(logo) if logo else ""),
+                generator.kontakte_pdf(
+                    ordner_name, kontakte, firmenname=firmenname,
+                    logo_pfad=str(logo) if logo else "",
+                    mobil_zeigen=bool(settings.get("export.mobil_zeigen", False)),
+                    privates_telefon_zeigen=bool(settings.get("export.privates_telefon_zeigen", False)),
+                    private_email_zeigen=bool(settings.get("export.private_email_zeigen", False)),
+                    privatadresse_zeigen=bool(settings.get("export.privatadresse_zeigen", False)),
+                ),
             )
         if "csv" in formate:
             zf.writestr(f"{basisname}_{datum}.csv", generator.kontakte_csv(kontakte))

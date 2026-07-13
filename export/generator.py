@@ -27,19 +27,82 @@ def _telefon_text(kontakt: dict) -> str:
     return "; ".join(f"{t['typ']}: {t['nummer']}" for t in kontakt.get("telefonnummern", []))
 
 
-def _telefon_liste(kontakt: dict, mobil: bool) -> str:
-    """Trennt Telefonnummern in Festnetz/Fax/Direktwahl vs. Mobil - im PDF-Export
-    als eigene Spalten, analog zur Nutzer-Vorlage ("Telefon/Fax/Direktwahl" und
-    "Mobil" getrennt)."""
+_PRIVAT_TYPEN = {"privat", "private", "home"}
+_MOBIL_TYPEN = {"mobil", "cell", "iphone"}
+
+
+def _ist_privat_typ(typ: str) -> bool:
+    return (typ or "").strip().lower() in _PRIVAT_TYPEN
+
+
+def _ist_mobil_typ(typ: str) -> bool:
+    return (typ or "").strip().lower() in _MOBIL_TYPEN
+
+
+def _ist_firmenkontakt(kontakt: dict) -> bool:
+    """Ein Kontakt ohne Vor-/Nachname repraesentiert in der Praxis oft die Firma
+    selbst (allgemeine Nummer/Mail, z.B. ein Sekretariat) statt einer Person -
+    genau dieses Muster kommt im echten Bestand vor. Dessen Kontaktdaten werden
+    im Export als "allgemeine" Firmenzeile gezeigt statt als Mitarbeiter-Zeile."""
+    return not (kontakt.get("vorname", "").strip() or kontakt.get("nachname", "").strip())
+
+
+def _direktwahl_pdf(kontakt: dict, privates_telefon_zeigen: bool) -> str:
+    """Geschaeftliche/allgemeine Nummern immer, mobile Nummern nie (eigene
+    Spalte, siehe _mobilnummern_pdf), private Festnetznummern nur wenn in den
+    Export-Einstellungen aktiviert."""
+    ergebnis = []
+    for t in kontakt.get("telefonnummern", []):
+        typ = t.get("typ", "")
+        if _ist_mobil_typ(typ):
+            continue
+        if _ist_privat_typ(typ) and not privates_telefon_zeigen:
+            continue
+        ergebnis.append(t["nummer"])
+    return "<br/>".join(escape(n) for n in ergebnis)
+
+
+def _mobilnummern_pdf(kontakt: dict) -> str:
     return "<br/>".join(
-        escape(t["nummer"]) for t in kontakt.get("telefonnummern", [])
-        if (t.get("typ") == "mobil") == mobil
+        escape(t["nummer"]) for t in kontakt.get("telefonnummern", []) if _ist_mobil_typ(t.get("typ", ""))
     )
 
 
-def _email_und_web_text(kontakt: dict) -> str:
-    teile = [e["email"] for e in kontakt.get("emails", [])] + [u["url"] for u in kontakt.get("urls", [])]
-    return "<br/>".join(escape(t) for t in teile)
+def _email_pdf(kontakt: dict, private_email_zeigen: bool, mit_webseite: bool = False) -> str:
+    """Geschaeftliche E-Mails immer, private nur wenn aktiviert. Reale
+    vCard-Importe taggen E-Mails fast immer generisch (Apple: "internet") -
+    nur explizit als privat/home markierte Eintraege werden ausgeblendet,
+    damit unklar getaggte Adressen nicht faelschlich verschwinden."""
+    ergebnis = [
+        e["email"] for e in kontakt.get("emails", [])
+        if not (_ist_privat_typ(e.get("typ", "")) and not private_email_zeigen)
+    ]
+    if mit_webseite:
+        ergebnis += [u["url"] for u in kontakt.get("urls", [])]
+    return "<br/>".join(escape(t) for t in ergebnis)
+
+
+def _adresse_pdf(kontakt: dict, privatadresse_zeigen: bool) -> str:
+    """Standardmaessig nur die geschaeftliche Adresse, ohne Typ-Praefix (kein
+    "work"/"arbeit" im Ausdruck - der Nutzer wollte diesen Praefix nicht
+    sehen). Die private Adresse erscheint nur, wenn in den Export-
+    Einstellungen aktiviert, dann mit "Privat:"-Praefix zur Unterscheidung."""
+    zeilen = []
+    for a in kontakt.get("adressen", []):
+        privat = _ist_privat_typ(a.get("typ", ""))
+        if privat and not privatadresse_zeigen:
+            continue
+        teile = [a.get("strasse", ""), f"{a.get('plz', '')} {a.get('ort', '')}".strip()]
+        teile = [t for t in teile if t]
+        if a.get("land"):
+            teile.append(a["land"])
+        if not teile:
+            continue
+        text = ", ".join(teile)
+        if privat:
+            text = f"Privat: {text}"
+        zeilen.append(text)
+    return "<br/>".join(escape(z) for z in zeilen)
 
 
 def _email_text(kontakt: dict) -> str:
@@ -143,7 +206,8 @@ _TABELLEN_SPALTEN = [
     "BKP Nummer", "Unternehmen", "Sachbearbeitung", "Funktion",
     "Telefon/Fax/Direktwahl", "Mobil", "E-Mail/Webseite",
 ]
-_SPALTEN_ANTEILE = [0.13, 0.18, 0.14, 0.14, 0.15, 0.08, 0.18]
+_SPALTEN_ANTEILE_MIT_MOBIL = [0.13, 0.18, 0.14, 0.14, 0.15, 0.08, 0.18]
+_SPALTEN_ANTEILE_OHNE_MOBIL = [0.13, 0.19, 0.15, 0.15, 0.17, 0.21]
 
 
 def _bkp_zellen_text(funktion: str) -> str:
@@ -185,55 +249,100 @@ def _kopf_fuss_zeichner(firmenname: str, logo_pfad: str):
     return zeichnen
 
 
-def _firmen_adresse(firma_kontakte: list[dict]) -> str:
-    return next((_adresse_text(k) for k in firma_kontakte if _adresse_text(k)), "")
+def _firmen_adresse_pdf(alle_kontakte: list[dict], privatadresse_zeigen: bool) -> str:
+    return next((a for a in (_adresse_pdf(k, privatadresse_zeigen) for k in alle_kontakte) if a), "")
 
 
-def _tabellenzeilen(kontakte: list[dict]) -> list[list]:
-    """Baut die Datenzeilen der Kontakttabelle: BKP-Nummer/Funktion und
-    Unternehmen (Name+Adresse) erscheinen nur in der ersten Zeile eines
-    Firmenblocks, jede Person danach ist eine eigene Zeile mit ihren eigenen
-    Sachbearbeitung/Funktion/Telefon/Mobil/E-Mail-Werten - analog zur
-    Nutzer-Vorlage (mehrere Personen derselben Firma untereinander, BKP-Nummer
-    und Firma nur einmal links davor)."""
-    zeilen = [[Paragraph(spalte, _STIL_KOPFZELLE) for spalte in _TABELLEN_SPALTEN]]
+def _mitarbeiter_zeile(
+    kontakt: dict, mobil_zeigen: bool, privates_telefon_zeigen: bool, private_email_zeigen: bool,
+    bkp_zelle="", unternehmen_zelle="",
+) -> list:
+    name = f"{kontakt.get('vorname', '')} {kontakt.get('nachname', '')}".strip()
+    telefon = _direktwahl_pdf(kontakt, privates_telefon_zeigen)
+    email = _email_pdf(kontakt, private_email_zeigen, mit_webseite=True)
+    zeile = [
+        bkp_zelle,
+        unternehmen_zelle,
+        Paragraph(escape(name), _STIL_ZELLE) if name else "",
+        Paragraph(escape(kontakt["rolle"]), _STIL_ZELLE) if kontakt.get("rolle") else "",
+        Paragraph(telefon, _STIL_ZELLE) if telefon else "",
+    ]
+    if mobil_zeigen:
+        mobil = _mobilnummern_pdf(kontakt)
+        zeile.append(Paragraph(mobil, _STIL_ZELLE) if mobil else "")
+    zeile.append(Paragraph(email, _STIL_ZELLE) if email else "")
+    return zeile
+
+
+def _tabellenzeilen(
+    kontakte: list[dict], mobil_zeigen: bool, privates_telefon_zeigen: bool,
+    private_email_zeigen: bool, privatadresse_zeigen: bool,
+) -> tuple[list[list], list[int]]:
+    """Baut die Datenzeilen der Kontakttabelle. Pro Firma gibt es IMMER eine
+    eigene "Firmenzeile" (BKP-Nummer/Gewerk, Firmenname+Adresse, allgemeine
+    Nummer/Mail falls vorhanden - Sachbearbeitung/Funktion bleiben dort leer),
+    gefolgt von je einer Zeile pro Mitarbeiter (Name/Funktion/Direktwahl) -
+    exakt das Muster aus der Nutzer-Vorlage. Die "allgemeine Nummer/Mail"
+    stammt von einem Kontakt ohne Namen in derselben Firma, falls vorhanden
+    (siehe _ist_firmenkontakt) - gibt es keinen, bleiben die Felder leer.
+    Kontakte ohne Firma bekommen keine eigene Firmenzeile, die BKP-Nummer
+    steht dann direkt auf der ersten Personenzeile.
+    Gibt zusaetzlich die Zeilenindizes zurueck, an denen eine neue Firma
+    beginnt (fuer die Trennlinie zwischen den Bloecken)."""
+    spalten = [s for s in _TABELLEN_SPALTEN if mobil_zeigen or s != "Mobil"]
+    zeilen = [[Paragraph(s, _STIL_KOPFZELLE) for s in spalten]]
+    gruppengrenzen = []
 
     for gruppe in _gruppiere_fuer_export(kontakte):
         for firmen_gruppe in gruppe["firmen"]:
             firma = firmen_gruppe["firma"]
-            firma_kontakte = firmen_gruppe["kontakte"]
-            firmen_adresse = _firmen_adresse(firma_kontakte)
+            alle_kontakte = firmen_gruppe["kontakte"]
+            bkp_zelle = Paragraph(_bkp_zellen_text(gruppe["funktion"]), _STIL_ZELLE) if gruppe["funktion"] else ""
+            gruppengrenzen.append(len(zeilen))
 
-            for i, k in enumerate(firma_kontakte):
-                if i == 0:
-                    bkp_zelle = Paragraph(_bkp_zellen_text(gruppe["funktion"]), _STIL_ZELLE) if gruppe["funktion"] else ""
-                    unternehmen_teile = ([f"<b>{escape(firma)}</b>"] if firma else [])
-                    if firmen_adresse:
-                        unternehmen_teile.append(escape(firmen_adresse))
-                    unternehmen_zelle = Paragraph("<br/>".join(unternehmen_teile), _STIL_ZELLE) if unternehmen_teile else ""
-                else:
-                    bkp_zelle = ""
-                    unternehmen_zelle = ""
+            if firma:
+                firmenkontakt = next((k for k in alle_kontakte if _ist_firmenkontakt(k)), None)
+                mitarbeiter = [k for k in alle_kontakte if k is not firmenkontakt]
 
-                name = f"{k.get('vorname', '')} {k.get('nachname', '')}".strip()
-                zeilen.append([
-                    bkp_zelle,
-                    unternehmen_zelle,
-                    Paragraph(escape(name), _STIL_ZELLE) if name else "",
-                    Paragraph(escape(k["rolle"]), _STIL_ZELLE) if k.get("rolle") else "",
-                    Paragraph(_telefon_liste(k, mobil=False), _STIL_ZELLE),
-                    Paragraph(_telefon_liste(k, mobil=True), _STIL_ZELLE),
-                    Paragraph(_email_und_web_text(k), _STIL_ZELLE),
-                ])
-    return zeilen
+                adresse = _firmen_adresse_pdf(alle_kontakte, privatadresse_zeigen)
+                unternehmen_teile = [f"<b>{escape(firma)}</b>"]
+                if adresse:
+                    unternehmen_teile.append(adresse)
+                unternehmen_zelle = Paragraph("<br/>".join(unternehmen_teile), _STIL_ZELLE)
+
+                allg_telefon = _direktwahl_pdf(firmenkontakt, privates_telefon_zeigen) if firmenkontakt else ""
+                allg_email = _email_pdf(firmenkontakt, private_email_zeigen, mit_webseite=True) if firmenkontakt else ""
+                firmenzeile = [bkp_zelle, unternehmen_zelle, "", ""]
+                firmenzeile.append(Paragraph(allg_telefon, _STIL_ZELLE) if allg_telefon else "")
+                if mobil_zeigen:
+                    firmenzeile.append("")
+                firmenzeile.append(Paragraph(allg_email, _STIL_ZELLE) if allg_email else "")
+                zeilen.append(firmenzeile)
+
+                for k in mitarbeiter:
+                    zeilen.append(_mitarbeiter_zeile(k, mobil_zeigen, privates_telefon_zeigen, private_email_zeigen))
+            else:
+                for i, k in enumerate(alle_kontakte):
+                    zeilen.append(_mitarbeiter_zeile(
+                        k, mobil_zeigen, privates_telefon_zeigen, private_email_zeigen,
+                        bkp_zelle=bkp_zelle if i == 0 else "",
+                    ))
+    return zeilen, gruppengrenzen
 
 
-def kontakte_pdf(ordner_name: str, kontakte: list[dict], firmenname: str = "", logo_pfad: str = "") -> bytes:
-    """firmenname/logo_pfad sind optional und kommen aus den Einstellungen
-    (web/export.py) - erscheinen auf jeder Seite oben (Firmenname mittig,
-    Logo rechts). Der Ordnername bleibt der alleinige Titel der Liste (z.B.
-    Projektname) - andere Ordner, denen ein Kontakt sonst noch angehoert,
-    werden nirgends aufgefuehrt."""
+def kontakte_pdf(
+    ordner_name: str, kontakte: list[dict], firmenname: str = "", logo_pfad: str = "",
+    mobil_zeigen: bool = False, privates_telefon_zeigen: bool = False,
+    private_email_zeigen: bool = False, privatadresse_zeigen: bool = False,
+) -> bytes:
+    """firmenname/logo_pfad sowie die vier zeige_*-Flags kommen aus den
+    Einstellungen (web/export.py). Firmenname/Logo erscheinen auf jeder Seite
+    oben (Firmenname mittig, Logo rechts). Standardmaessig werden nur
+    geschaeftliche Kontaktdaten gezeigt (Mobil-/Privat-Nummern, private
+    E-Mail und Heimadresse sind Opt-in) - so bleibt der Export kompakt, auch
+    wenn im Bestand teils private Daten hinterlegt sind. Der Ordnername bleibt
+    der alleinige Titel der Liste (z.B. Projektname) - andere Ordner, denen
+    ein Kontakt sonst noch angehoert, werden nirgends aufgefuehrt."""
     puffer = io.BytesIO()
     doc = SimpleDocTemplate(
         puffer, pagesize=landscape(A4),
@@ -250,20 +359,25 @@ def kontakte_pdf(ordner_name: str, kontakte: list[dict], firmenname: str = "", l
     ]
 
     if kontakte:
-        tabelle = Table(
-            _tabellenzeilen(kontakte),
-            colWidths=[doc.width * anteil for anteil in _SPALTEN_ANTEILE],
-            repeatRows=1,
+        zeilen, gruppengrenzen = _tabellenzeilen(
+            kontakte, mobil_zeigen, privates_telefon_zeigen, private_email_zeigen, privatadresse_zeigen,
         )
-        tabelle.setStyle(TableStyle([
+        anteile = _SPALTEN_ANTEILE_MIT_MOBIL if mobil_zeigen else _SPALTEN_ANTEILE_OHNE_MOBIL
+        tabelle = Table(zeilen, colWidths=[doc.width * anteil for anteil in anteile], repeatRows=1)
+        stil = [
             ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2f3437")),
-            ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#dddddd")),
             ("VALIGN", (0, 0), (-1, -1), "TOP"),
             ("LEFTPADDING", (0, 0), (-1, -1), 4),
             ("RIGHTPADDING", (0, 0), (-1, -1), 4),
             ("TOPPADDING", (0, 0), (-1, -1), 3),
             ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-        ]))
+        ]
+        # Eine duenne Trennlinie zwischen den Firmen-/BKP-Bloecken statt eines
+        # vollen Gitternetzes (Nutzer-Vorgabe: "zwischen jeder BKP eine Linie") -
+        # keine Linien zwischen den Mitarbeiter-Zeilen derselben Firma.
+        for zeilenindex in gruppengrenzen:
+            stil.append(("LINEABOVE", (0, zeilenindex), (-1, zeilenindex), 0.5, colors.HexColor("#bbbbbb")))
+        tabelle.setStyle(TableStyle(stil))
         elemente.append(tabelle)
     else:
         elemente.append(Paragraph("Dieser Ordner enthält keine Kontakte.", _STIL_ZELLE))

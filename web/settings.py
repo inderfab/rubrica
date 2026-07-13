@@ -32,6 +32,10 @@ def einstellungen_form(request: Request, gespeichert: str = ""):
         "backup_pfad": settings.get("backup.pfad", "") or "",
         "export_firmenname": settings.get("export.firmenname", "") or "",
         "logo_vorhanden": settings.logo_pfad() is not None,
+        "mobil_zeigen": bool(settings.get("export.mobil_zeigen", False)),
+        "privates_telefon_zeigen": bool(settings.get("export.privates_telefon_zeigen", False)),
+        "private_email_zeigen": bool(settings.get("export.private_email_zeigen", False)),
+        "privatadresse_zeigen": bool(settings.get("export.privatadresse_zeigen", False)),
     })
 
 
@@ -71,6 +75,12 @@ async def einstellungen_speichern(request: Request):
     settings.save({
         "archivio": {"db_path": db_path, "min_mails": min_mails},
         "backup": {"pfad": backup_pfad},
-        "export": {"firmenname": export_firmenname},
+        "export": {
+            "firmenname": export_firmenname,
+            "mobil_zeigen": form.get("mobil_zeigen") is not None,
+            "privates_telefon_zeigen": form.get("privates_telefon_zeigen") is not None,
+            "private_email_zeigen": form.get("private_email_zeigen") is not None,
+            "privatadresse_zeigen": form.get("privatadresse_zeigen") is not None,
+        },
     })
     return RedirectResponse(url="/einstellungen?gespeichert=1", status_code=303)

@@ -760,6 +760,40 @@ Rubrica importiert — deutlich robuster als das proprietäre Schema direkt zu p
     in der Nutzer-Vorlage, inkl. Mehrfachfirma-Block und langer BKP-Bezeichnung) visuell gegen erzeugte PDFs
     verifiziert - Spaltenbreiten iterativ angepasst, bis keine Wort-mitten-im-Wort-Umbrueche mehr auftraten.
 
+- **PDF-Export: Firmenzeile getrennt von Mitarbeiterzeilen, Sichtbarkeits-Einstellungen, echte Trennlinien
+  (2026-07-13):** Zweite Vergleichsrunde gegen die Original-Adressliste zeigte drei verbleibende Abweichungen:
+  1. **Reale vCard-Importe taggen ueberwiegend englisch/Apple-Style**, nicht deutsch: Stichprobe der
+     Produktiv-DB ergab bei Telefonnummern ueberwiegend `work`/`cell`/`home`/`main` statt `arbeit`/`mobil`/
+     `privat`, bei E-Mails praktisch nur `internet` (Apple unterscheidet dort gar nicht geschaeftlich/privat).
+     Neue Klassierung in `export/generator.py`: `_ist_privat_typ()`/`_ist_mobil_typ()` erkennen beide
+     Sprachvarianten (`{"privat","private","home"}` bzw. `{"mobil","cell","iphone"}`); alles andere
+     (`work`/`main`/`other`/`arbeit`/unlabeled) gilt als geschaeftlich/allgemein und bleibt sichtbar - so
+     verschwinden bei den ueberwiegend `internet`-getaggten E-Mails keine Daten faelschlich.
+  2. **Firmenzeile ist jetzt strukturell von den Mitarbeiterzeilen getrennt** (vorher: BKP/Firma in der Zeile
+     der ersten Person kombiniert - stimmte nicht mit der Vorlage ueberein, dort hat die Firma immer eine
+     eigene Zeile mit Sachbearbeitung/Funktion leer). Ein Kontakt ganz ohne Vor-/Nachname repraesentiert im
+     echten Bestand oft die Firma selbst (Sekretariat/allgemeine Nummer) - `_ist_firmenkontakt()` erkennt das
+     und liefert die "allgemeine Nummer"/"allgemeine Mail" fuer die Firmenzeile; ist keiner vorhanden, bleiben
+     diese Felder leer, die Firmenzeile existiert trotzdem (BKP-Nummer + Firma + Adresse). Adresse zeigt keinen
+     Typ-Praefix mehr ("work"/"arbeit" wurde von Nutzer explizit nicht gewuenscht) - nur die optionale
+     Privatadresse bekommt "Privat:" vorangestellt, damit sie von der Geschaeftsadresse unterscheidbar bleibt.
+  3. **Neue Sichtbarkeits-Einstellungen** (`web/settings.py`, neues Fieldset "Export – sichtbare Felder"):
+     vier Checkboxen `mobil_zeigen`/`privates_telefon_zeigen`/`private_email_zeigen`/`privatadresse_zeigen`,
+     alle standardmaessig aus (nur geschaeftliche Daten im Export, private/mobile Angaben sind Opt-in). Die
+     "Mobil"-Spalte wird bei `mobil_zeigen=False` komplett aus der Tabelle entfernt (nicht nur leer gelassen),
+     die restlichen Spalten werden dann automatisch breiter (`_SPALTEN_ANTEILE_OHNE_MOBIL`).
+  4. **Echte Trennlinie statt vollem Gitternetz**: Nutzer-Feedback "das Ziel: zwischen jeder BKP eine Linie" -
+     das bisherige volle `GRID` (Linien um jede Zelle) ersetzt durch eine duenne `LINEABOVE` genau an den
+     Zeilenindizes, an denen eine neue Firmengruppe beginnt (`_tabellenzeilen()` gibt diese Indizes jetzt
+     zurueck) - keine Linien mehr zwischen den Mitarbeiterzeilen derselben Firma.
+  - Ausserdem: Platzhaltertext beim Firmennamen-Feld war "Strut Architekten AG" (Nutzer: soll bei anderen
+    Bueros nicht so erscheinen) → neutrales Beispiel "Muster Architektur AG"; unterstützte Logo-Dateiformate
+    (PNG/JPG/JPEG/GIF) jetzt explizit als Hinweistext neben dem Upload-Feld sichtbar.
+  - 15 neue/aktualisierte Tests (Typ-Erkennung inkl. englischer Apple-Varianten, Firmenzeile-Trennung,
+    Spalten-Ein/Ausblendung, Checkbox-Persistenz inkl. Rueck-auf-False beim Deaktivieren). Alle 109 Tests
+    grün. Mit synthetischen Daten (inkl. Firmenkontakt mit allgemeiner Nummer, wie im echten Bestand
+    beobachtet) visuell gegen erzeugte PDFs verifiziert, mit und ohne aktivierte Sichtbarkeits-Optionen.
+
 Bekannte Einschränkung: Entwicklungsumgebung läuft unter Python 3.9 (Systemversion) statt der ursprünglich in Abschnitt 6 vermuteten 3.12 — FastAPI-Routenparameter deshalb mit `typing.Optional[int]` statt `int | None` (siehe `CLAUDE.md`). Dies betrifft nur die lokale Entwicklungsumgebung; das produktive `.pkg` bringt sein eigenes Python 3.13 mit und ist davon unabhängig.
 
 Nächste sinnvolle Schritte: Neues `.pkg` (Notion-Redesign + Archivio einzeln übernehmen/ablehnen + Ordner-
