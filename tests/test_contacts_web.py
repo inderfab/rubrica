@@ -14,13 +14,23 @@ def test_neu_formular_erreichbar(tmp_db):
     assert r.status_code == 200
     assert "Neuer Kontakt" in r.text
     assert 'class="combobox"' in r.text
-    assert "Bauingenieur/in (Statik)" in r.text  # vordefinierte Funktion, geschlechtsneutral
+    assert "297.0 Geometer" in r.text  # vordefinierte BKP-Funktion
 
 
 def test_funktionen_liste_ist_geschlechtsneutral(tmp_db):
     from web.contacts import FUNKTIONEN
-    assert "Architekt" not in FUNKTIONEN  # nur "Architekt/in" soll vorkommen
-    assert "Architekt/in" in FUNKTIONEN
+    assert "291 Architekt" not in FUNKTIONEN  # nur "291 Architekt/in" soll vorkommen
+    assert "291 Architekt/in" in FUNKTIONEN
+
+
+def test_funktionen_liste_ist_nach_bkp_klassiert(tmp_db):
+    from web.contacts import FUNKTIONEN
+    # Eintraege mit BKP-Nummer sind ein einzelner String "<Nummer> <Bezeichnung>" -
+    # die Combobox-Suche (app.js) filtert per Teilstring, ein Treffer ist also
+    # sowohl ueber die Nummer als auch ueber die Bezeichnung auffindbar.
+    geometer = next(f for f in FUNKTIONEN if "Geometer" in f)
+    assert geometer.startswith("297")
+    assert "Geometer" in geometer
 
 
 def test_signatur_parsen_fragment(tmp_db):

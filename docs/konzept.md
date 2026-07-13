@@ -684,15 +684,42 @@ Session. Gesammeltes Wissen fuer naechstes Mal:
   (`web/settings.py`, `settings.html`), Default leer = deaktiviert. 5 neue Tests (`tests/test_backup.py`),
   inkl. Middleware-Integrationstest und Fehlerfall mit ungültigem Pfad. Alle 86 Tests grün.
 
-**Offene Frage vom Nutzer (2026-07-12, noch nicht umgesetzt): kompletten `.abbu`-Ordner statt einzelner
-vCard-Datei importieren können**, mit Blick auf andere Büros mit derselben Ausgangslage (Apple-Kontakte-Export
-statt Rubrica). Kurz recherchiert: `.abbu` ist kein vCard-Text, sondern ein macOS-Bundle (Ordner) mit Apples
-interner, proprietärer SQLite-Datenbank (`AddressBook-v22.abcddb`, Tabellen wie `ZABCDRECORD` — undokumentiert,
-ändert sich zwischen macOS-Versionen). Das direkt zu parsen wäre deutlich fragiler als der bestehende, gut
-getestete vCard-Import. Empfehlung (noch nicht mit dem Nutzer abgestimmt): eher client-seitig per AppleScript
-aus Kontakte.app heraus nach vCard exportieren lassen (wie schon in `scripts/import_from_contacts_app.py` für
-den eigenen Bestand gelöst) und dieses vcf in Rubrica importieren, statt einen eigenen `.abbu`-Parser zu bauen.
-Müsste noch mit dem Nutzer besprochen werden, bevor das umgesetzt wird.
+**Zurückgestellt (2026-07-13, vom Nutzer bestätigt „für später notieren"): `.abbu`-Import für andere Büros.**
+Ziel: anderen Architekturbüros mit derselben Ausgangslage (Apple-Kontakte statt Rubrica) den Umstieg erleichtern,
+indem ihr komplettes Adressbuch-Backup (`.abbu`) direkt importierbar ist. `.abbu` ist kein vCard-Text, sondern
+ein macOS-Bundle (Ordner) mit Apples interner, proprietärer SQLite-Datenbank (`AddressBook-v22.abcddb`, Tabellen
+wie `ZABCDRECORD` — undokumentiert, ändert sich zwischen macOS-Versionen). Empfehlung, sobald das aufgegriffen
+wird: kein eigener `.abbu`-Parser, sondern ein Export-Skript, das per AppleScript aus Kontakte.app heraus nach
+vCard exportiert (analog zu `scripts/import_from_contacts_app.py` für den eigenen Bestand) und dieses vcf in
+Rubrica importiert — deutlich robuster als das proprietäre Schema direkt zu parsen.
+
+- **Cache-Busting für `style.css`/`app.js` (2026-07-13):** Nach der `.pkg`-Installation auf iMac und Mac Studio
+  meldete der Nutzer, das Sammel-Bearbeiten funktioniere zwar, aber "Unterschiedliche Werte" sei nirgends
+  sichtbar. Live gegen die echte, frisch installierte Instanz nachgestellt (`curl` gegen
+  `/kontakte/bulk-bearbeiten-flyover` mit echten Kontakt-IDs): Server-Output war in Wahrheit korrekt (Platzhalter
+  erscheint zuverlässig bei abweichenden Werten) — der wahrscheinlichste Grund ist ein vom Browser gecachtes,
+  altes `style.css`/`app.js` unter unveränderter URL nach dem App-Update. Behoben, indem `web/shared.py` die
+  `VERSION`-Datei liest und als Jinja-Global `app_version` bereitstellt; `base.html` haengt `?v={{ app_version
+  }}` an beide Dateien an, sodass jede neue Version zwangsläufig eine neue URL bekommt und der Browser sie neu
+  laden muss.
+- **BKP-basierte Funktionsliste (2026-07-13):** Nutzer-Vorlage (reale Adressliste eines Bauprojekts) zeigt, dass
+  Büros Kontakte nach Schweizer Baukostenplan (BKP) klassieren (z. B. "297.0 Geometer"). `FUNKTIONEN` in
+  `web/contacts.py` komplett durch eine BKP-Liste ersetzt — jeder Eintrag ein String `"<BKP-Nummer>
+  <Bezeichnung>"`; die bestehende Combobox-Suche (Teilstring-Filter) findet Eintraege dadurch automatisch sowohl
+  über die Nummer ("297") als auch über die Bezeichnung ("geometer"), ohne Code-Änderung an `app.js`. Rollen
+  ohne Kostenklassierung (Bauherrschaft, Behörde, intern) bleiben ohne Nummer. Zwei vom Nutzer explizit als
+  "Spezialnummern ausserhalb des Standards" genannte Codes (601.x, 701.1) sind trotzdem mit aufgenommen, weil sie
+  in der realen Vorlage vorkamen.
+- **Export: Gruppierung nach Firma + Sortierung nach BKP-Nummer (2026-07-13):** Bisher listete der PDF/CSV-Export
+  jeden Kontakt unabhängig und unsortiert auf. Neu (`export/generator.py`): `_bkp_sortier_schluessel()` sortiert
+  numerisch nach BKP-Nummer (nicht alphabetisch, sonst käme "299" vor "297"); Eintraege ohne Nummer zuerst.
+  `_gruppiere_fuer_export()` gruppiert zusätzlich nach Firma — mehrere Personen derselben Firma erscheinen als
+  ein gemeinsamer Firmenblock (Firmenname/-adresse nur einmal), exakt wie in der vom Nutzer bereitgestellten
+  Beispiel-Adressliste (z. B. Astrid Beispiel, Michael Suter, Corina Kunz alle unter "Beispiel Bauingenieure AG").
+  CSV-Zeilen folgen derselben Sortierung (ohne Gruppierung, da Flat-Format). Dass der Export NICHT alle Ordner
+  eines Kontakts zeigt, war bereits vorher der Fall (der Generator liest das `projekte`-Feld nirgends) — mit
+  einem Test explizit abgesichert. 9 neue Tests, alle 92 Tests grün. Mit synthetischen Testdaten (Struktur wie
+  in der Nutzer-Vorlage) visuell gegen ein erzeugtes PDF verifiziert.
 
 Bekannte Einschränkung: Entwicklungsumgebung läuft unter Python 3.9 (Systemversion) statt der ursprünglich in Abschnitt 6 vermuteten 3.12 — FastAPI-Routenparameter deshalb mit `typing.Optional[int]` statt `int | None` (siehe `CLAUDE.md`). Dies betrifft nur die lokale Entwicklungsumgebung; das produktive `.pkg` bringt sein eigenes Python 3.13 mit und ist davon unabhängig.
 
