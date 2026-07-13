@@ -82,6 +82,20 @@ def _bereite_datenverzeichnis_vor():
         log.info("config.yaml aus Beispiel erstellt")
 
 
+def _setze_config_radicale_passwort(passwort: str):
+    """Traegt das generierte Radicale-Passwort in config.yaml ein (radicale.password),
+    damit die Client-Seite (Push) mit der htpasswd-Server-Seite uebereinstimmt."""
+    import yaml
+    config = _DATA_DIR / "config.yaml"
+    try:
+        daten = yaml.safe_load(config.read_text()) or {}
+        daten.setdefault("radicale", {})["password"] = passwort
+        config.write_text(yaml.dump(daten, allow_unicode=True, default_flow_style=False, sort_keys=False))
+        log.info("Radicale-Passwort in config.yaml gesetzt")
+    except Exception as exc:
+        log.warning("Konnte Radicale-Passwort nicht in config.yaml schreiben: %s", exc)
+
+
 def _bereite_radicale_vor():
     """Zertifikat, Passwort und radicale.conf beim allerersten Start anlegen -
     portiert aus dem vorherigen Bash-Launcher 'Rubrica Radicale'."""
@@ -100,6 +114,11 @@ def _bereite_radicale_vor():
         passwort = secrets.token_urlsafe(12)
         subprocess.run([sys.executable, str(_HERE / "radicale_set_password.py"), benutzer, passwort],
                         check=False, timeout=30, env=_env())
+        # Dasselbe generierte Passwort auch in config.yaml schreiben (Client-Seite),
+        # damit Rubricas eigener Push von Anfang an gegen das gleiche Passwort
+        # authentifiziert wie die htpasswd-Datei (Server-Seite) - sonst schluege der
+        # Push bis zur ersten manuellen Passwortaenderung fehl.
+        _setze_config_radicale_passwort(passwort)
         zugangsdaten = _DATA_DIR / "RADICALE-ZUGANGSDATEN.txt"
         zugangsdaten.write_text(
             f"Rubrica CardDAV-Zugangsdaten (generiert {time.strftime('%c')})\n"

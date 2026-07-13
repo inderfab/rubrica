@@ -1000,6 +1000,34 @@ Rubrica importiert — deutlich robuster als das proprietäre Schema direkt zu p
     Einstellungen setzt (was jetzt beide Seiten schreibt); ein sauberer Erststart-Flow, der von Anfang an
     ein konsistentes Passwort in beide Ziele schreibt, waere aber die robustere Loesung.
 
+- **Dritter (eigentlicher) Sync-Bug: TLS-Verify gegen lokale CA (2026-07-13):** Nach den beiden vorigen
+  Fixes (enabled-Schalter, htpasswd) konnte sich Kontakte.app zwar anmelden, aber neu erstellte Kontakte
+  (Test1 unter 0.10, Test2 unter 0.11) tauchten weiterhin nur im Web auf, nicht auf dem Client - und ein
+  laengst geloeschter "Test Nutzer" (0.9) blieb sichtbar. Root Cause: Rubricas eigener Push geht an
+  `https://127.0.0.1:8443`, dessen Zertifikat von einer lokal erzeugten CA (`radicale-tls/ca-cert.pem`)
+  signiert ist. httpx prueft mit `verify=True` gegen den certifi-Trust-Store, der diese CA nicht kennt ->
+  **jeder Push schlug mit einem TLS-Zertifikatsfehler fehl, und zwar still** (Sync-Fehler unterbrechen die
+  Web-Route bewusst nie). Kontakte.app funktioniert, weil macOS die CA aus dem Schluesselbund vertraut -
+  httpx nutzt den Schluesselbund aber nicht.
+  - Fix: `sync/radicale.py::_tls_verify()` prueft jetzt gegen die lokale CA-Datei, falls vorhanden (sicher +
+    funktioniert), sonst ohne Pruefung (Loopback 127.0.0.1 ist nicht abhoerbar). `verify_ssl=false` erzwingt
+    weiterhin keine Pruefung. Damit funktioniert der Push in allen Faellen.
+  - Weil dies bereits der DRITTE stille Sync-Fehler in Folge war: neue sichtbare Aktion "Jetzt alles neu
+    synchronisieren" auf der Einstellungen-Seite (`POST /einstellungen/radicale-sync` ->
+    `radicale.sync_alle()`). Sie pusht alle Kontakte/Ordner neu UND entfernt verwaiste vCards (in Radicale
+    vorhanden, aber nicht mehr in der DB - z.B. der alte "Test Nutzer", dessen Delete-Push damals fehlschlug)
+    und meldet Anzahlen + erste Fehlermeldung zurueck. `_put`/`_delete`/`push_*` geben dafuer jetzt bool
+    (Erfolg) zurueck; neues `_remote_vcf_namen()` listet den Remote-Bestand per PROPFIND (tolerantes Regex auf
+    die selbst vergebenen Namen `kontakt-N.vcf`/`projekt-N.vcf`). Das Standalone-Skript
+    `scripts/sync_alle_nach_radicale.py` delegiert jetzt an dieselbe Funktion.
+  - Erstinstallation (`menubar/app.py`): schreibt das generierte Zufallspasswort jetzt auch in
+    `config.yaml` (Client-Seite), nicht nur in htpasswd + Merkzettel - damit Push und Server-Auth von Anfang
+    an konsistent sind (schliesst den zuvor als "offener Punkt" notierten Rest).
+  - 8 neue Tests (`_tls_verify`, `sync_alle` inkl. Entfernen verwaister Eintraege, Sync-Button-Route).
+  - Muster-Lektion: drei Sync-Bugs in Folge blieben nur deshalb so lange unentdeckt, weil Sync-Fehler
+    absichtlich still verschluckt werden (damit sie die Web-UI nicht blockieren). Die neue sichtbare
+    "Jetzt alles neu synchronisieren"-Rueckmeldung schliesst diese Diagnose-Luecke fuer die Zukunft.
+
 Bekannte Einschränkung: Entwicklungsumgebung läuft unter Python 3.9 (Systemversion) statt der ursprünglich in Abschnitt 6 vermuteten 3.12 — FastAPI-Routenparameter deshalb mit `typing.Optional[int]` statt `int | None` (siehe `CLAUDE.md`). Dies betrifft nur die lokale Entwicklungsumgebung; das produktive `.pkg` bringt sein eigenes Python 3.13 mit und ist davon unabhängig.
 
 Nächste sinnvolle Schritte: Neues `.pkg` (Notion-Redesign + Archivio einzeln übernehmen/ablehnen + Ordner-

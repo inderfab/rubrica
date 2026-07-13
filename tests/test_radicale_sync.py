@@ -160,3 +160,63 @@ def test_client_braucht_keinen_enabled_schalter(monkeypatch):
     client = radicale._client()
     assert client is not None
     client.close()
+
+
+def test_tls_verify_ohne_lokale_ca_ist_false(tmp_db, monkeypatch):
+    # verify_ssl=True, aber keine lokale CA-Datei vorhanden -> auf Loopback ohne
+    # Pruefung, statt den Push mit einem Zertifikatsfehler still scheitern zu lassen.
+    monkeypatch.setattr(settings, "_settings", {"radicale": {"verify_ssl": True}})
+    assert radicale._tls_verify() is False
+
+
+def test_tls_verify_nutzt_lokale_ca_wenn_vorhanden(tmp_db, monkeypatch):
+    tls_dir = settings.daten_verzeichnis() / "radicale-tls"
+    tls_dir.mkdir(parents=True, exist_ok=True)
+    (tls_dir / "ca-cert.pem").write_text("dummy", encoding="utf-8")
+    monkeypatch.setattr(settings, "_settings", {"radicale": {"verify_ssl": True}})
+    assert radicale._tls_verify() == str(tls_dir / "ca-cert.pem")
+
+
+def test_tls_verify_false_wenn_ausdruecklich_deaktiviert(tmp_db, monkeypatch):
+    tls_dir = settings.daten_verzeichnis() / "radicale-tls"
+    tls_dir.mkdir(parents=True, exist_ok=True)
+    (tls_dir / "ca-cert.pem").write_text("dummy", encoding="utf-8")
+    monkeypatch.setattr(settings, "_settings", {"radicale": {"verify_ssl": False}})
+    assert radicale._tls_verify() is False
+
+
+def test_sync_alle_ohne_konfiguration_meldet_inaktiv(tmp_db, monkeypatch):
+    monkeypatch.setattr(radicale, "_client", lambda: None)
+    ergebnis = radicale.sync_alle(tmp_db)
+    assert ergebnis["aktiv"] is False
+
+
+def test_sync_alle_pusht_alle_und_entfernt_verwaiste(tmp_db, monkeypatch):
+    k1 = queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster"})
+    k2 = queries.create_kontakt(tmp_db, {"vorname": "Bob", "nachname": "Beispiel"})
+
+    gesendet = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        gesendet.append((request.method, request.url.path))
+        if request.method == "PROPFIND":
+            # Radicale meldet einen verwaisten Kontakt (kontakt-999), der nicht mehr in der DB ist.
+            xml = ('<multistatus><response><href>/a/kontakt-999.vcf</href></response>'
+                   f'<response><href>/a/kontakt-{k1}.vcf</href></response></multistatus>')
+            return httpx.Response(207, text=xml)
+        return httpx.Response(201)
+
+    def mock_client():
+        return httpx.Client(transport=httpx.MockTransport(handler), base_url="https://test/a/")
+
+    monkeypatch.setattr(radicale, "_client", mock_client)
+
+    ergebnis = radicale.sync_alle(tmp_db)
+
+    assert ergebnis["aktiv"] is True
+    assert ergebnis["kontakte"] == 2
+    assert ergebnis["entfernt"] == 1  # kontakt-999 entfernt
+    # Der verwaiste Kontakt wurde per DELETE entfernt, die echten per PUT gepusht.
+    assert ("DELETE", "/a/kontakt-999.vcf") in gesendet
+    assert ("PUT", f"/a/kontakt-{k1}.vcf") in gesendet
+    assert ("PUT", f"/a/kontakt-{k2}.vcf") in gesendet

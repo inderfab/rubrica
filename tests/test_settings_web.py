@@ -14,6 +14,13 @@ def test_einstellungen_formular_zeigt_aktuellen_wert(tmp_db, monkeypatch):
     assert 'value="3"' in r.text
 
 
+def test_radicale_sync_button_ohne_konfiguration_meldet_inaktiv(tmp_db, monkeypatch):
+    monkeypatch.setattr(settings, "_settings", {"radicale": {"base_url": ""}})
+    r = TestClient(app).post("/einstellungen/radicale-sync", follow_redirects=False)
+    assert r.status_code == 303
+    assert "sync=" in r.headers["location"]
+
+
 def test_einstellungen_speichern_schreibt_config(tmp_db, monkeypatch, tmp_path):
     config_pfad = tmp_path / "config.yaml"
     config_pfad.write_text("database:\n  path: rubrica.db\n")
