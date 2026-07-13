@@ -65,27 +65,24 @@ def test_einstellungen_speichert_export_checkboxen(tmp_db, monkeypatch, tmp_path
     # Checkboxen aktiviert (HTML-Formulare senden nur angehakte Checkboxen mit)
     client.post("/einstellungen", data={
         "archivio_db_path": "", "archivio_min_mails": "2",
-        "mobil_zeigen": "on", "privates_telefon_zeigen": "on",
-        "private_email_zeigen": "on", "privatadresse_zeigen": "on",
+        "privates_telefon_zeigen": "on", "private_email_zeigen": "on", "privatadresse_zeigen": "on",
     })
-    assert settings.get("export.mobil_zeigen") is True
     assert settings.get("export.privates_telefon_zeigen") is True
     assert settings.get("export.private_email_zeigen") is True
     assert settings.get("export.privatadresse_zeigen") is True
 
     # Nicht angehakt -> muss auf False zurueckgesetzt werden (nicht einfach fehlen)
     client.post("/einstellungen", data={"archivio_db_path": "", "archivio_min_mails": "2"})
-    assert settings.get("export.mobil_zeigen") is False
     assert settings.get("export.privates_telefon_zeigen") is False
 
 
 def test_einstellungen_formular_zeigt_checkbox_status(tmp_db, monkeypatch):
-    monkeypatch.setattr(settings, "_settings", {"export": {"mobil_zeigen": True}})
+    monkeypatch.setattr(settings, "_settings", {"export": {"privates_telefon_zeigen": True}})
     r = TestClient(app).get("/einstellungen")
     assert r.status_code == 200
     # Nur die aktivierte Checkbox soll "checked" haben
-    mobil_abschnitt = r.text.split('name="mobil_zeigen"')[1][:20]
-    assert "checked" in mobil_abschnitt
+    abschnitt = r.text.split('name="privates_telefon_zeigen"')[1][:20]
+    assert "checked" in abschnitt
 
 
 def test_logo_upload_wird_gespeichert_und_ausgeliefert(tmp_db, monkeypatch, tmp_path):

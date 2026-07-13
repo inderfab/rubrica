@@ -100,6 +100,13 @@ FUNKTIONEN = [
 # klares "gleich oder verschieden"-Konzept bei unterschiedlicher Anzahl je Kontakt).
 FELDER_MEHRFACHBEARBEITUNG = ["vorname", "nachname", "firma", "rolle", "kategorie", "notizen"]
 
+# Vordefinierte Kategorien fuer Telefonnummern/E-Mails - ersetzt die bisherigen
+# uneinheitlichen Werte (teils deutsch "arbeit"/"mobil"/"privat", teils englisch
+# aus Apple-Importen "work"/"cell"/"home"). Drei Kategorien reichen fuer den
+# Export (Direkt/Allgemein sind immer sichtbar, Privat ist optional - siehe
+# export/generator.py). Freitext bleibt ueber die Combobox weiterhin moeglich.
+TELEFON_EMAIL_TYPEN = ["Direkt", "Privat", "Allgemein"]
+
 
 def _funktion_optionen(conn) -> list:
     """Vordefinierte Funktionen + bereits im Bestand vorkommende Zusatzwerte."""
@@ -109,6 +116,20 @@ def _funktion_optionen(conn) -> list:
         )
     }
     return FUNKTIONEN + sorted(bestehende - set(FUNKTIONEN))
+
+
+def _telefon_typ_optionen(conn) -> list:
+    bestehende = {
+        r["typ"] for r in conn.execute("SELECT DISTINCT typ FROM telefonnummern WHERE typ != ''")
+    }
+    return TELEFON_EMAIL_TYPEN + sorted(bestehende - set(TELEFON_EMAIL_TYPEN))
+
+
+def _email_typ_optionen(conn) -> list:
+    bestehende = {
+        r["typ"] for r in conn.execute("SELECT DISTINCT typ FROM emails WHERE typ != ''")
+    }
+    return TELEFON_EMAIL_TYPEN + sorted(bestehende - set(TELEFON_EMAIL_TYPEN))
 
 
 def _parse_kontakt_form(form) -> dict:
@@ -142,11 +163,11 @@ def _parse_kontakt_form(form) -> dict:
         "kategorie": form.get("kategorie", "").strip(),
         "notizen": form.get("notizen", "").strip(),
         "telefonnummern": [
-            {"typ": t.strip() or "mobil", "nummer": n.strip()}
+            {"typ": t.strip() or "Direkt", "nummer": n.strip()}
             for t, n in zip(telefon_typen, telefon_nummern) if n.strip()
         ],
         "emails": [
-            {"typ": t.strip() or "arbeit", "email": e.strip()}
+            {"typ": t.strip() or "Direkt", "email": e.strip()}
             for t, e in zip(email_typen, email_adressen) if e.strip()
         ],
         "adressen": adressen,
@@ -197,10 +218,13 @@ def kontakt_neu_form(request: Request):
     try:
         ordner = queries.list_projekte(conn)
         funktionen = _funktion_optionen(conn)
+        telefon_typen = _telefon_typ_optionen(conn)
+        email_typen = _email_typ_optionen(conn)
     finally:
         conn.close()
     return templates.TemplateResponse("contact_new.html", {
         "request": request, "ordner": ordner, "funktionen": funktionen,
+        "telefon_typen": telefon_typen, "email_typen": email_typen,
         "kontakt": None, "ausgewaehlte_ordner": [],
     })
 
@@ -215,11 +239,14 @@ async def kontakt_signatur_parsen(request: Request):
     try:
         ordner = queries.list_projekte(conn)
         funktionen = _funktion_optionen(conn)
+        telefon_typen = _telefon_typ_optionen(conn)
+        email_typen = _email_typ_optionen(conn)
     finally:
         conn.close()
     return templates.TemplateResponse("_kontakt_felder.html", {
         "request": request, "kontakt": daten, "ordner": ordner,
-        "funktionen": funktionen, "ausgewaehlte_ordner": [],
+        "funktionen": funktionen, "telefon_typen": telefon_typen, "email_typen": email_typen,
+        "ausgewaehlte_ordner": [],
     })
 
 
@@ -255,10 +282,13 @@ def kontakt_bearbeiten_form(request: Request, kontakt_id: int, ordner_id: str = 
         kontakt = queries.get_kontakt(conn, kontakt_id)
         ordner = queries.list_projekte(conn)
         funktionen = _funktion_optionen(conn)
+        telefon_typen = _telefon_typ_optionen(conn)
+        email_typen = _email_typ_optionen(conn)
     finally:
         conn.close()
     return templates.TemplateResponse("contact_form.html", {
         "request": request, "kontakt": kontakt, "ordner": ordner, "funktionen": funktionen,
+        "telefon_typen": telefon_typen, "email_typen": email_typen,
         "action": f"/kontakte/{kontakt_id}/bearbeiten", "modal": False,
         "zurueck_ordner_id": ordner_id,
     })
@@ -273,10 +303,13 @@ def kontakt_bearbeiten_flyover(request: Request, kontakt_id: int, ordner_id: str
         kontakt = queries.get_kontakt(conn, kontakt_id)
         ordner = queries.list_projekte(conn)
         funktionen = _funktion_optionen(conn)
+        telefon_typen = _telefon_typ_optionen(conn)
+        email_typen = _email_typ_optionen(conn)
     finally:
         conn.close()
     return templates.TemplateResponse("kontakt_bearbeiten_modal.html", {
         "request": request, "kontakt": kontakt, "ordner": ordner, "funktionen": funktionen,
+        "telefon_typen": telefon_typen, "email_typen": email_typen,
         "action": f"/kontakte/{kontakt_id}/bearbeiten", "modal": True,
         "zurueck_ordner_id": ordner_id,
     })

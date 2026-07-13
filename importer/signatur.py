@@ -64,14 +64,17 @@ _GRUSSFORMEL = re.compile(
 
 
 def _telefon_typ(kontext: str) -> str:
-    """Klassifiziert eine Nummer anhand des Textes davor (Label) bzw. der Vorwahl."""
+    """Klassifiziert eine Nummer anhand des Textes davor (Label) bzw. der Vorwahl.
+    Faxnummern sind praktisch immer Firmen-/Sammelanschluesse -> Allgemein;
+    Mobilnummern gelten als privat (siehe importer/vcard.py); Tel./Direktwahl-
+    Label -> Direkt."""
     k = kontext.lower()
     if re.search(r"\bfax\b|\bf[:.]?\s*$", k):
-        return "fax"
+        return "Allgemein"
     if re.search(r"\bmob\w*|\bnatel|\bhandy|\bm[:.]?\s*$|\bcell", k):
-        return "mobil"
+        return "Privat"
     if re.search(r"\btel|\bfon|\bt[:.]?\s*$|\bdirekt|\bfestnetz|\bp[:.]?\s*$", k):
-        return "arbeit"
+        return "Direkt"
     return ""
 
 
@@ -115,7 +118,7 @@ def parse_signatur(text: str) -> dict:
             adr = m.group(0).strip(".,;:")
             if adr.lower() not in gesehene_mails:
                 gesehene_mails.add(adr.lower())
-                emails.append({"typ": "arbeit", "email": adr})
+                emails.append({"typ": "Direkt", "email": adr})
         for m in _URL.finditer(zeile):
             u = m.group(0).strip(".,;:")
             # E-Mail-Domain nicht faelschlich als URL zaehlen
@@ -144,7 +147,7 @@ def parse_signatur(text: str) -> dict:
             kontext = zeile[:m.start()][-12:]
             typ = _telefon_typ(kontext)
             if not typ:
-                typ = "mobil" if re.search(r"(?:\+41\s?|0)7\d", normalisiert) else "arbeit"
+                typ = "Privat" if re.search(r"(?:\+41\s?|0)7\d", normalisiert) else "Direkt"
             telefonnummern.append({"typ": typ, "nummer": normalisiert})
 
     firma = ""

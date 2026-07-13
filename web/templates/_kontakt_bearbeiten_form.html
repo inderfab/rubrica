@@ -38,13 +38,19 @@
         <div id="tel-rows">
             {% for t in (kontakt.telefonnummern if kontakt else []) %}
             <div class="tel-row">
-                <input type="text" name="telefon_typ" value="{{ t.typ }}" placeholder="Typ" style="width: 6rem;">
+                <div class="combobox" data-optionen='{{ telefon_typen|tojson }}' style="width:8rem;">
+                    <input type="text" class="combobox-input" name="telefon_typ" autocomplete="off" value="{{ t.typ }}"
+                           oninput="rubricaComboboxInput(event)" onfocus="rubricaComboboxInput(event)"
+                           onblur="rubricaComboboxBlur(event)">
+                    <ul class="combobox-liste"></ul>
+                </div>
                 <input type="text" name="telefon_nummer" value="{{ t.nummer }}" placeholder="Nummer">
                 <button type="button" class="secondary" onclick="this.parentElement.remove()">Entfernen</button>
             </div>
             {% endfor %}
         </div>
-        <button type="button" class="secondary" onclick="addRow('tel-rows', 'tel')">+ Telefonnummer</button>
+        <button type="button" class="secondary" data-optionen='{{ telefon_typen|tojson }}'
+                onclick="addRow('tel-rows', 'tel', this)">+ Telefonnummer</button>
     </fieldset>
 
     <fieldset>
@@ -52,13 +58,19 @@
         <div id="mail-rows">
             {% for e in (kontakt.emails if kontakt else []) %}
             <div class="mail-row">
-                <input type="text" name="email_typ" value="{{ e.typ }}" placeholder="Typ" style="width: 6rem;">
+                <div class="combobox" data-optionen='{{ email_typen|tojson }}' style="width:8rem;">
+                    <input type="text" class="combobox-input" name="email_typ" autocomplete="off" value="{{ e.typ }}"
+                           oninput="rubricaComboboxInput(event)" onfocus="rubricaComboboxInput(event)"
+                           onblur="rubricaComboboxBlur(event)">
+                    <ul class="combobox-liste"></ul>
+                </div>
                 <input type="text" name="email_adresse" value="{{ e.email }}" placeholder="E-Mail">
                 <button type="button" class="secondary" onclick="this.parentElement.remove()">Entfernen</button>
             </div>
             {% endfor %}
         </div>
-        <button type="button" class="secondary" onclick="addRow('mail-rows', 'mail')">+ E-Mail</button>
+        <button type="button" class="secondary" data-optionen='{{ email_typen|tojson }}'
+                onclick="addRow('mail-rows', 'mail', this)">+ E-Mail</button>
     </fieldset>
 
     <fieldset>
@@ -123,9 +135,13 @@
 </form>
 
 <script>
+// "typInput" (tel/mail) rendert statt eines einfachen Textfelds die Combobox
+// fuer die Kategorie (Direkt/Privat/Allgemein) - die Optionsliste kommt aus
+// dem data-optionen-Attribut des "+ ..."-Buttons (button-Parameter), da neu
+// per JS eingefuegte Zeilen die Jinja-Vorlagenwerte sonst nicht kennen.
 const ROW_SPECS = {
-    tel: {cls: 'tel-row', fields: [['telefon_typ', 'Typ', '6rem'], ['telefon_nummer', 'Nummer', null]]},
-    mail: {cls: 'mail-row', fields: [['email_typ', 'Typ', '6rem'], ['email_adresse', 'E-Mail', null]]},
+    tel: {cls: 'tel-row', typInput: 'telefon_typ', fields: [['telefon_nummer', 'Nummer', null]]},
+    mail: {cls: 'mail-row', typInput: 'email_typ', fields: [['email_adresse', 'E-Mail', null]]},
     url: {cls: 'mail-row', fields: [['url_typ', 'Typ', '6rem'], ['url_adresse', 'https://…', null]]},
     adr: {cls: 'tel-row', fields: [
         ['adresse_typ', 'Typ', '5rem'], ['adresse_strasse', 'Strasse', null],
@@ -134,15 +150,48 @@ const ROW_SPECS = {
     ]},
 };
 
-function addRow(containerId, kind) {
+function addRow(containerId, kind, button) {
     const container = document.getElementById(containerId);
     const spec = ROW_SPECS[kind];
     const row = document.createElement('div');
     row.className = spec.cls;
-    const inputs = spec.fields.map(([name, placeholder, width]) =>
-        `<input type="text" name="${name}" placeholder="${placeholder}"${width ? ` style="width: ${width};"` : ''}>`
-    ).join('\n');
-    row.innerHTML = inputs + '<button type="button" class="secondary" onclick="this.parentElement.remove()">Entfernen</button>';
+
+    if (spec.typInput) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'combobox';
+        wrapper.style.width = '8rem';
+        wrapper.dataset.optionen = (button && button.dataset.optionen) || '[]';
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'combobox-input';
+        input.name = spec.typInput;
+        input.autocomplete = 'off';
+        input.addEventListener('input', rubricaComboboxInput);
+        input.addEventListener('focus', rubricaComboboxInput);
+        input.addEventListener('blur', rubricaComboboxBlur);
+        const liste = document.createElement('ul');
+        liste.className = 'combobox-liste';
+        wrapper.appendChild(input);
+        wrapper.appendChild(liste);
+        row.appendChild(wrapper);
+    }
+
+    spec.fields.forEach(([name, placeholder, width]) => {
+        const feld = document.createElement('input');
+        feld.type = 'text';
+        feld.name = name;
+        feld.placeholder = placeholder;
+        if (width) feld.style.width = width;
+        row.appendChild(feld);
+    });
+
+    const entfernenBtn = document.createElement('button');
+    entfernenBtn.type = 'button';
+    entfernenBtn.className = 'secondary';
+    entfernenBtn.textContent = 'Entfernen';
+    entfernenBtn.addEventListener('click', () => row.remove());
+    row.appendChild(entfernenBtn);
+
     container.appendChild(row);
 }
 </script>

@@ -794,6 +794,59 @@ Rubrica importiert — deutlich robuster als das proprietäre Schema direkt zu p
     grün. Mit synthetischen Daten (inkl. Firmenkontakt mit allgemeiner Nummer, wie im echten Bestand
     beobachtet) visuell gegen erzeugte PDFs verifiziert, mit und ohne aktivierte Sichtbarkeits-Optionen.
 
+- **Telefon-/E-Mail-Kategorien vereinheitlicht auf Direkt/Privat/Allgemein, Export-Kopf/Fuss verfeinert
+  (2026-07-13):** Dritte Vergleichsrunde: Nutzer meldete, dass bei einem Mitarbeiter sowohl geschaeftliche
+  als auch private E-Mail im Export erschienen (beide vCard-typisiert als generisches Apple-"internet" -
+  keine Unterscheidung anhand des Typs moeglich). Statt die Heuristik weiter zu verfeinern, komplette
+  Vereinfachung auf drei nutzerdefinierte Kategorien:
+  - `web/contacts.py`: neue Konstante `TELEFON_EMAIL_TYPEN = ["Direkt", "Privat", "Allgemein"]`,
+    `_telefon_typ_optionen()`/`_email_typ_optionen()` (gleiches Muster wie `_funktion_optionen()` - Vorschlag
+    + bereits im Bestand vorkommende Zusatzwerte). Die Telefon-/E-Mail-Typ-Felder in `_kontakt_felder.html`
+    und `_kontakt_bearbeiten_form.html` sind jetzt Comboboxen (wie das Funktion-Feld: Vorschlagsliste +
+    Freitext moeglich) statt starrem `<select>` bzw. reinem Freitext. `addRow()` in
+    `_kontakt_bearbeiten_form.html` baut die Combobox fuer neu hinzugefuegte Zeilen jetzt per DOM-API auf
+    (Optionsliste kommt aus dem `data-optionen`-Attribut des "+ ..."-Buttons), damit dynamisch eingefuegte
+    Zeilen dieselbe Kategorisierung anbieten wie die urspruenglich gerenderten.
+  - **Migration bestehender Daten** (`db/migrations.py`, `2026-07-13_telefon_email_typ_direkt_privat_allgemein`):
+    mappt alte Werte (deutsch: arbeit/mobil/privat/fax; englisch aus Apple-Importen: work/cell/home/main) auf
+    die drei neuen Kategorien - Mobilnummern gelten als privat, unbekannte/generische Typen (insbesondere
+    Apples "internet" fuer ALLE E-Mails, ohne Unterscheidung) werden konservativ zu "Direkt" (sichtbar), damit
+    nichts automatisch verschwindet. **Bekannte Grenze:** Bereits importierte E-Mails, die alle als "internet"
+    getaggt sind (praktisch der gesamte Altbestand), koennen dadurch nicht automatisch in geschaeftlich/privat
+    unterschieden werden - dafuer muss der Typ pro Kontakt manuell auf "Privat" umgestellt werden, falls eine
+    bestimmte Adresse ausgeblendet werden soll. `importer/vcard.py` (`_telefon_typ_normalisieren()`/
+    `_email_typ_normalisieren()`) und `importer/signatur.py` wenden dieselbe Kategorisierung neu auf
+    KUENFTIGE Importe an.
+  - `export/generator.py` entsprechend vereinfacht: keine eigene "Mobil"-Spalte/Einstellung mehr (Mobilnummern
+    zaehlen jetzt zur privaten Kategorie und erscheinen zusammen mit anderen privaten Nummern, wenn
+    aktiviert) - eine Tabelle mit sechs statt sieben Spalten.
+  - **Webseite nur einmal, auf der Firmenzeile:** `_firmen_webseiten_pdf()` sammelt alle URLs innerhalb einer
+    Firmengruppe (unabhaengig davon, an welchem Kontakt sie haengen) und zeigt sie nur auf der Firmenzeile -
+    vorher wurde sie faelschlich bei jedem Mitarbeiter wiederholt.
+  - **Kopf-/Fusszeile verfeinert:** Die Zusammenfassungszeile ("Rubrica – Kontaktliste – N Kontakt(e) –
+    erzeugt am ...") entfernt. Fusszeile zeigt jetzt links "Datum / Rubrica", rechts "Seite X von Y" (echte
+    Gesamtseitenzahl statt nur der laufenden Nummer) - dafuer neue `_NumberedCanvas`-Klasse (reportlab-
+    Standardmuster: Seiten werden zwischengespeichert, bis beim finalen `save()` die Gesamtzahl feststeht).
+  - Live-Test des Nutzers zeigte ausserdem einen Kontakt ("Manon Mathys") auf einer separaten Zeile statt im
+    selben Firmenblock wie die uebrigen Strut-Mitarbeiter - Ursache war ein Tippfehler im Firmenfeld dieses
+    einen Kontakts ("Strut Architeken AG" statt "Strut Architekten AG"); die Gruppierung ist bewusst ein
+    exakter Textvergleich (kein Fuzzy-Matching, um nicht versehentlich unterschiedliche Firmen zusammen-
+    zulegen) - der Kontakt muss in der Kontaktliste manuell korrigiert werden, kein Code-Fehler.
+  - 6 neue Tests (`db/migrations.py`, `importer/vcard.py`-Mapping, Webseite-nur-einmal). Alle 113 Tests grün.
+
+**Zurueckgestellt (2026-07-13, Nutzer-Feedback waehrend dieser Session, noch nicht umgesetzt):**
+  - Import-Seite: Drag&Drop-Feld vergroessern, Text "Kontakte hier hineinziehen", Mehrfachauswahl/-Drop.
+  - Review-Queue: Ordner-Zuweisung als Auswahlliste, Bearbeiten einzelner/mehrerer Vorschlaege vor
+    Bestaetigung (analog Sammel-Bearbeiten bei Kontakten), Aktionen "Alle bestaetigen"/"Nur ausgewaehlte
+    bestaetigen"/"Ausgewaehlte ablehnen".
+  - Archivio-Import als eigene Seite zwischen "Review-Queue" und "Import" (nur sichtbar, wenn ein gueltiger
+    Archivio-DB-Pfad in den Einstellungen hinterlegt ist); von dort geht es in die Review-Queue.
+  - **Bug gemeldet:** Live-Test (Kontakt in Kontakte.app angelegt, einer Gruppe zugewiesen, exportiert,
+    importiert) - alles ausser der Gruppenzuweisung wurde uebernommen, obwohl die Checkbox "Gruppen
+    uebernehmen" beim Import aktiviert war. Nutzer-Wunsch: Checkbox entfernen, Gruppen-Uebernahme
+    standardmaessig immer versuchen (landet ohnehin erst in der Review-Queue, kein Risiko durch automatisches
+    Anlegen).
+
 Bekannte Einschränkung: Entwicklungsumgebung läuft unter Python 3.9 (Systemversion) statt der ursprünglich in Abschnitt 6 vermuteten 3.12 — FastAPI-Routenparameter deshalb mit `typing.Optional[int]` statt `int | None` (siehe `CLAUDE.md`). Dies betrifft nur die lokale Entwicklungsumgebung; das produktive `.pkg` bringt sein eigenes Python 3.13 mit und ist davon unabhängig.
 
 Nächste sinnvolle Schritte: Neues `.pkg` (Notion-Redesign + Archivio einzeln übernehmen/ablehnen + Ordner-

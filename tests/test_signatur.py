@@ -20,7 +20,7 @@ www.strut.ch
 
 def test_email_und_web():
     d = parse_signatur(SIG_TYPISCH)
-    assert {"typ": "arbeit", "email": "anna.braendli@strut.ch"} in d["emails"]
+    assert {"typ": "Direkt", "email": "anna.braendli@strut.ch"} in d["emails"]
     assert any(u["url"] == "www.strut.ch" for u in d["urls"])
     # E-Mail-Domain darf nicht als URL auftauchen
     assert not any("@" in u["url"] for u in d["urls"])
@@ -29,8 +29,8 @@ def test_email_und_web():
 def test_telefon_klassifikation():
     d = parse_signatur(SIG_TYPISCH)
     typen = {t["typ"]: t["nummer"] for t in d["telefonnummern"]}
-    assert "arbeit" in typen and "52" in typen["arbeit"]
-    assert "mobil" in typen and "79" in typen["mobil"]
+    assert "Direkt" in typen and "52" in typen["Direkt"]
+    assert "Privat" in typen and "79" in typen["Privat"]
 
 
 def test_firma_und_name():
@@ -57,8 +57,8 @@ def test_rolle():
 def test_mobil_ohne_label_per_vorwahl():
     d = parse_signatur("Max Muster\nMuster GmbH\n079 123 45 67\n044 321 65 43")
     typen = {t["typ"] for t in d["telefonnummern"]}
-    assert "mobil" in typen  # 079... als Mobil erkannt
-    assert "arbeit" in typen  # 044... als Festnetz
+    assert "Privat" in typen  # 079... als Mobil -> gilt als privat
+    assert "Direkt" in typen  # 044... als Festnetz
 
 
 def test_leere_signatur_bricht_nicht_ab():
@@ -82,7 +82,7 @@ def test_kompakte_signatur_mit_labels():
     sig = "Dr. Hans Meier | Geologe\nGeoTest AG\nT: 044 123 45 67  F: 044 123 45 68\nM: 079 888 77 66\nhans.meier@geotest.ch"
     d = parse_signatur(sig)
     typen = {t["typ"] for t in d["telefonnummern"]}
-    assert typen == {"arbeit", "fax", "mobil"}
+    assert typen == {"Direkt", "Allgemein", "Privat"}
     assert d["firma"] == "GeoTest AG"
     assert d["emails"][0]["email"] == "hans.meier@geotest.ch"
 

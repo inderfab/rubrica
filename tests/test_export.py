@@ -73,13 +73,15 @@ def test_bkp_zellen_text_bricht_nach_der_nummer_um():
     assert generator._bkp_zellen_text("Bauherrschaft/Kundschaft") == "Bauherrschaft/Kundschaft"
 
 
-def test_direktwahl_pdf_klammert_mobil_aus():
+def test_direktwahl_pdf_behandelt_mobil_als_privat():
+    # Mobilnummern gelten als privat (Direkt/Privat/Allgemein-Kategorisierung) -
+    # keine eigene "Mobil"-Spalte mehr, siehe web/contacts.py TELEFON_EMAIL_TYPEN.
     kontakt = _kontakt(telefonnummern=[
         {"typ": "arbeit", "nummer": "052 123 45 67"},
         {"typ": "mobil", "nummer": "079 123 45 67"},
     ])
     assert generator._direktwahl_pdf(kontakt, privates_telefon_zeigen=False) == "052 123 45 67"
-    assert generator._mobilnummern_pdf(kontakt) == "079 123 45 67"
+    assert generator._direktwahl_pdf(kontakt, privates_telefon_zeigen=True) == "052 123 45 67<br/>079 123 45 67"
 
 
 def test_direktwahl_pdf_erkennt_englische_apple_typen():
@@ -90,8 +92,7 @@ def test_direktwahl_pdf_erkennt_englische_apple_typen():
         {"typ": "home", "nummer": "052 333 33 33"},
     ])
     assert generator._direktwahl_pdf(kontakt, privates_telefon_zeigen=False) == "052 111 11 11"
-    assert generator._mobilnummern_pdf(kontakt) == "079 222 22 22"
-    assert generator._direktwahl_pdf(kontakt, privates_telefon_zeigen=True) == "052 111 11 11<br/>052 333 33 33"
+    assert generator._direktwahl_pdf(kontakt, privates_telefon_zeigen=True) == "052 111 11 11<br/>079 222 22 22<br/>052 333 33 33"
 
 
 def test_direktwahl_pdf_private_nummer_nur_mit_flag():
@@ -141,7 +142,7 @@ def test_tabellenzeilen_firmenzeile_getrennt_von_mitarbeiterzeilen():
                             telefonnummern=[{"typ": "work", "nummer": "052 111 11 11"}],
                             emails=[{"typ": "internet", "email": "bleuler@sking.ch"}])
     zeilen, grenzen = generator._tabellenzeilen(
-        [firmenkontakt, mitarbeiter], mobil_zeigen=False, privates_telefon_zeigen=False,
+        [firmenkontakt, mitarbeiter], privates_telefon_zeigen=False,
         private_email_zeigen=False, privatadresse_zeigen=False,
     )
     assert len(zeilen) == 3  # Kopfzeile + Firmenzeile + 1 Mitarbeiterzeile
@@ -151,18 +152,25 @@ def test_tabellenzeilen_firmenzeile_getrennt_von_mitarbeiterzeilen():
     assert grenzen == [1]  # eine Firmengruppe -> Trennlinie beginnt bei Zeile 1
 
 
-def test_tabellenzeilen_ohne_mobil_spalte_wenn_deaktiviert():
+def test_tabellenzeilen_hat_sechs_spalten_keine_eigene_mobil_spalte():
     zeilen, _ = generator._tabellenzeilen(
-        [_kontakt()], mobil_zeigen=False, privates_telefon_zeigen=False,
-        private_email_zeigen=False, privatadresse_zeigen=False,
+        [_kontakt()], privates_telefon_zeigen=False, private_email_zeigen=False, privatadresse_zeigen=False,
     )
-    assert len(zeilen[0]) == 6  # 7 Spalten minus "Mobil"
+    assert len(zeilen[0]) == 6
+    assert [str(p.text) for p in zeilen[0]] == generator._TABELLEN_SPALTEN
 
-    zeilen_mit_mobil, _ = generator._tabellenzeilen(
-        [_kontakt()], mobil_zeigen=True, privates_telefon_zeigen=False,
+
+def test_webseite_erscheint_nur_auf_firmenzeile_nicht_bei_mitarbeitern():
+    firmenkontakt = _kontakt(id=1, vorname="", nachname="", firma="Strut AG", urls=[])
+    mitarbeiter = _kontakt(id=2, vorname="Sarina", nachname="Goldiger", firma="Strut AG",
+                            urls=[{"typ": "homepage", "url": "www.strut.ch"}])
+    zeilen, _ = generator._tabellenzeilen(
+        [firmenkontakt, mitarbeiter], privates_telefon_zeigen=False,
         private_email_zeigen=False, privatadresse_zeigen=False,
     )
-    assert len(zeilen_mit_mobil[0]) == 7
+    firmenzeile, mitarbeiterzeile = zeilen[1], zeilen[2]
+    assert "www.strut.ch" in firmenzeile[5].text
+    assert mitarbeiterzeile[5] == "" or "www.strut.ch" not in getattr(mitarbeiterzeile[5], "text", "")
 
 
 def test_bkp_sortier_schluessel_ordnet_numerisch_nicht_alphabetisch():

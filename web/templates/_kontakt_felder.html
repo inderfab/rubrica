@@ -41,11 +41,12 @@
     {% for i in range([tels|length, 3]|max) %}
     {% set t = tels[i] if i < tels|length else {'typ': '', 'nummer': ''} %}
     <div class="tel-row">
-        <select name="telefon_typ">
-            {% for opt in ['arbeit', 'mobil', 'fax', 'privat'] %}
-            <option value="{{ opt }}" {% if t.typ == opt %}selected{% endif %}>{{ opt }}</option>
-            {% endfor %}
-        </select>
+        <div class="combobox" data-optionen='{{ telefon_typen|tojson }}' style="width:8rem;">
+            <input type="text" class="combobox-input" name="telefon_typ" autocomplete="off" value="{{ t.typ }}"
+                   oninput="rubricaComboboxInput(event)" onfocus="rubricaComboboxInput(event)"
+                   onblur="rubricaComboboxBlur(event)">
+            <ul class="combobox-liste"></ul>
+        </div>
         <input type="text" name="telefon_nummer" value="{{ t.nummer }}" placeholder="Telefonnummer">
     </div>
     {% endfor %}
@@ -56,11 +57,12 @@
     {% for i in range([mails|length, 2]|max) %}
     {% set m = mails[i] if i < mails|length else {'typ': '', 'email': ''} %}
     <div class="mail-row">
-        <select name="email_typ">
-            {% for opt in ['arbeit', 'privat'] %}
-            <option value="{{ opt }}" {% if m.typ == opt %}selected{% endif %}>{{ opt }}</option>
-            {% endfor %}
-        </select>
+        <div class="combobox" data-optionen='{{ email_typen|tojson }}' style="width:8rem;">
+            <input type="text" class="combobox-input" name="email_typ" autocomplete="off" value="{{ m.typ }}"
+                   oninput="rubricaComboboxInput(event)" onfocus="rubricaComboboxInput(event)"
+                   onblur="rubricaComboboxBlur(event)">
+            <ul class="combobox-liste"></ul>
+        </div>
         <input type="email" name="email_adresse" value="{{ m.email }}" placeholder="E-Mail">
     </div>
     {% endfor %}

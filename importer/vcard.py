@@ -34,17 +34,42 @@ def _typ_von(prop) -> str:
     return (typ or "").lower()
 
 
+# vCard-Importe (v.a. aus Apple Kontakte.app) taggen Telefonnummern/E-Mails
+# englisch (work/cell/home) statt mit unseren drei Kategorien Direkt/Privat/
+# Allgemein - hier auf die neue Kategorisierung gemappt. Mobile Nummern gelten
+# als privat (in der Praxis meist persoenliche Nummern), unbekannte/generische
+# Typen (z.B. Apples "internet" fuer alle E-Mails) defaulten zu "Direkt"
+# (sichtbar), damit beim Import nichts faelschlich verschwindet.
+_TELEFON_TYP_MAPPING = {
+    "work": "Direkt", "arbeit": "Direkt", "office": "Direkt", "main": "Allgemein",
+    "allgemein": "Allgemein", "home": "Privat", "privat": "Privat", "private": "Privat",
+    "cell": "Privat", "mobil": "Privat", "iphone": "Privat",
+}
+_EMAIL_TYP_MAPPING = {
+    "work": "Direkt", "arbeit": "Direkt", "internet": "Direkt", "main": "Allgemein",
+    "allgemein": "Allgemein", "home": "Privat", "privat": "Privat", "private": "Privat",
+}
+
+
+def _telefon_typ_normalisieren(rohtyp: str) -> str:
+    return _TELEFON_TYP_MAPPING.get(rohtyp.lower(), "Direkt")
+
+
+def _email_typ_normalisieren(rohtyp: str) -> str:
+    return _EMAIL_TYP_MAPPING.get(rohtyp.lower(), "Direkt")
+
+
 def _parse_kontakt(vcard) -> dict:
     vorname, nachname = _parse_name(vcard)
     firma = vcard.org.value[0] if hasattr(vcard, "org") and vcard.org.value else ""
     rolle = vcard.title.value if hasattr(vcard, "title") else ""
 
     telefonnummern = [
-        {"typ": _typ_von(tel) or "mobil", "nummer": tel.value.strip()}
+        {"typ": _telefon_typ_normalisieren(_typ_von(tel)), "nummer": tel.value.strip()}
         for tel in _values(vcard, "tel") if tel.value and tel.value.strip()
     ]
     emails = [
-        {"typ": _typ_von(mail) or "arbeit", "email": mail.value.strip()}
+        {"typ": _email_typ_normalisieren(_typ_von(mail)), "email": mail.value.strip()}
         for mail in _values(vcard, "email") if mail.value and mail.value.strip()
     ]
     adressen = [

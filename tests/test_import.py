@@ -64,6 +64,26 @@ def test_parse_vcf_gruppenzugehoerigkeit():
     assert kontakte[0]["gruppen"] == ["Projekt X"]
 
 
+def test_parse_vcf_mappt_englische_apple_typen_auf_direkt_privat_allgemein():
+    vcf = textwrap.dedent("""\
+        BEGIN:VCARD
+        VERSION:3.0
+        N:Muster;Anna;;;
+        FN:Anna Muster
+        TEL;TYPE=WORK:+41 52 111 11 11
+        TEL;TYPE=CELL:+41 79 222 22 22
+        TEL;TYPE=MAIN:+41 52 333 33 33
+        EMAIL;TYPE=INTERNET:anna@example.com
+        END:VCARD
+    """)
+    k = parse_vcf(vcf)[0]
+    telefon_typen = {t["nummer"]: t["typ"] for t in k["telefonnummern"]}
+    assert telefon_typen["+41 52 111 11 11"] == "Direkt"
+    assert telefon_typen["+41 79 222 22 22"] == "Privat"
+    assert telefon_typen["+41 52 333 33 33"] == "Allgemein"
+    assert k["emails"][0]["typ"] == "Direkt"
+
+
 def test_import_ohne_treffer_erzeugt_neuen_vorschlag(tmp_db):
     anzahl = importiere(tmp_db, VCF_NEU, gruppen_als_ordner=False)
     assert anzahl == 1
