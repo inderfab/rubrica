@@ -976,7 +976,31 @@ Rubrica importiert — deutlich robuster als das proprietäre Schema direkt zu p
     eine Datei stammt, bevor lokale Dev-Config-Dateien als Referenz herangezogen werden (fruehe
     Fehlspur in dieser Diagnose).
 
-Bekannte Einschränkung: Entwicklungsumgebung läuft unter Python 3.9 (Systemversion) statt der ursprünglich in Abschnitt 6 vermuteten 3.12 (Systemversion) statt der ursprünglich in Abschnitt 6 vermuteten 3.12 — FastAPI-Routenparameter deshalb mit `typing.Optional[int]` statt `int | None` (siehe `CLAUDE.md`). Dies betrifft nur die lokale Entwicklungsumgebung; das produktive `.pkg` bringt sein eigenes Python 3.13 mit und ist davon unabhängig.
+- **Folgebug: Passwortaenderung schrieb htpasswd nicht mit (2026-07-13):** Direkt nach dem vorigen Fix
+  meldete der Nutzer, dass Kontakte.app trotz korrekt in den Einstellungen gesetztem Passwort keine
+  Verbindung herstellt ("Accountname/Passwort konnte nicht ueberprueft werden"). Ursache: es gibt **zwei**
+  Radicale-Passwoerter, die synchron bleiben muessen, und die Einstellungen-Seite pflegte nur eines:
+  - `config.yaml -> radicale.password`: das Passwort, das Rubrica als **Client** beim Pushen sendet (und
+    das der Nutzer in Kontakte.app eintraegt).
+  - `radicale-htpasswd`: die Datei, gegen die der Radicale-**Server** eingehende Logins prueft (Kontakte.app
+    UND Rubrica selbst). Wurde bisher nur beim allerersten Start einmalig mit einem Zufallspasswort
+    geschrieben (`menubar/app.py:_bereite_radicale_vor()`).
+  - Fix: neues Modul `sync/htpasswd.py` mit `set_password()` (bcrypt-Hash, ersetzt den Eintrag desselben
+    Benutzers, erhaelt andere) - wird von der Einstellungen-Seite bei jedem Speichern eines Radicale-
+    Passworts aufgerufen, sodass Client- und Server-Seite immer uebereinstimmen. Radicale liest die
+    htpasswd-Datei pro Anfrage bzw. bei mtime-Aenderung neu ein (verifiziert in
+    `radicale/auth/htpasswd.py`), ein Neustart ist nicht noetig. Das bestehende Standalone-Skript
+    `scripts/radicale_set_password.py` (das der Menubar-Erststart per subprocess aufruft) delegiert jetzt
+    an dasselbe Modul (DRY) und legt dafuer zwei Kandidatenpfade in `sys.path` (Dev-Layout `scripts/` vs.
+    flaches Bundle-Layout `Contents/Resources/`), im flachen Bundle-Layout verifiziert.
+  - 5 neue Tests (`tests/test_htpasswd.py`, plus htpasswd-Assertion in `tests/test_settings_web.py`).
+  - Offener Punkt (nicht kritisch, spaeter): der Menubar-Erststart schreibt das generierte Zufallspasswort
+    nur in die htpasswd-Datei und den Zugangsdaten-Merkzettel, nicht in `config.yaml` (dort bleibt es
+    zunaechst leer). Fuer den praktischen Ablauf unerheblich, da der Nutzer das Passwort ohnehin in den
+    Einstellungen setzt (was jetzt beide Seiten schreibt); ein sauberer Erststart-Flow, der von Anfang an
+    ein konsistentes Passwort in beide Ziele schreibt, waere aber die robustere Loesung.
+
+Bekannte Einschränkung: Entwicklungsumgebung läuft unter Python 3.9 (Systemversion) statt der ursprünglich in Abschnitt 6 vermuteten 3.12 — FastAPI-Routenparameter deshalb mit `typing.Optional[int]` statt `int | None` (siehe `CLAUDE.md`). Dies betrifft nur die lokale Entwicklungsumgebung; das produktive `.pkg` bringt sein eigenes Python 3.13 mit und ist davon unabhängig.
 
 Nächste sinnvolle Schritte: Neues `.pkg` (Notion-Redesign + Archivio einzeln übernehmen/ablehnen + Ordner-
 Bearbeiten + alle bisherigen Fixes) auf dem iMac installieren; unter „Einstellungen" `archivio.db_path`

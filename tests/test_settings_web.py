@@ -1,6 +1,8 @@
+import bcrypt
 from fastapi.testclient import TestClient
 
 from config import settings
+from sync import htpasswd
 from web.main import app
 
 
@@ -63,6 +65,14 @@ def test_einstellungen_speichern_schreibt_radicale_config(tmp_db, monkeypatch, t
     assert settings.get("radicale.username") == "pas"
     assert settings.get("radicale.password") == "neuespasswort"
     assert settings.get("radicale.verify_ssl") is True
+
+    # Kernpunkt des Bugfixes: das Passwort muss auch in der htpasswd-Datei landen
+    # (Server-Auth), nicht nur in config.yaml (Client-Push) - sonst schlaegt der
+    # Login von Kontakte.app fehl.
+    inhalt = htpasswd.htpasswd_pfad().read_text(encoding="utf-8").strip()
+    login, digest = inhalt.split(":", maxsplit=1)
+    assert login == "pas"
+    assert bcrypt.checkpw(b"neuespasswort", digest.encode("ascii"))
 
 
 def test_einstellungen_speichern_zeigt_bestaetigung(tmp_db, monkeypatch, tmp_path):

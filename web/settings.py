@@ -10,6 +10,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import FileResponse, RedirectResponse, Response
 
 from config import settings
+from sync import htpasswd
 from web.shared import templates
 
 router = APIRouter()
@@ -97,4 +98,12 @@ async def einstellungen_speichern(request: Request):
             "privatadresse_zeigen": form.get("privatadresse_zeigen") is not None,
         },
     })
+
+    # Das Radicale-Passwort in config.yaml ist nur die CLIENT-Seite (womit Rubrica pusht).
+    # Die htpasswd-Datei, gegen die der Radicale-SERVER Logins prueft (Kontakte.app UND
+    # Rubrica), muss mitgezogen werden - sonst schlaegt jeder Login fehl. Radicale liest
+    # die Datei live neu ein, ein Neustart ist nicht noetig.
+    if radicale_username and radicale_password:
+        htpasswd.set_password(radicale_username, radicale_password)
+
     return RedirectResponse(url="/einstellungen?gespeichert=1", status_code=303)

@@ -1,15 +1,22 @@
 """Setzt/aktualisiert das Radicale-htpasswd-Passwort fuer einen Benutzer.
 
 Aufruf: .venv/bin/python scripts/radicale_set_password.py <benutzername> <passwort>
+
+Delegiert an sync.htpasswd.set_password (dieselbe Logik nutzt auch die
+Einstellungen-Seite), damit es nur eine Quelle fuer das htpasswd-Format gibt.
 """
-import os
 import sys
 from pathlib import Path
 
-import bcrypt
+# Beide moeglichen Layouts abdecken: im Dev-Repo liegt dieses Skript unter
+# scripts/ (sync/ eine Ebene hoeher), im gepackten .app-Bundle flach in
+# Contents/Resources/ (sync/ als Geschwisterordner). Beide Kandidaten in den
+# Pfad legen, damit der Import in beiden Faellen aufloest.
+_hier = Path(__file__).resolve().parent
+sys.path.insert(0, str(_hier))
+sys.path.insert(0, str(_hier.parent))
 
-DATA_DIR = Path(os.environ.get("RUBRICA_DATA_DIR", Path.home() / "Library/Application Support/Rubrica"))
-HTPASSWD_PATH = DATA_DIR / "radicale-htpasswd"
+from sync import htpasswd  # noqa: E402
 
 
 def main():
@@ -17,18 +24,8 @@ def main():
         print("Aufruf: radicale_set_password.py <benutzername> <passwort>")
         sys.exit(1)
     benutzer, passwort = sys.argv[1], sys.argv[2]
-
-    hash_ = bcrypt.hashpw(passwort.encode("utf-8"), bcrypt.gensalt()).decode("ascii")
-
-    zeilen = []
-    if HTPASSWD_PATH.exists():
-        zeilen = [z for z in HTPASSWD_PATH.read_text().splitlines() if z and not z.startswith(f"{benutzer}:")]
-    zeilen.append(f"{benutzer}:{hash_}")
-
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    HTPASSWD_PATH.write_text("\n".join(zeilen) + "\n")
-    HTPASSWD_PATH.chmod(0o600)
-    print(f"Passwort fuer '{benutzer}' gesetzt in {HTPASSWD_PATH}")
+    htpasswd.set_password(benutzer, passwort)
+    print(f"Passwort fuer '{benutzer}' gesetzt in {htpasswd.htpasswd_pfad()}")
 
 
 if __name__ == "__main__":
