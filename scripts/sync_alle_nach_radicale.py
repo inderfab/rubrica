@@ -1,9 +1,9 @@
-"""Einmaliges Nachtrags-Skript: pusht alle bestehenden Kontakte/Ordner nach Radicale.
+"""Einmaliges Nachtrags-Skript: gleicht alle Kontakte/Ordner mit Radicale ab.
 
-Sinnvoll direkt nach dem erstmaligen Aktivieren von radicale.enabled (config.yaml),
-damit bereits vorhandene Datensaetze (die vor der Aktivierung importiert wurden)
-nachtraeglich synchronisiert werden. Danach uebernimmt die App den Sync automatisch
-bei jeder Aenderung (siehe sync/radicale.py, web/contacts.py, web/folders.py).
+Sinnvoll, um bereits vorhandene Datensaetze nachtraeglich zu synchronisieren
+(z.B. nach einem Import mit deaktiviertem/fehlerhaftem Sync). Danach uebernimmt
+die App den Sync automatisch bei jeder Aenderung. Dieselbe Logik steht in der
+Weboberflaeche unter Einstellungen -> "Jetzt alles neu synchronisieren".
 
 Aufruf: .venv/bin/python scripts/sync_alle_nach_radicale.py
 """
@@ -16,18 +16,18 @@ from sync import radicale
 def main():
     conn = get_connection()
     try:
-        kontakt_ids = [row["id"] for row in conn.execute("SELECT id FROM kontakte")]
-        projekt_ids = [row["id"] for row in conn.execute("SELECT id FROM projekte")]
-
-        for kontakt_id in kontakt_ids:
-            radicale.push_kontakt(conn, kontakt_id)
-        print(f"{len(kontakt_ids)} Kontakte gepusht.")
-
-        for projekt_id in projekt_ids:
-            radicale.push_projekt(conn, projekt_id)
-        print(f"{len(projekt_ids)} Ordner gepusht.")
+        ergebnis = radicale.sync_alle(conn)
     finally:
         conn.close()
+
+    if not ergebnis["aktiv"]:
+        print("Radicale nicht konfiguriert - nichts synchronisiert.")
+        return
+    print(f"{ergebnis['kontakte']} Kontakte gepusht.")
+    print(f"{ergebnis['ordner']} Ordner gepusht.")
+    print(f"{ergebnis['entfernt']} verwaiste Eintraege entfernt.")
+    for fehler in ergebnis["fehler"]:
+        print(f"  Fehler: {fehler}")
 
 
 if __name__ == "__main__":

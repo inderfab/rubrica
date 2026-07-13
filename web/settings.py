@@ -5,12 +5,14 @@ fehlende Sektion bei Installationen mit aelterem config.yaml)."""
 from __future__ import annotations
 
 from pathlib import Path
+from urllib.parse import quote
 
 from fastapi import APIRouter, Request
 from fastapi.responses import FileResponse, RedirectResponse, Response
 
 from config import settings
-from sync import htpasswd
+from db.connection import get_connection
+from sync import htpasswd, radicale
 from web.shared import templates
 
 router = APIRouter()
@@ -24,10 +26,11 @@ def _logo_entfernen() -> None:
 
 
 @router.get("/einstellungen")
-def einstellungen_form(request: Request, gespeichert: str = ""):
+def einstellungen_form(request: Request, gespeichert: str = "", sync: str = ""):
     return templates.TemplateResponse("settings.html", {
         "request": request,
         "gespeichert": bool(gespeichert),
+        "sync_ergebnis": sync,
         "archivio_db_path": settings.get("archivio.db_path", "") or "",
         "archivio_min_mails": settings.get("archivio.min_mails", 2),
         "backup_pfad": settings.get("backup.pfad", "") or "",
@@ -107,3 +110,24 @@ async def einstellungen_speichern(request: Request):
         htpasswd.set_password(radicale_username, radicale_password)
 
     return RedirectResponse(url="/einstellungen?gespeichert=1", status_code=303)
+
+
+@router.post("/einstellungen/radicale-sync")
+def einstellungen_radicale_sync():
+    """Stoesst einen sichtbaren Vollabgleich zu Radicale an: pusht alle Kontakte/
+    Ordner neu und entfernt verwaiste vCards. Nuetzlich, um Datensaetze
+    nachzuziehen, deren automatischer Push frueher (still) fehlgeschlagen ist."""
+    conn = get_connection()
+    try:
+        ergebnis = radicale.sync_alle(conn)
+    finally:
+        conn.close()
+
+    if not ergebnis["aktiv"]:
+        text = "Radicale nicht konfiguriert - Sync nicht möglich."
+    else:
+        text = (f"{ergebnis['kontakte']} Kontakte und {ergebnis['ordner']} Ordner synchronisiert, "
+                f"{ergebnis['entfernt']} verwaiste Einträge entfernt.")
+        if ergebnis["fehler"]:
+            text += f" {len(ergebnis['fehler'])} Fehler (z. B. {ergebnis['fehler'][0]})."
+    return RedirectResponse(url=f"/einstellungen?sync={quote(text)}", status_code=303)

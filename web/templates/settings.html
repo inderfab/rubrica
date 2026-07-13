@@ -6,6 +6,9 @@
 {% if gespeichert %}
 <p style="color:#1a7f37; padding:0.5rem 0">Gespeichert.</p>
 {% endif %}
+{% if sync_ergebnis %}
+<p style="color:#1a7f37; padding:0.5rem 0">{{ sync_ergebnis }}</p>
+{% endif %}
 
 <form method="post" action="/einstellungen" enctype="multipart/form-data">
     <fieldset>
@@ -88,6 +91,14 @@
             <input type="checkbox" name="radicale_verify_ssl" {% if radicale_verify_ssl %}checked{% endif %}>
             TLS-Zertifikat prüfen (bei selbstsigniertem Zertifikat i.d.R. trotzdem aktiviert lassen)
         </label>
+        <p class="empty" style="padding:0.6rem 0 0.3rem">
+            Gleicht alle Kontakte und Ordner erneut mit Radicale ab (nützlich, wenn frühere Änderungen nicht
+            angekommen sind) und entfernt dabei verwaiste Einträge, die in Apple Kontakte noch auftauchen,
+            obwohl sie in Rubrica längst gelöscht wurden.
+        </p>
+        <button type="submit" formaction="/einstellungen/radicale-sync" class="secondary">
+            Jetzt alles neu synchronisieren
+        </button>
     </fieldset>
 
     <fieldset>
