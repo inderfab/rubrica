@@ -37,13 +37,10 @@
     <fieldset>
         <legend>Export – sichtbare Felder</legend>
         <p class="empty" style="padding:0 0 0.5rem">
-            Standardmässig zeigt der PDF-Export nur geschäftliche Kontaktdaten (Direktwahl, Geschäfts-E-Mail,
-            Geschäftsadresse). Private/mobile Angaben erscheinen nur, wenn hier aktiviert.
+            Standardmässig zeigt der PDF-Export nur geschäftliche Kontaktdaten (Kategorie "Direkt"/"Allgemein").
+            Als "Privat" kategorisierte Telefonnummern (inkl. Mobilnummern), E-Mails und Adressen erscheinen
+            nur, wenn hier aktiviert.
         </p>
-        <label style="display:flex; align-items:center; gap:0.4rem; font-weight:normal; margin-bottom:0.4rem;">
-            <input type="checkbox" name="mobil_zeigen" {% if mobil_zeigen %}checked{% endif %}>
-            Mobilnummer anzeigen
-        </label>
         <label style="display:flex; align-items:center; gap:0.4rem; font-weight:normal; margin-bottom:0.4rem;">
             <input type="checkbox" name="privates_telefon_zeigen" {% if privates_telefon_zeigen %}checked{% endif %}>
             Private Telefonnummer anzeigen

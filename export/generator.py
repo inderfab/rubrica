@@ -13,6 +13,7 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
+from reportlab.pdfgen.canvas import Canvas
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Table, TableStyle
 
 from sync.radicale import kontakt_zu_vcard
@@ -27,16 +28,11 @@ def _telefon_text(kontakt: dict) -> str:
     return "; ".join(f"{t['typ']}: {t['nummer']}" for t in kontakt.get("telefonnummern", []))
 
 
-_PRIVAT_TYPEN = {"privat", "private", "home"}
-_MOBIL_TYPEN = {"mobil", "cell", "iphone"}
+_PRIVAT_TYPEN = {"privat", "private", "home", "cell", "mobil", "iphone"}
 
 
 def _ist_privat_typ(typ: str) -> bool:
     return (typ or "").strip().lower() in _PRIVAT_TYPEN
-
-
-def _ist_mobil_typ(typ: str) -> bool:
-    return (typ or "").strip().lower() in _MOBIL_TYPEN
 
 
 def _ist_firmenkontakt(kontakt: dict) -> bool:
@@ -48,38 +44,41 @@ def _ist_firmenkontakt(kontakt: dict) -> bool:
 
 
 def _direktwahl_pdf(kontakt: dict, privates_telefon_zeigen: bool) -> str:
-    """Geschaeftliche/allgemeine Nummern immer, mobile Nummern nie (eigene
-    Spalte, siehe _mobilnummern_pdf), private Festnetznummern nur wenn in den
-    Export-Einstellungen aktiviert."""
-    ergebnis = []
-    for t in kontakt.get("telefonnummern", []):
-        typ = t.get("typ", "")
-        if _ist_mobil_typ(typ):
-            continue
-        if _ist_privat_typ(typ) and not privates_telefon_zeigen:
-            continue
-        ergebnis.append(t["nummer"])
+    """Kategorien Direkt/Allgemein immer sichtbar, Privat (inkl. Mobilnummern -
+    gelten als privat) nur wenn in den Export-Einstellungen aktiviert."""
+    ergebnis = [
+        t["nummer"] for t in kontakt.get("telefonnummern", [])
+        if not (_ist_privat_typ(t.get("typ", "")) and not privates_telefon_zeigen)
+    ]
     return "<br/>".join(escape(n) for n in ergebnis)
 
 
-def _mobilnummern_pdf(kontakt: dict) -> str:
-    return "<br/>".join(
-        escape(t["nummer"]) for t in kontakt.get("telefonnummern", []) if _ist_mobil_typ(t.get("typ", ""))
-    )
-
-
-def _email_pdf(kontakt: dict, private_email_zeigen: bool, mit_webseite: bool = False) -> str:
-    """Geschaeftliche E-Mails immer, private nur wenn aktiviert. Reale
-    vCard-Importe taggen E-Mails fast immer generisch (Apple: "internet") -
-    nur explizit als privat/home markierte Eintraege werden ausgeblendet,
-    damit unklar getaggte Adressen nicht faelschlich verschwinden."""
+def _email_pdf(kontakt: dict, private_email_zeigen: bool) -> str:
+    """Geschaeftliche/allgemeine E-Mails immer, private nur wenn aktiviert.
+    Reale vCard-Importe taggen E-Mails fast immer generisch (Apple: "internet")
+    - nur explizit als privat/home markierte Eintraege werden ausgeblendet,
+    damit unklar getaggte Adressen nicht faelschlich verschwinden. Die
+    Webseite ist bewusst NICHT Teil dieser Funktion (siehe _firmen_webseiten_pdf) -
+    sie gilt firmenweit und erscheint nur einmal auf der Firmenzeile, nicht bei
+    jedem Mitarbeiter."""
     ergebnis = [
         e["email"] for e in kontakt.get("emails", [])
         if not (_ist_privat_typ(e.get("typ", "")) and not private_email_zeigen)
     ]
-    if mit_webseite:
-        ergebnis += [u["url"] for u in kontakt.get("urls", [])]
     return "<br/>".join(escape(t) for t in ergebnis)
+
+
+def _firmen_webseiten_pdf(alle_kontakte: list[dict]) -> str:
+    """Sammelt alle Webseiten-URLs innerhalb einer Firmengruppe (unabhaengig
+    davon, an welchem einzelnen Kontakt sie haengen) und entfernt Duplikate -
+    die Webseite gilt firmenweit und wird nur einmal auf der Firmenzeile
+    gezeigt, nicht bei jedem Mitarbeiter wiederholt."""
+    gesehen = []
+    for k in alle_kontakte:
+        for u in k.get("urls", []):
+            if u["url"] not in gesehen:
+                gesehen.append(u["url"])
+    return "<br/>".join(escape(u) for u in gesehen)
 
 
 def _adresse_pdf(kontakt: dict, privatadresse_zeigen: bool) -> str:
@@ -195,19 +194,42 @@ def kontakte_vcard(kontakte: list[dict]) -> bytes:
 
 
 _STYLES = getSampleStyleSheet()
-_STIL_TITEL = ParagraphStyle("OrdnerTitel", parent=_STYLES["Title"], alignment=0, spaceAfter=1 * mm)
-_STIL_UNTERTITEL = ParagraphStyle("Untertitel", parent=_STYLES["Normal"], textColor=colors.grey, spaceAfter=5 * mm)
+_STIL_TITEL = ParagraphStyle("OrdnerTitel", parent=_STYLES["Title"], alignment=0, spaceAfter=3 * mm)
 _STIL_ZELLE = ParagraphStyle("Zelle", parent=_STYLES["Normal"], fontSize=8, leading=10)
 _STIL_KOPFZELLE = ParagraphStyle(
     "Kopfzelle", parent=_STIL_ZELLE, fontName="Helvetica-Bold", textColor=colors.white,
 )
 
-_TABELLEN_SPALTEN = [
-    "BKP Nummer", "Unternehmen", "Sachbearbeitung", "Funktion",
-    "Telefon/Fax/Direktwahl", "Mobil", "E-Mail/Webseite",
-]
-_SPALTEN_ANTEILE_MIT_MOBIL = [0.13, 0.18, 0.14, 0.14, 0.15, 0.08, 0.18]
-_SPALTEN_ANTEILE_OHNE_MOBIL = [0.13, 0.19, 0.15, 0.15, 0.17, 0.21]
+_TABELLEN_SPALTEN = ["BKP Nummer", "Unternehmen", "Sachbearbeitung", "Funktion", "Telefon", "E-Mail/Webseite"]
+_SPALTEN_ANTEILE = [0.13, 0.20, 0.16, 0.16, 0.16, 0.19]
+_RAND = 15 * mm
+
+
+class _NumberedCanvas(Canvas):
+    """Speichert jede Seite zwischen, statt sie sofort zu schreiben - beim
+    finalen save() ist die Gesamt-Seitenzahl bekannt, erst dann kann "Seite X
+    von Y" gezeichnet werden (reportlab kennt sie waehrend des normalen
+    Seitenaufbaus noch nicht, da es nur einen Durchlauf macht)."""
+
+    def __init__(self, *args, **kwargs):
+        Canvas.__init__(self, *args, **kwargs)
+        self._gespeicherte_seiten = []
+
+    def showPage(self):
+        self._gespeicherte_seiten.append(dict(self.__dict__))
+        self._startPage()
+
+    def save(self):
+        gesamt = len(self._gespeicherte_seiten)
+        for zustand in self._gespeicherte_seiten:
+            self.__dict__.update(zustand)
+            self.saveState()
+            self.setFont("Helvetica", 7)
+            self.setFillColor(colors.grey)
+            self.drawRightString(self._pagesize[0] - _RAND, 10 * mm, f"Seite {self.getPageNumber()} von {gesamt}")
+            self.restoreState()
+            Canvas.showPage(self)
+        Canvas.save(self)
 
 
 def _bkp_zellen_text(funktion: str) -> str:
@@ -219,13 +241,13 @@ def _bkp_zellen_text(funktion: str) -> str:
     return "<br/>".join(escape(t) for t in teile)
 
 
-def _kopf_fuss_zeichner(firmenname: str, logo_pfad: str):
+def _kopf_zeichner(firmenname: str, logo_pfad: str):
     """Wird pro Seite als Canvas-Callback aufgerufen (nicht als Flowable), damit
-    Firmenname/Logo auf JEDER Seite oben erscheinen, nicht nur auf der ersten -
+    Firmenname/Logo/Datum auf JEDER Seite erscheinen, nicht nur auf der ersten -
     Platypus-Flowables wiederholen sich sonst nicht automatisch ueber Seiten
-    hinweg. Firmenname ist mittig oben, Logo rechts oben (Nutzer-Vorgabe;
-    ersetzt den fixen "mmt"-Platzhalter aus der Beispielvorlage), beides ueber
-    die Einstellungen konfigurierbar."""
+    hinweg. Firmenname mittig oben, Logo rechts oben (Nutzer-Vorgabe; ersetzt
+    den fixen "mmt"-Platzhalter aus der Beispielvorlage), beides ueber die
+    Einstellungen konfigurierbar. "Seite X von Y" zeichnet _NumberedCanvas."""
     def zeichnen(canvas, doc):
         breite, hoehe = doc.pagesize
         canvas.saveState()
@@ -243,8 +265,7 @@ def _kopf_fuss_zeichner(firmenname: str, logo_pfad: str):
                 pass  # fehlerhafte/fehlende Logo-Datei darf den Export nie abbrechen
         canvas.setFont("Helvetica", 7)
         canvas.setFillColor(colors.grey)
-        canvas.drawString(doc.leftMargin, 10 * mm, datetime.now().strftime("%d.%m.%Y"))
-        canvas.drawRightString(breite - doc.rightMargin, 10 * mm, f"Seite {doc.page}")
+        canvas.drawString(doc.leftMargin, 10 * mm, f"{datetime.now().strftime('%d.%m.%Y')} / Rubrica")
         canvas.restoreState()
     return zeichnen
 
@@ -254,43 +275,38 @@ def _firmen_adresse_pdf(alle_kontakte: list[dict], privatadresse_zeigen: bool) -
 
 
 def _mitarbeiter_zeile(
-    kontakt: dict, mobil_zeigen: bool, privates_telefon_zeigen: bool, private_email_zeigen: bool,
-    bkp_zelle="", unternehmen_zelle="",
+    kontakt: dict, privates_telefon_zeigen: bool, private_email_zeigen: bool, bkp_zelle="",
 ) -> list:
     name = f"{kontakt.get('vorname', '')} {kontakt.get('nachname', '')}".strip()
     telefon = _direktwahl_pdf(kontakt, privates_telefon_zeigen)
-    email = _email_pdf(kontakt, private_email_zeigen, mit_webseite=True)
-    zeile = [
+    email = _email_pdf(kontakt, private_email_zeigen)
+    return [
         bkp_zelle,
-        unternehmen_zelle,
+        "",
         Paragraph(escape(name), _STIL_ZELLE) if name else "",
         Paragraph(escape(kontakt["rolle"]), _STIL_ZELLE) if kontakt.get("rolle") else "",
         Paragraph(telefon, _STIL_ZELLE) if telefon else "",
+        Paragraph(email, _STIL_ZELLE) if email else "",
     ]
-    if mobil_zeigen:
-        mobil = _mobilnummern_pdf(kontakt)
-        zeile.append(Paragraph(mobil, _STIL_ZELLE) if mobil else "")
-    zeile.append(Paragraph(email, _STIL_ZELLE) if email else "")
-    return zeile
 
 
 def _tabellenzeilen(
-    kontakte: list[dict], mobil_zeigen: bool, privates_telefon_zeigen: bool,
-    private_email_zeigen: bool, privatadresse_zeigen: bool,
+    kontakte: list[dict], privates_telefon_zeigen: bool, private_email_zeigen: bool, privatadresse_zeigen: bool,
 ) -> tuple[list[list], list[int]]:
     """Baut die Datenzeilen der Kontakttabelle. Pro Firma gibt es IMMER eine
     eigene "Firmenzeile" (BKP-Nummer/Gewerk, Firmenname+Adresse, allgemeine
-    Nummer/Mail falls vorhanden - Sachbearbeitung/Funktion bleiben dort leer),
-    gefolgt von je einer Zeile pro Mitarbeiter (Name/Funktion/Direktwahl) -
-    exakt das Muster aus der Nutzer-Vorlage. Die "allgemeine Nummer/Mail"
-    stammt von einem Kontakt ohne Namen in derselben Firma, falls vorhanden
-    (siehe _ist_firmenkontakt) - gibt es keinen, bleiben die Felder leer.
+    Nummer/Mail/Webseite falls vorhanden - Sachbearbeitung/Funktion bleiben
+    dort leer), gefolgt von je einer Zeile pro Mitarbeiter (Name/Funktion/
+    Direktwahl) - exakt das Muster aus der Nutzer-Vorlage. Die "allgemeine
+    Nummer/Mail" stammt von einem Kontakt ohne Namen in derselben Firma, falls
+    vorhanden (siehe _ist_firmenkontakt) - gibt es keinen, bleiben die Felder
+    leer. Die Webseite gilt firmenweit (siehe _firmen_webseiten_pdf) und
+    erscheint deshalb NUR auf der Firmenzeile, nie bei einzelnen Mitarbeitern.
     Kontakte ohne Firma bekommen keine eigene Firmenzeile, die BKP-Nummer
     steht dann direkt auf der ersten Personenzeile.
     Gibt zusaetzlich die Zeilenindizes zurueck, an denen eine neue Firma
     beginnt (fuer die Trennlinie zwischen den Bloecken)."""
-    spalten = [s for s in _TABELLEN_SPALTEN if mobil_zeigen or s != "Mobil"]
-    zeilen = [[Paragraph(s, _STIL_KOPFZELLE) for s in spalten]]
+    zeilen = [[Paragraph(s, _STIL_KOPFZELLE) for s in _TABELLEN_SPALTEN]]
     gruppengrenzen = []
 
     for gruppe in _gruppiere_fuer_export(kontakte):
@@ -311,34 +327,33 @@ def _tabellenzeilen(
                 unternehmen_zelle = Paragraph("<br/>".join(unternehmen_teile), _STIL_ZELLE)
 
                 allg_telefon = _direktwahl_pdf(firmenkontakt, privates_telefon_zeigen) if firmenkontakt else ""
-                allg_email = _email_pdf(firmenkontakt, private_email_zeigen, mit_webseite=True) if firmenkontakt else ""
-                firmenzeile = [bkp_zelle, unternehmen_zelle, "", ""]
-                firmenzeile.append(Paragraph(allg_telefon, _STIL_ZELLE) if allg_telefon else "")
-                if mobil_zeigen:
-                    firmenzeile.append("")
-                firmenzeile.append(Paragraph(allg_email, _STIL_ZELLE) if allg_email else "")
-                zeilen.append(firmenzeile)
+                allg_email = _email_pdf(firmenkontakt, private_email_zeigen) if firmenkontakt else ""
+                allg_web = _firmen_webseiten_pdf(alle_kontakte)
+                allg_email_zelle = "<br/>".join(t for t in (allg_email, allg_web) if t)
+                zeilen.append([
+                    bkp_zelle, unternehmen_zelle, "", "",
+                    Paragraph(allg_telefon, _STIL_ZELLE) if allg_telefon else "",
+                    Paragraph(allg_email_zelle, _STIL_ZELLE) if allg_email_zelle else "",
+                ])
 
                 for k in mitarbeiter:
-                    zeilen.append(_mitarbeiter_zeile(k, mobil_zeigen, privates_telefon_zeigen, private_email_zeigen))
+                    zeilen.append(_mitarbeiter_zeile(k, privates_telefon_zeigen, private_email_zeigen))
             else:
                 for i, k in enumerate(alle_kontakte):
                     zeilen.append(_mitarbeiter_zeile(
-                        k, mobil_zeigen, privates_telefon_zeigen, private_email_zeigen,
-                        bkp_zelle=bkp_zelle if i == 0 else "",
+                        k, privates_telefon_zeigen, private_email_zeigen, bkp_zelle=bkp_zelle if i == 0 else "",
                     ))
     return zeilen, gruppengrenzen
 
 
 def kontakte_pdf(
     ordner_name: str, kontakte: list[dict], firmenname: str = "", logo_pfad: str = "",
-    mobil_zeigen: bool = False, privates_telefon_zeigen: bool = False,
-    private_email_zeigen: bool = False, privatadresse_zeigen: bool = False,
+    privates_telefon_zeigen: bool = False, private_email_zeigen: bool = False, privatadresse_zeigen: bool = False,
 ) -> bytes:
-    """firmenname/logo_pfad sowie die vier zeige_*-Flags kommen aus den
-    Einstellungen (web/export.py). Firmenname/Logo erscheinen auf jeder Seite
-    oben (Firmenname mittig, Logo rechts). Standardmaessig werden nur
-    geschaeftliche Kontaktdaten gezeigt (Mobil-/Privat-Nummern, private
+    """firmenname/logo_pfad sowie die drei zeige_*-Flags kommen aus den
+    Einstellungen (web/export.py). Firmenname/Logo/Datum erscheinen auf jeder
+    Seite oben/unten (Firmenname mittig, Logo rechts). Standardmaessig werden
+    nur geschaeftliche Kontaktdaten gezeigt (Mobil-/Privat-Nummern, private
     E-Mail und Heimadresse sind Opt-in) - so bleibt der Export kompakt, auch
     wenn im Bestand teils private Daten hinterlegt sind. Der Ordnername bleibt
     der alleinige Titel der Liste (z.B. Projektname) - andere Ordner, denen
@@ -346,24 +361,16 @@ def kontakte_pdf(
     puffer = io.BytesIO()
     doc = SimpleDocTemplate(
         puffer, pagesize=landscape(A4),
-        topMargin=24 * mm, bottomMargin=16 * mm, leftMargin=15 * mm, rightMargin=15 * mm,
+        topMargin=24 * mm, bottomMargin=16 * mm, leftMargin=_RAND, rightMargin=_RAND,
         title=f"Rubrica – {ordner_name}",
     )
-    elemente = [
-        Paragraph(escape(ordner_name), _STIL_TITEL),
-        Paragraph(
-            f"Rubrica – Kontaktliste – {len(kontakte)} Kontakt(e) – "
-            f"erzeugt am {datetime.now().strftime('%d.%m.%Y %H:%M')}",
-            _STIL_UNTERTITEL,
-        ),
-    ]
+    elemente = [Paragraph(escape(ordner_name), _STIL_TITEL)]
 
     if kontakte:
         zeilen, gruppengrenzen = _tabellenzeilen(
-            kontakte, mobil_zeigen, privates_telefon_zeigen, private_email_zeigen, privatadresse_zeigen,
+            kontakte, privates_telefon_zeigen, private_email_zeigen, privatadresse_zeigen,
         )
-        anteile = _SPALTEN_ANTEILE_MIT_MOBIL if mobil_zeigen else _SPALTEN_ANTEILE_OHNE_MOBIL
-        tabelle = Table(zeilen, colWidths=[doc.width * anteil for anteil in anteile], repeatRows=1)
+        tabelle = Table(zeilen, colWidths=[doc.width * anteil for anteil in _SPALTEN_ANTEILE], repeatRows=1)
         stil = [
             ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2f3437")),
             ("VALIGN", (0, 0), (-1, -1), "TOP"),
@@ -382,6 +389,6 @@ def kontakte_pdf(
     else:
         elemente.append(Paragraph("Dieser Ordner enthält keine Kontakte.", _STIL_ZELLE))
 
-    zeichnen = _kopf_fuss_zeichner(firmenname, logo_pfad)
-    doc.build(elemente, onFirstPage=zeichnen, onLaterPages=zeichnen)
+    zeichnen = _kopf_zeichner(firmenname, logo_pfad)
+    doc.build(elemente, onFirstPage=zeichnen, onLaterPages=zeichnen, canvasmaker=_NumberedCanvas)
     return puffer.getvalue()
