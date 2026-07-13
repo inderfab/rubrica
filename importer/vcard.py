@@ -188,7 +188,7 @@ def finde_match(conn: sqlite3.Connection, kontakt: dict) -> int | None:
     return None
 
 
-def importiere(conn: sqlite3.Connection, inhalt: str, gruppen_als_ordner: bool) -> int:
+def importiere(conn: sqlite3.Connection, inhalt: str, gruppen_als_ordner: bool = True) -> int:
     """Parst eine .vcf-Datei und legt fuer jeden Kontakt einen Vorschlag an.
     Gibt die Anzahl erzeugter Vorschlaege zurueck. Aendert nie direkt kontakte."""
     kontakte = parse_vcf(inhalt)

@@ -841,11 +841,30 @@ Rubrica importiert — deutlich robuster als das proprietäre Schema direkt zu p
     bestaetigen"/"Ausgewaehlte ablehnen".
   - Archivio-Import als eigene Seite zwischen "Review-Queue" und "Import" (nur sichtbar, wenn ein gueltiger
     Archivio-DB-Pfad in den Einstellungen hinterlegt ist); von dort geht es in die Review-Queue.
-  - **Bug gemeldet:** Live-Test (Kontakt in Kontakte.app angelegt, einer Gruppe zugewiesen, exportiert,
-    importiert) - alles ausser der Gruppenzuweisung wurde uebernommen, obwohl die Checkbox "Gruppen
-    uebernehmen" beim Import aktiviert war. Nutzer-Wunsch: Checkbox entfernen, Gruppen-Uebernahme
-    standardmaessig immer versuchen (landet ohnehin erst in der Review-Queue, kein Risiko durch automatisches
-    Anlegen).
+- **Gruppen-Import: Checkbox entfernt, Standardverhalten (2026-07-13):** Nutzer meldete einen "Bug" - beim
+  Import eines einzelnen, in Kontakte.app einer Gruppe zugewiesenen Kontakts wurde die Gruppenzuordnung nicht
+  uebernommen, obwohl die Checkbox "Gruppen uebernehmen" aktiviert war. Ursache liegt nicht im Rubrica-Code,
+  sondern an Apples vCard-Export selbst: Kontakte.app schreibt Gruppenzugehoerigkeit **nur** in die vCard,
+  wenn eine ganze Gruppe exportiert wird (dabei entsteht eine zusaetzliche synthetische
+  `X-ADDRESSBOOKSERVER-KIND:group`-vCard mit Mitgliederliste) - beim Export eines einzelnen Kontakts fehlt
+  diese Information komplett (bereits beim AppleScript-Spike in Abschnitt 9 festgestellt: Gruppenzugehoerigkeit
+  ist nur ueber die App-interne Objektbeziehung abrufbar, nicht ueber die vCard-Property). Die Checkbox konnte
+  also nichts bewirken, wenn die hochgeladene Datei gar keine Gruppendaten enthielt - kein Fehler in
+  `importer/vcard.py`, sondern eine Grenze des Exportformats fuer Einzelkontakte.
+  Trotzdem wie gewuenscht umgesetzt: `gruppen_als_ordner`-Checkbox aus `import_form.html` entfernt,
+  `importer.vcard.importiere()` versucht Gruppen jetzt standardmaessig zu uebernehmen (`gruppen_als_ordner:
+  bool = True`) - kein Risiko, da Ordner-Zuordnung wie alles andere erst als Vorschlag in der Review-Queue
+  landet. Bringt fuer den beschriebenen Einzelkontakt-Fall keine Aenderung (die Daten fehlen schlicht), hilft
+  aber beim Export ganzer Gruppen (z. B. via `scripts/import_from_contacts_app.py` oder manuellem
+  Gruppen-Export), wo die Information vorhanden ist. 1 neuer Test. Alle 114 Tests gruen.
+
+**Zurueckgestellt (2026-07-13, Nutzer-Feedback waehrend dieser Session, noch nicht umgesetzt):**
+  - Import-Seite: Drag&Drop-Feld vergroessern, Text "Kontakte hier hineinziehen", Mehrfachauswahl/-Drop.
+  - Review-Queue: Ordner-Zuweisung als Auswahlliste, Bearbeiten einzelner/mehrerer Vorschlaege vor
+    Bestaetigung (analog Sammel-Bearbeiten bei Kontakten), Aktionen "Alle bestaetigen"/"Nur ausgewaehlte
+    bestaetigen"/"Ausgewaehlte ablehnen".
+  - Archivio-Import als eigene Seite zwischen "Review-Queue" und "Import" (nur sichtbar, wenn ein gueltiger
+    Archivio-DB-Pfad in den Einstellungen hinterlegt ist); von dort geht es in die Review-Queue.
 
 Bekannte Einschränkung: Entwicklungsumgebung läuft unter Python 3.9 (Systemversion) statt der ursprünglich in Abschnitt 6 vermuteten 3.12 — FastAPI-Routenparameter deshalb mit `typing.Optional[int]` statt `int | None` (siehe `CLAUDE.md`). Dies betrifft nur die lokale Entwicklungsumgebung; das produktive `.pkg` bringt sein eigenes Python 3.13 mit und ist davon unabhängig.
 
