@@ -11,18 +11,88 @@ from web.shared import templates
 
 router = APIRouter()
 
-# Vordefinierte Funktionen (Fachrichtungen) fuer das Auswahlfeld - geschlechtsneutral
-# (Swiss-uebliche "/in"-Schreibweise bzw. neutrale Kollektivbegriffe wie
-# "Bauherrschaft"). Freitext bleibt moeglich, die Liste ist nur Vorschlag, kein
-# Zwang. Technisch im bestehenden Feld kontakte.kategorie gespeichert (UI-Label
-# "Funktion").
+# Vordefinierte Funktionen (Fachrichtungen) fuer das Auswahlfeld - orientiert sich
+# am Schweizer Baukostenplan (BKP), damit "Funktion" dieselbe Klassifizierung
+# abbildet wie die Adresslisten, die Bauherren/Planer projektintern verwenden
+# (Nutzer-Vorlage: "297.0 Geometer" usw.). Jeder Eintrag ist ein einzelner String
+# "<BKP-Nummer> <Bezeichnung>" - die Combobox-Suche (app.js) filtert per
+# Teilstring-Suche ueber den ganzen String, findet einen Eintrag also sowohl ueber
+# die Nummer ("297") als auch ueber die Bezeichnung ("geometer"). Rollen ohne
+# BKP-Klassierung (Bauherrschaft, Behoerde, intern) bleiben ohne Nummer. Freitext
+# bleibt moeglich, die Liste ist nur Vorschlag, kein Zwang. Technisch im
+# bestehenden Feld kontakte.kategorie gespeichert (UI-Label "Funktion").
 FUNKTIONEN = [
-    "Architekt/in", "Innenarchitekt/in", "Bauingenieur/in (Statik)", "Bauleiter/in",
-    "Bauherrschaft/Kundschaft", "Bauherrenvertretung", "Geologe/in", "Vermessung/Geometer/in",
-    "Sanitärplaner/in", "Lüftungsplaner/in", "Heizungsplaner/in", "Elektroplaner/in",
-    "Lichtplaner/in", "Türplaner/in", "Brandschutzplaner/in", "Bauphysik/Akustik",
-    "Landschaftsarchitekt/in", "Industrieplaner/in", "Unternehmer/in/Handwerker/in",
-    "Behörde/Amt", "Lieferant/in", "intern",
+    # Ohne BKP-Nummer (Rollen ohne Kostenklassierung)
+    "Bauherrschaft/Kundschaft", "Bauherrenvertretung", "Behörde/Amt", "Lieferant/in", "intern",
+
+    # BKP 1/2 - Vorbereitungs-, Bau- und Ausbauarbeiten (Unternehmer/Handwerker)
+    "104 Baugespann",
+    "111 Bodenuntersuchung/Baugrunduntersuchung",
+    "149.1 Baumeisterarbeiten",
+    "157 Fernwärme",
+    "201 Baugrubenaushub inkl. Entsorgung",
+    "211 Baumeisterarbeiten",
+    "215.2 Fassadenbau",
+    "221 Fenster, Aussentüren",
+    "225 Metallbau",
+    "226 Spenglerarbeiten",
+    "227 Bedachungsarbeiten",
+    "230 Starkstromanlagen",
+    "231 Starkstromanlagen, Trafo",
+    "232 Starkstromanlagen",
+    "233 Schwachstromanlagen",
+    "242 Heizungs- und Kälteanlagen",
+    "244 Lufttechnische Anlagen",
+    "250 Sanitäranlagen",
+    "257 Sprinkleranlagen",
+    "261 Aufzüge",
+    "271 Bodenbeläge",
+    "275 Türen, Tore",
+    "276 Schreinerarbeiten",
+    "359.1 Spez. Medien",
+    "365 Hebeeinrichtungen",
+
+    # BKP 29x - Planungs- und Ingenieurhonorare
+    "290 Bauherrenberatung",
+    "291 Generalplaner/in",
+    "291 Bauleitung",
+    "291 Architekt/in",
+    "292 Bauingenieur/in",
+    "293 Elektroingenieur/in",
+    "294 HLK-Ingenieur/in",
+    "295 Sanitäringenieur/in",
+    "297.0 Geometer",
+    "297.1 Geologe/in, Geotechniker/in",
+    "297.3 Bauphysiker/in",
+    "297.7 Fassadeningenieur/in",
+    "298.3 Prüfingenieur/in",
+    "298.5 Brandschutzingenieur/in",
+    "298.6 Gaslager- und Gefahrenstoffexperte/in",
+    "299 Sicherheitsbeauftragte/r",
+    "299 Sicherheitsplaner/in",
+    "299 Umweltberater/in",
+    "299 Beleuchtungsplaner/in",
+    "299 Visualisierung",
+
+    # BKP 4 - Umgebung
+    "496 Landschaftsarchitekt/in",
+
+    # BKP 5 - Baunebenkosten
+    "511 Bewilligungen, Gebühren",
+    "511 Tiefbauamt",
+    "512.1 Elektrizität",
+    "512.4 Wasser",
+    "525 Dokumentation",
+    "532 Spezialversicherungen",
+    "568 Baureklame",
+    "598.0 Bauherrenberater",
+
+    # Projektspezifische Sondernummern ausserhalb des Standard-BKP (aus der Praxis
+    # uebernommen - Bueros vergeben teils eigene Nummern fuer Spezialfaelle)
+    "601.1 Kardex-Liftsysteme",
+    "601.2 Kleingüteraufzug",
+    "701.1 Adaptive Solarfassade",
+    "999 Nachbar",
 ]
 
 # Scalar-Felder, die per Mehrfachauswahl gemeinsam bearbeitet werden koennen -

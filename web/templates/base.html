@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <title>{% block title %}Rubrica{% endblock %}</title>
-    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/style.css?v={{ app_version }}">
     <script src="/static/htmx.min.js"></script>
-    <script src="/static/app.js"></script>
+    <script src="/static/app.js?v={{ app_version }}"></script>
 </head>
 <body>
     {% set pfad = request.url.path %}
