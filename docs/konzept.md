@@ -943,7 +943,40 @@ Rubrica importiert — deutlich robuster als das proprietäre Schema direkt zu p
   bestehen (zeigt jetzt auf `/archivio-import`), ebenfalls nur wenn konfiguriert. Von dort weiterhin
   Uebernahme in die Review-Queue (`quelle='archivio'`), unveraendertes Verhalten.
 
-Bekannte Einschränkung: Entwicklungsumgebung läuft unter Python 3.9 (Systemversion) statt der ursprünglich in Abschnitt 6 vermuteten 3.12 — FastAPI-Routenparameter deshalb mit `typing.Optional[int]` statt `int | None` (siehe `CLAUDE.md`). Dies betrifft nur die lokale Entwicklungsumgebung; das produktive `.pkg` bringt sein eigenes Python 3.13 mit und ist davon unabhängig.
+- **Produktionsbug gefunden + behoben: Loeschen synct nicht zu Radicale (2026-07-13):** Nutzer meldete,
+  dass ein in der Weboberflaeche geloeschter Kontakt in Kontakte.app (iMac "windows", Nutzer `pas`)
+  bestehen blieb, auch nach erzwungenem Account-Resync. Ferndiagnose anhand von vier vom Nutzer
+  bereitgestellten Logs (`server.log`, `radicale.log`, `menubar.log`, `menubar-launcher.log`):
+  - Root Cause: `radicale.enabled: false` in der `config.yaml` auf dem iMac - dadurch hat `sync/
+    radicale.py::_client()` **jeden** Push (Erstellen UND Loeschen) von Anfang an stillschweigend
+    uebersprungen (per Design: Radicale-Fehler duerfen die Web-Route nie blockieren, aber das machte den
+    deaktivierten Zustand von aussen ununterscheidbar von "funktioniert einwandfrei, nur eben still").
+    Bestaetigt durch: `radicale.log` enthielt in der gesamten Logspanne keine einzige PUT/DELETE-Anfrage
+    von Rubricas eigenem httpx-Client (nur Kontakte.app-eigene PROPFIND/REPORT-Sync-Anfragen).
+  - Nebenbefund (Ablenkung waehrend der Diagnose, keine Ursache): wiederkehrende "SSL:
+    UNEXPECTED_EOF_WHILE_READING"-Fehler alle 15s in `radicale.log` kamen vom Menubar-App-eigenen
+    Alive-Check (`menubar/app.py:_radicale_antwortet()`), der bisher nur einen rohen TCP-Connect ohne
+    TLS-Handshake machte - Radicale wertete das als abgebrochenen Handshake gegenueber `127.0.0.1` und
+    loggte einen Fehler. Behoben durch einen echten HTTPS-Request (Statuscode ist egal, jede Antwort
+    zaehlt als "laeuft").
+  - **Fix (auf expliziten Nutzerwunsch):** Der `enabled`-Schalter wurde komplett entfernt - Sync ist ab
+    sofort immer aktiv, sobald `radicale.base_url` gesetzt ist (kein An/Aus mehr, da ein deaktivierter
+    Zustand fuer eine App, deren Zweck der CardDAV-Sync ist, keinen Sinn ergibt und schon zu genau dieser
+    Verwirrung gefuehrt hat). `config.yaml.example` entsprechend angepasst.
+  - **Radicale-Verbindungsdaten jetzt in der Einstellungen-Seite** (neues Fieldset "CardDAV-Sync
+    (Radicale)"): Server-Adresse, Adressbuch-Pfad, Benutzername, Passwort (bewusst als normales
+    Klartext-Textfeld, nicht `type="password"` - auf expliziten Nutzerwunsch, da die App nur im internen
+    Netz laeuft und hier keine schuetzenswerten Geheimnisse liegen) und TLS-Zertifikatspruefung. Vorher
+    war dieser gesamte Konfigurationsblock nur per Hand in `config.yaml` editierbar und dadurch unsichtbar
+    fuer den Nutzer - direkte Ursache dafuer, dass ein einmal (vermutlich versehentlich) auf `false`
+    gesetzter Schalter niemandem auffiel.
+  - 4 neue Tests (`tests/test_radicale_sync.py`, `tests/test_settings_web.py`).
+  - **Wichtige Lektion fuers Debugging:** Mac Studio (Nutzer `fi`) ist die Dev-Maschine, iMac "windows"
+    (Nutzer `pas`) ist die Produktion - beim Log-Lesen unbedingt zuerst verifizieren, von welcher Maschine
+    eine Datei stammt, bevor lokale Dev-Config-Dateien als Referenz herangezogen werden (fruehe
+    Fehlspur in dieser Diagnose).
+
+Bekannte Einschränkung: Entwicklungsumgebung läuft unter Python 3.9 (Systemversion) statt der ursprünglich in Abschnitt 6 vermuteten 3.12 (Systemversion) statt der ursprünglich in Abschnitt 6 vermuteten 3.12 — FastAPI-Routenparameter deshalb mit `typing.Optional[int]` statt `int | None` (siehe `CLAUDE.md`). Dies betrifft nur die lokale Entwicklungsumgebung; das produktive `.pkg` bringt sein eigenes Python 3.13 mit und ist davon unabhängig.
 
 Nächste sinnvolle Schritte: Neues `.pkg` (Notion-Redesign + Archivio einzeln übernehmen/ablehnen + Ordner-
 Bearbeiten + alle bisherigen Fixes) auf dem iMac installieren; unter „Einstellungen" `archivio.db_path`

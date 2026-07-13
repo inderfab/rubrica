@@ -35,6 +35,11 @@ def einstellungen_form(request: Request, gespeichert: str = ""):
         "privates_telefon_zeigen": bool(settings.get("export.privates_telefon_zeigen", False)),
         "private_email_zeigen": bool(settings.get("export.private_email_zeigen", False)),
         "privatadresse_zeigen": bool(settings.get("export.privatadresse_zeigen", False)),
+        "radicale_base_url": settings.get("radicale.base_url", "") or "",
+        "radicale_addressbook_path": settings.get("radicale.addressbook_path", "") or "",
+        "radicale_username": settings.get("radicale.username", "") or "",
+        "radicale_password": settings.get("radicale.password", "") or "",
+        "radicale_verify_ssl": bool(settings.get("radicale.verify_ssl", True)),
     })
 
 
@@ -62,6 +67,10 @@ async def einstellungen_speichern(request: Request):
         min_mails = 2
     backup_pfad = (form.get("backup_pfad") or "").strip()
     export_firmenname = (form.get("export_firmenname") or "").strip()
+    radicale_base_url = (form.get("radicale_base_url") or "").strip()
+    radicale_addressbook_path = (form.get("radicale_addressbook_path") or "").strip()
+    radicale_username = (form.get("radicale_username") or "").strip()
+    radicale_password = form.get("radicale_password") or ""
 
     logo = form.get("logo")
     if logo is not None and getattr(logo, "filename", ""):
@@ -74,6 +83,13 @@ async def einstellungen_speichern(request: Request):
     settings.save({
         "archivio": {"db_path": db_path, "min_mails": min_mails},
         "backup": {"pfad": backup_pfad},
+        "radicale": {
+            "base_url": radicale_base_url,
+            "addressbook_path": radicale_addressbook_path,
+            "username": radicale_username,
+            "password": radicale_password,
+            "verify_ssl": form.get("radicale_verify_ssl") is not None,
+        },
         "export": {
             "firmenname": export_firmenname,
             "privates_telefon_zeigen": form.get("privates_telefon_zeigen") is not None,

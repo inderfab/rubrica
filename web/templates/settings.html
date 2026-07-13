@@ -56,6 +56,41 @@
     </fieldset>
 
     <fieldset>
+        <legend>CardDAV-Sync (Radicale)</legend>
+        <p class="empty" style="padding:0 0 0.5rem">
+            Damit gibt Rubrica Kontakte/Ordner an Radicale weiter, das sie wiederum an Apple Kontakte
+            ausliefert (Einweg-Sync, nie umgekehrt). Sync ist immer aktiv, sobald hier eine Server-Adresse
+            eingetragen ist - kein separater An/Aus-Schalter, sonst funktioniert das Löschen/Ändern in
+            Kontakte.app nicht mehr. Diese Angaben sind im internen Netz sichtbar (kein Klartext-Passwortfeld),
+            da hier keine sicherheitskritischen Daten drinstecken.
+        </p>
+        <div class="field">
+            <label>Server-Adresse</label>
+            <input type="text" name="radicale_base_url" value="{{ radicale_base_url }}"
+                   placeholder="https://127.0.0.1:8443" style="width:100%">
+        </div>
+        <div class="field">
+            <label>Adressbuch-Pfad</label>
+            <input type="text" name="radicale_addressbook_path" value="{{ radicale_addressbook_path }}"
+                   placeholder="/pas/kontakte/" style="width:100%">
+        </div>
+        <div class="grid-2">
+            <div class="field">
+                <label>Benutzername</label>
+                <input type="text" name="radicale_username" value="{{ radicale_username }}">
+            </div>
+            <div class="field">
+                <label>Passwort</label>
+                <input type="text" name="radicale_password" value="{{ radicale_password }}">
+            </div>
+        </div>
+        <label style="display:flex; align-items:center; gap:0.4rem; font-weight:normal;">
+            <input type="checkbox" name="radicale_verify_ssl" {% if radicale_verify_ssl %}checked{% endif %}>
+            TLS-Zertifikat prüfen (bei selbstsigniertem Zertifikat i.d.R. trotzdem aktiviert lassen)
+        </label>
+    </fieldset>
+
+    <fieldset>
         <legend>Archivio-Anbindung</legend>
         <p class="empty" style="padding:0 0 0.5rem">
             Liest bereits von Archivio erfasste E-Mail-Signaturen und schlägt daraus neue Kontakte in der

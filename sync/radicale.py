@@ -99,8 +99,10 @@ def projekt_zu_gruppen_vcard(projekt: dict, mitglieder_ids: list) -> str:
 
 
 def _client() -> httpx.Client | None:
-    if not settings.get("radicale.enabled", False):
-        return None
+    """Kein separater An/Aus-Schalter: Sync ist immer aktiv, sobald eine base_url
+    konfiguriert ist (siehe config.yaml.example) - ein vergessener/versehentlich
+    gesetzter "enabled: false"-Schalter hat schon zu Verwirrung gefuehrt, weil
+    Kontakte lokal geloescht wurden, der Push zu Radicale aber nie versucht wurde."""
     base_url = settings.get("radicale.base_url", "")
     if not base_url:
         return None
