@@ -13,9 +13,10 @@
         <label>vCard-Dateien (.vcf)</label>
         <input type="file" name="dateien" accept=".vcf" multiple required>
     </div>
-    <div class="field">
-        <label><input type="checkbox" name="gruppen_als_ordner"> Bestehende Apple-Gruppen als Ordner übernehmen</label>
-    </div>
+    <p class="empty" style="font-size:0.85rem">
+        Enthält die vCard-Datei Apple-Gruppen (z. B. beim Export einer ganzen Gruppe statt einzelner
+        Kontakte), werden diese automatisch als Ordner-Vorschlag übernommen.
+    </p>
     <button type="submit">Importieren</button>
 </form>
 {% endblock %}

@@ -16,16 +16,19 @@ def import_form(request: Request):
 
 
 @router.post("/import")
-async def import_hochladen(request: Request, dateien: list[UploadFile]):
-    form = await request.form()
-    gruppen_als_ordner = form.get("gruppen_als_ordner") == "on"
-
+async def import_hochladen(dateien: list[UploadFile]):
+    """Apple-Gruppen werden immer versucht zu uebernehmen (frueher eine
+    Checkbox, die praktisch wirkungslos war - Gruppenzugehoerigkeit steht nur
+    in vCards drin, wenn eine ganze Gruppe statt einzelner Kontakte exportiert
+    wurde; ohne solche Daten passiert einfach nichts). Kein Risiko durch
+    automatisches Anlegen: Ordner-Zuordnung landet wie alles andere erst als
+    Vorschlag in der Review-Queue."""
     anzahl_gesamt = 0
     conn = get_connection()
     try:
         for datei in dateien:
             inhalt = (await datei.read()).decode("utf-8", errors="replace")
-            anzahl_gesamt += importiere(conn, inhalt, gruppen_als_ordner)
+            anzahl_gesamt += importiere(conn, inhalt)
     finally:
         conn.close()
 

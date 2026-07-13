@@ -64,6 +64,14 @@ def test_parse_vcf_gruppenzugehoerigkeit():
     assert kontakte[0]["gruppen"] == ["Projekt X"]
 
 
+def test_importiere_uebernimmt_gruppen_standardmaessig_ohne_flag(tmp_db):
+    # Frueher eine Checkbox im Import-Formular, die faktisch wirkungslos war -
+    # jetzt Standardverhalten (siehe web/imports.py).
+    importiere(tmp_db, VCF_GRUPPE)
+    vorschlag = queries.list_vorschlaege(tmp_db)[0]
+    assert vorschlag["rohdaten"]["gruppen_als_ordner"] == ["Projekt X"]
+
+
 def test_parse_vcf_mappt_englische_apple_typen_auf_direkt_privat_allgemein():
     vcf = textwrap.dedent("""\
         BEGIN:VCARD
