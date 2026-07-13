@@ -4,13 +4,22 @@ YAML von Hand bearbeiten muessen (Fehlerquelle: Tippfehler, falsche Einrueckung,
 fehlende Sektion bei Installationen mit aelterem config.yaml)."""
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastapi import APIRouter, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse, Response
 
 from config import settings
 from web.shared import templates
 
 router = APIRouter()
+
+LOGO_ERLAUBTE_ENDUNGEN = {".png", ".jpg", ".jpeg", ".gif"}
+
+
+def _logo_entfernen() -> None:
+    for alte_datei in settings.daten_verzeichnis().glob(f"{settings.LOGO_STAMM}.*"):
+        alte_datei.unlink(missing_ok=True)
 
 
 @router.get("/einstellungen")
@@ -21,7 +30,23 @@ def einstellungen_form(request: Request, gespeichert: str = ""):
         "archivio_db_path": settings.get("archivio.db_path", "") or "",
         "archivio_min_mails": settings.get("archivio.min_mails", 2),
         "backup_pfad": settings.get("backup.pfad", "") or "",
+        "export_firmenname": settings.get("export.firmenname", "") or "",
+        "logo_vorhanden": settings.logo_pfad() is not None,
     })
+
+
+@router.get("/einstellungen/logo")
+def einstellungen_logo():
+    pfad = settings.logo_pfad()
+    if pfad is None:
+        return Response(status_code=404)
+    return FileResponse(pfad)
+
+
+@router.post("/einstellungen/logo/entfernen")
+def einstellungen_logo_entfernen():
+    _logo_entfernen()
+    return RedirectResponse(url="/einstellungen?gespeichert=1", status_code=303)
 
 
 @router.post("/einstellungen")
@@ -33,9 +58,19 @@ async def einstellungen_speichern(request: Request):
     except ValueError:
         min_mails = 2
     backup_pfad = (form.get("backup_pfad") or "").strip()
+    export_firmenname = (form.get("export_firmenname") or "").strip()
+
+    logo = form.get("logo")
+    if logo is not None and getattr(logo, "filename", ""):
+        endung = Path(logo.filename).suffix.lower()
+        if endung in LOGO_ERLAUBTE_ENDUNGEN:
+            _logo_entfernen()
+            ziel = settings.daten_verzeichnis() / f"{settings.LOGO_STAMM}{endung}"
+            ziel.write_bytes(await logo.read())
 
     settings.save({
         "archivio": {"db_path": db_path, "min_mails": min_mails},
         "backup": {"pfad": backup_pfad},
+        "export": {"firmenname": export_firmenname},
     })
     return RedirectResponse(url="/einstellungen?gespeichert=1", status_code=303)

@@ -41,3 +41,64 @@ def test_einstellungen_speichern_zeigt_bestaetigung(tmp_db, monkeypatch, tmp_pat
     client.post("/einstellungen", data={"archivio_db_path": "", "archivio_min_mails": "2"})
     r = client.get("/einstellungen?gespeichert=1")
     assert "Gespeichert" in r.text
+
+
+def test_einstellungen_speichert_firmenname(tmp_db, monkeypatch, tmp_path):
+    config_pfad = tmp_path / "config.yaml"
+    config_pfad.write_text("database:\n  path: rubrica.db\n")
+    monkeypatch.setattr(settings, "_CONFIG_PATH", config_pfad)
+    monkeypatch.setattr(settings, "_settings", {})
+
+    TestClient(app).post("/einstellungen", data={
+        "archivio_db_path": "", "archivio_min_mails": "2", "export_firmenname": "Strut Architekten AG",
+    })
+    assert settings.get("export.firmenname") == "Strut Architekten AG"
+
+
+def test_logo_upload_wird_gespeichert_und_ausgeliefert(tmp_db, monkeypatch, tmp_path):
+    config_pfad = tmp_path / "config.yaml"
+    config_pfad.write_text("database:\n  path: rubrica.db\n")
+    monkeypatch.setattr(settings, "_CONFIG_PATH", config_pfad)
+    monkeypatch.setattr(settings, "_settings", {})
+
+    client = TestClient(app)
+    bild_bytes = b"\x89PNG\r\n\x1a\n" + b"fake-png-inhalt"
+    r = client.post("/einstellungen", data={"archivio_db_path": "", "archivio_min_mails": "2"},
+                    files={"logo": ("mein-logo.png", bild_bytes, "image/png")}, follow_redirects=False)
+    assert r.status_code == 303
+
+    r = client.get("/einstellungen")
+    assert 'src="/einstellungen/logo"' in r.text
+
+    r = client.get("/einstellungen/logo")
+    assert r.status_code == 200
+    assert r.content == bild_bytes
+
+
+def test_logo_upload_lehnt_unerlaubte_dateiendung_ab(tmp_db, monkeypatch, tmp_path):
+    config_pfad = tmp_path / "config.yaml"
+    config_pfad.write_text("database:\n  path: rubrica.db\n")
+    monkeypatch.setattr(settings, "_CONFIG_PATH", config_pfad)
+    monkeypatch.setattr(settings, "_settings", {})
+
+    client = TestClient(app)
+    client.post("/einstellungen", data={"archivio_db_path": "", "archivio_min_mails": "2"},
+                files={"logo": ("script.exe", b"nicht ein bild", "application/octet-stream")})
+
+    r = client.get("/einstellungen/logo")
+    assert r.status_code == 404
+
+
+def test_logo_entfernen(tmp_db, monkeypatch, tmp_path):
+    config_pfad = tmp_path / "config.yaml"
+    config_pfad.write_text("database:\n  path: rubrica.db\n")
+    monkeypatch.setattr(settings, "_CONFIG_PATH", config_pfad)
+    monkeypatch.setattr(settings, "_settings", {})
+
+    client = TestClient(app)
+    client.post("/einstellungen", data={"archivio_db_path": "", "archivio_min_mails": "2"},
+                files={"logo": ("logo.png", b"echtbild", "image/png")})
+    assert client.get("/einstellungen/logo").status_code == 200
+
+    client.post("/einstellungen/logo/entfernen")
+    assert client.get("/einstellungen/logo").status_code == 404

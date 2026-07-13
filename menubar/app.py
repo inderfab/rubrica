@@ -23,6 +23,7 @@ WEB_PORT = 8001
 RADICALE_PORT = 8443
 
 _HERE = Path(__file__).resolve().parent  # Contents/Resources im gepackten Bundle
+_ICON = str(_HERE / "icon.png")
 _DATA_DIR = Path.home() / "Library" / "Application Support" / "Rubrica"
 _LOG_DIR = _DATA_DIR / "logs"
 _LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -175,7 +176,7 @@ def _radicale_antwortet() -> bool:
 
 class RubricaApp(rumps.App):
     def __init__(self):
-        super().__init__("Rubrica", title="📇", quit_button=None)
+        super().__init__("Rubrica", icon=_ICON, template=True, quit_button=None)
 
         self._version_item = rumps.MenuItem(f"Version {_local_version()}")
         self._server_item = rumps.MenuItem("⬤  Web-Server …")

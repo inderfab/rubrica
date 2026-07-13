@@ -10,10 +10,10 @@ from datetime import datetime
 from xml.sax.saxutils import escape
 
 from reportlab.lib import colors
-from reportlab.lib.pagesizes import A4
+from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
-from reportlab.platypus import KeepTogether, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Table, TableStyle
 
 from sync.radicale import kontakt_zu_vcard
 
@@ -25,6 +25,21 @@ CSV_SPALTEN = [
 
 def _telefon_text(kontakt: dict) -> str:
     return "; ".join(f"{t['typ']}: {t['nummer']}" for t in kontakt.get("telefonnummern", []))
+
+
+def _telefon_liste(kontakt: dict, mobil: bool) -> str:
+    """Trennt Telefonnummern in Festnetz/Fax/Direktwahl vs. Mobil - im PDF-Export
+    als eigene Spalten, analog zur Nutzer-Vorlage ("Telefon/Fax/Direktwahl" und
+    "Mobil" getrennt)."""
+    return "<br/>".join(
+        escape(t["nummer"]) for t in kontakt.get("telefonnummern", [])
+        if (t.get("typ") == "mobil") == mobil
+    )
+
+
+def _email_und_web_text(kontakt: dict) -> str:
+    teile = [e["email"] for e in kontakt.get("emails", [])] + [u["url"] for u in kontakt.get("urls", [])]
+    return "<br/>".join(escape(t) for t in teile)
 
 
 def _email_text(kontakt: dict) -> str:
@@ -117,83 +132,142 @@ def kontakte_vcard(kontakte: list[dict]) -> bytes:
 
 
 _STYLES = getSampleStyleSheet()
-_STIL_NAME = ParagraphStyle("KontaktName", parent=_STYLES["Heading4"], spaceAfter=1 * mm)
-_STIL_DETAIL = ParagraphStyle("KontaktDetail", parent=_STYLES["Normal"], fontSize=9, leading=12)
-_STIL_FUNKTION = ParagraphStyle(
-    "FunktionGruppe", parent=_STYLES["Heading3"],
-    textColor=colors.white, backColor=colors.HexColor("#2f3437"),
-    spaceBefore=4 * mm, spaceAfter=2 * mm, leftIndent=2 * mm, borderPadding=2,
+_STIL_TITEL = ParagraphStyle("OrdnerTitel", parent=_STYLES["Title"], alignment=0, spaceAfter=1 * mm)
+_STIL_UNTERTITEL = ParagraphStyle("Untertitel", parent=_STYLES["Normal"], textColor=colors.grey, spaceAfter=5 * mm)
+_STIL_ZELLE = ParagraphStyle("Zelle", parent=_STYLES["Normal"], fontSize=8, leading=10)
+_STIL_KOPFZELLE = ParagraphStyle(
+    "Kopfzelle", parent=_STIL_ZELLE, fontName="Helvetica-Bold", textColor=colors.white,
 )
-_STIL_FIRMA = ParagraphStyle("Firma", parent=_STYLES["Heading4"], spaceAfter=0.5 * mm)
+
+_TABELLEN_SPALTEN = [
+    "BKP Nummer", "Unternehmen", "Sachbearbeitung", "Funktion",
+    "Telefon/Fax/Direktwahl", "Mobil", "E-Mail/Webseite",
+]
+_SPALTEN_ANTEILE = [0.13, 0.18, 0.14, 0.14, 0.15, 0.08, 0.18]
 
 
-def kontakte_pdf(ordner_name: str, kontakte: list[dict]) -> bytes:
-    puffer = io.BytesIO()
-    doc = SimpleDocTemplate(
-        puffer, pagesize=A4,
-        topMargin=18 * mm, bottomMargin=18 * mm, leftMargin=18 * mm, rightMargin=18 * mm,
-        title=f"Rubrica – {ordner_name}",
-    )
-    elemente = []
+def _bkp_zellen_text(funktion: str) -> str:
+    """Bricht "292 Bauingenieur/in" nach der Nummer um ("292<br/>Bauingenieur/in")
+    statt die lange Bezeichnung mitten im Wort umbrechen zu lassen (reportlab
+    trennt sonst harte Wortumbrueche, sobald ein Wort allein nicht in die enge
+    BKP-Spalte passt)."""
+    teile = funktion.split(" ", 1)
+    return "<br/>".join(escape(t) for t in teile)
 
-    kopf_tabelle = Table(
-        [[Paragraph(f"<b>{escape(ordner_name)}</b>", _STYLES["Title"])]],
-        colWidths=[doc.width],
-    )
-    elemente.append(kopf_tabelle)
-    elemente.append(Paragraph(
-        f"Rubrica – Kontaktliste – {len(kontakte)} Kontakt(e) – "
-        f"erzeugt am {datetime.now().strftime('%d.%m.%Y %H:%M')}",
-        ParagraphStyle("Unter", parent=_STYLES["Normal"], textColor=colors.grey, spaceAfter=6 * mm),
-    ))
 
-    # Gruppiert nach Funktion (BKP-Nummer aufsteigend) und innerhalb einer Funktion
-    # nach Firma - mehrere Personen derselben Firma erscheinen als ein
-    # gemeinsamer Firmenblock (Firmenname/-adresse nur einmal), statt wie zuvor
-    # jede Person unabhaengig und unsortiert aufzulisten (Nutzer-Vorlage).
+def _kopf_fuss_zeichner(firmenname: str, logo_pfad: str):
+    """Wird pro Seite als Canvas-Callback aufgerufen (nicht als Flowable), damit
+    Firmenname/Logo auf JEDER Seite oben erscheinen, nicht nur auf der ersten -
+    Platypus-Flowables wiederholen sich sonst nicht automatisch ueber Seiten
+    hinweg. Firmenname ist mittig oben, Logo rechts oben (Nutzer-Vorgabe;
+    ersetzt den fixen "mmt"-Platzhalter aus der Beispielvorlage), beides ueber
+    die Einstellungen konfigurierbar."""
+    def zeichnen(canvas, doc):
+        breite, hoehe = doc.pagesize
+        canvas.saveState()
+        if firmenname:
+            canvas.setFont("Helvetica-Bold", 11)
+            canvas.setFillColor(colors.black)
+            canvas.drawCentredString(breite / 2, hoehe - 12 * mm, firmenname)
+        if logo_pfad:
+            try:
+                canvas.drawImage(
+                    logo_pfad, breite - doc.rightMargin - 25 * mm, hoehe - 20 * mm,
+                    width=25 * mm, height=12 * mm, preserveAspectRatio=True, anchor="n", mask="auto",
+                )
+            except Exception:
+                pass  # fehlerhafte/fehlende Logo-Datei darf den Export nie abbrechen
+        canvas.setFont("Helvetica", 7)
+        canvas.setFillColor(colors.grey)
+        canvas.drawString(doc.leftMargin, 10 * mm, datetime.now().strftime("%d.%m.%Y"))
+        canvas.drawRightString(breite - doc.rightMargin, 10 * mm, f"Seite {doc.page}")
+        canvas.restoreState()
+    return zeichnen
+
+
+def _firmen_adresse(firma_kontakte: list[dict]) -> str:
+    return next((_adresse_text(k) for k in firma_kontakte if _adresse_text(k)), "")
+
+
+def _tabellenzeilen(kontakte: list[dict]) -> list[list]:
+    """Baut die Datenzeilen der Kontakttabelle: BKP-Nummer/Funktion und
+    Unternehmen (Name+Adresse) erscheinen nur in der ersten Zeile eines
+    Firmenblocks, jede Person danach ist eine eigene Zeile mit ihren eigenen
+    Sachbearbeitung/Funktion/Telefon/Mobil/E-Mail-Werten - analog zur
+    Nutzer-Vorlage (mehrere Personen derselben Firma untereinander, BKP-Nummer
+    und Firma nur einmal links davor)."""
+    zeilen = [[Paragraph(spalte, _STIL_KOPFZELLE) for spalte in _TABELLEN_SPALTEN]]
+
     for gruppe in _gruppiere_fuer_export(kontakte):
-        if gruppe["funktion"]:
-            elemente.append(Paragraph(escape(gruppe["funktion"]), _STIL_FUNKTION))
-
         for firmen_gruppe in gruppe["firmen"]:
             firma = firmen_gruppe["firma"]
             firma_kontakte = firmen_gruppe["kontakte"]
-            block = []
+            firmen_adresse = _firmen_adresse(firma_kontakte)
 
-            if firma:
-                block.append(Paragraph(escape(firma), _STIL_FIRMA))
-                firmen_adresse = next((_adresse_text(k) for k in firma_kontakte if _adresse_text(k)), "")
-                if firmen_adresse:
-                    block.append(Paragraph(escape(firmen_adresse), _STIL_DETAIL))
+            for i, k in enumerate(firma_kontakte):
+                if i == 0:
+                    bkp_zelle = Paragraph(_bkp_zellen_text(gruppe["funktion"]), _STIL_ZELLE) if gruppe["funktion"] else ""
+                    unternehmen_teile = ([f"<b>{escape(firma)}</b>"] if firma else [])
+                    if firmen_adresse:
+                        unternehmen_teile.append(escape(firmen_adresse))
+                    unternehmen_zelle = Paragraph("<br/>".join(unternehmen_teile), _STIL_ZELLE) if unternehmen_teile else ""
+                else:
+                    bkp_zelle = ""
+                    unternehmen_zelle = ""
 
-            for k in firma_kontakte:
-                name = f"{k.get('vorname', '')} {k.get('nachname', '')}".strip() or "(ohne Name)"
-                zeile_stil = _STIL_DETAIL if firma else _STIL_NAME
-                block.append(Paragraph(f"<b>{escape(name)}</b>" if firma else escape(name), zeile_stil))
+                name = f"{k.get('vorname', '')} {k.get('nachname', '')}".strip()
+                zeilen.append([
+                    bkp_zelle,
+                    unternehmen_zelle,
+                    Paragraph(escape(name), _STIL_ZELLE) if name else "",
+                    Paragraph(escape(k["rolle"]), _STIL_ZELLE) if k.get("rolle") else "",
+                    Paragraph(_telefon_liste(k, mobil=False), _STIL_ZELLE),
+                    Paragraph(_telefon_liste(k, mobil=True), _STIL_ZELLE),
+                    Paragraph(_email_und_web_text(k), _STIL_ZELLE),
+                ])
+    return zeilen
 
-                if k.get("rolle"):
-                    block.append(Paragraph(escape(k["rolle"]), _STIL_DETAIL))
-                elif not firma and gruppe["funktion"]:
-                    block.append(Paragraph(escape(gruppe["funktion"]), _STIL_DETAIL))
 
-                for label, text in (("Telefon", _telefon_text(k)), ("E-Mail", _email_text(k)), ("Web", _url_text(k))):
-                    if text:
-                        block.append(Paragraph(f"<b>{label}:</b> {escape(text)}", _STIL_DETAIL))
+def kontakte_pdf(ordner_name: str, kontakte: list[dict], firmenname: str = "", logo_pfad: str = "") -> bytes:
+    """firmenname/logo_pfad sind optional und kommen aus den Einstellungen
+    (web/export.py) - erscheinen auf jeder Seite oben (Firmenname mittig,
+    Logo rechts). Der Ordnername bleibt der alleinige Titel der Liste (z.B.
+    Projektname) - andere Ordner, denen ein Kontakt sonst noch angehoert,
+    werden nirgends aufgefuehrt."""
+    puffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        puffer, pagesize=landscape(A4),
+        topMargin=24 * mm, bottomMargin=16 * mm, leftMargin=15 * mm, rightMargin=15 * mm,
+        title=f"Rubrica – {ordner_name}",
+    )
+    elemente = [
+        Paragraph(escape(ordner_name), _STIL_TITEL),
+        Paragraph(
+            f"Rubrica – Kontaktliste – {len(kontakte)} Kontakt(e) – "
+            f"erzeugt am {datetime.now().strftime('%d.%m.%Y %H:%M')}",
+            _STIL_UNTERTITEL,
+        ),
+    ]
 
-                if not firma:
-                    adresse = _adresse_text(k)
-                    if adresse:
-                        block.append(Paragraph(f"<b>Adresse:</b> {escape(adresse)}", _STIL_DETAIL))
+    if kontakte:
+        tabelle = Table(
+            _tabellenzeilen(kontakte),
+            colWidths=[doc.width * anteil for anteil in _SPALTEN_ANTEILE],
+            repeatRows=1,
+        )
+        tabelle.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2f3437")),
+            ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#dddddd")),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 4),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+            ("TOPPADDING", (0, 0), (-1, -1), 3),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ]))
+        elemente.append(tabelle)
+    else:
+        elemente.append(Paragraph("Dieser Ordner enthält keine Kontakte.", _STIL_ZELLE))
 
-                if k.get("notizen"):
-                    block.append(Paragraph(f"<b>Notizen:</b> {escape(k['notizen'])}", _STIL_DETAIL))
-                block.append(Spacer(1, 2 * mm))
-
-            elemente.append(KeepTogether(block))
-            elemente.append(Spacer(1, 3 * mm))
-
-    if not kontakte:
-        elemente.append(Paragraph("Dieser Ordner enthält keine Kontakte.", _STIL_DETAIL))
-
-    doc.build(elemente)
+    zeichnen = _kopf_fuss_zeichner(firmenname, logo_pfad)
+    doc.build(elemente, onFirstPage=zeichnen, onLaterPages=zeichnen)
     return puffer.getvalue()

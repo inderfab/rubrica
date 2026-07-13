@@ -721,6 +721,45 @@ Rubrica importiert — deutlich robuster als das proprietäre Schema direkt zu p
   einem Test explizit abgesichert. 9 neue Tests, alle 92 Tests grün. Mit synthetischen Testdaten (Struktur wie
   in der Nutzer-Vorlage) visuell gegen ein erzeugtes PDF verifiziert.
 
+- **Menubar-Icon (2026-07-13):** Bisher nur ein Emoji ("📇") als Menubar-Titel. Nutzer hat ein eigenes
+  Rubrica-Logo bereitgestellt (`~/Downloads/rubrica_logo_200x200.png`, transparenter Hintergrund) mit der
+  Vorgabe "Implementierung gleich wie bei Archivio". Umgesetzt exakt nach Archivio-Vorbild
+  (`/Users/fi/archivio/menubar/icon.png`): Logo auf 44×44 skaliert nach `menubar/icon.png`, `RubricaApp`
+  (`menubar/app.py`) nutzt jetzt `rumps.App(icon=_ICON, template=True, ...)` statt `title="📇"` -
+  `template=True` laesst macOS das Icon fuer Light/Dark-Menubar automatisch farblich invertieren (reines
+  Schwarz-auf-transparent, kein separates Dark-Mode-Icon noetig). `scripts/build-pkg.sh` kopiert `icon.png`
+  neu mit ins Bundle.
+- **Versionsanzeige im Web-UI (2026-07-13):** `app_version` (siehe Cache-Busting oben) wird zusaetzlich unten
+  in der Seitenleiste angezeigt ("Rubrica v0.3.0-test") - Nutzer-Wunsch, um auf einen Blick zu sehen, welche
+  Version gerade laeuft (relevant bei mehreren Installationen/Maschinen).
+- **PDF-Export als echtes Tabellen-Layout + konfigurierbarer Firmenname/Logo (2026-07-13):** Der Block-Stil aus
+  der vorherigen Iteration sah laut Nutzer immer noch nicht wie die Vorgabe aus (Screenshot der Original-
+  Adressliste erneut geteilt: echte Tabelle mit Spalten BKP Nummer/Unternehmen/Sachbearbeitung/Funktion/
+  Telefon-Fax-Direktwahl/Mobil/E-Mail-Webseite, Firmenlogo oben rechts, Firmenname oben mittig). Komplett
+  neu gebaut:
+  - `export/generator.py::kontakte_pdf()` erzeugt jetzt eine echte reportlab-`Table` im Querformat (A4
+    landscape - im Hochformat waeren 7 Spalten zu eng) mit `repeatRows=1` (Kopfzeile wiederholt sich
+    automatisch auf jeder Seite). BKP-Nummer/Firma+Adresse erscheinen nur in der ersten Zeile eines
+    Firmenblocks (mit `<br/>` nach der Nummer getrennt, sonst bricht reportlab lange Bezeichnungen wie
+    "Bauingenieur/in" mitten im Wort um, wenn die Spalte zu schmal ist - siehe `_bkp_zellen_text()`),
+    nachfolgende Personen derselben Firma sind eigene Zeilen mit leeren BKP-/Unternehmen-Zellen (nutzt die
+    bestehende `_gruppiere_fuer_export()`-Struktur direkt). Telefonnummern werden per `typ` in zwei Spalten
+    getrennt (`_telefon_liste(kontakt, mobil=True/False)`) statt wie bisher zusammen mit Typ-Praefix.
+  - Firmenname (mittig oben) und Logo (rechts oben, ersetzt den fixen "mmt"-Platzhalter der Vorlage) werden
+    per reportlab `onFirstPage`/`onLaterPages`-Canvas-Callback auf JEDER Seite gezeichnet (`_kopf_fuss_zeichner()`)
+    - normale Platypus-Flowables wiederholen sich sonst nicht ueber Seitenumbrueche hinweg. Datum + Seitenzahl
+      als einfache Fusszeile ebenfalls per Callback. Der Ordnername bleibt alleiniger Titel der Liste
+      (Projektname) als normales Flowable am Seitenanfang - unveraendert.
+  - Neue Einstellungen (`web/settings.py`, `settings.html`): Freitext „Firmenname" + Logo-Datei-Upload
+    (`.png/.jpg/.jpeg/.gif`, gespeichert als `export-logo.<endung>` im Datenverzeichnis via neuem
+    `config.settings.daten_verzeichnis()`/`logo_pfad()`, inkl. Vorschau + "Logo entfernen"-Button). Ungueltige
+    Dateiendungen werden abgelehnt. `web/export.py` liest beide Werte und reicht sie an den Generator durch.
+    Ein fehlendes/ungueltiges Logo darf den Export nie zum Absturz bringen (try/except um `drawImage`).
+  - 8 neue Tests (Generator-Spaltenlogik, Einstellungen-Upload/Entfernen/Ablehnung falscher Endungen,
+    Export-Route mit konfiguriertem Firmennamen). Alle 100 Tests grün. Mit synthetischen Daten (Struktur wie
+    in der Nutzer-Vorlage, inkl. Mehrfachfirma-Block und langer BKP-Bezeichnung) visuell gegen erzeugte PDFs
+    verifiziert - Spaltenbreiten iterativ angepasst, bis keine Wort-mitten-im-Wort-Umbrueche mehr auftraten.
+
 Bekannte Einschränkung: Entwicklungsumgebung läuft unter Python 3.9 (Systemversion) statt der ursprünglich in Abschnitt 6 vermuteten 3.12 — FastAPI-Routenparameter deshalb mit `typing.Optional[int]` statt `int | None` (siehe `CLAUDE.md`). Dies betrifft nur die lokale Entwicklungsumgebung; das produktive `.pkg` bringt sein eigenes Python 3.13 mit und ist davon unabhängig.
 
 Nächste sinnvolle Schritte: Neues `.pkg` (Notion-Redesign + Archivio einzeln übernehmen/ablehnen + Ordner-
