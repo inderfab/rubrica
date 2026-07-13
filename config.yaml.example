@@ -15,7 +15,6 @@ radicale:
   addressbook_path: /__RUBRICA_USER__/kontakte/
   username: __RUBRICA_USER__
   password: ""
-  verify_ssl: true
 
 # Phase 4 (Vorstufe): Archivio-Anbindung - liest bereits von Archivio extrahierte
 # E-Mail-Signaturen und erzeugt daraus Kontaktvorschlaege in der Review-Queue.
