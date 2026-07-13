@@ -26,21 +26,21 @@ def _hole_kandidaten_oder_leer(conn):
         return [], f"Archivio-Datenbank nicht lesbar: {type(exc).__name__}"
 
 
-@router.get("/review/archivio-vorschau")
-def archivio_vorschau(request: Request):
+@router.get("/archivio-import")
+def archivio_import_seite(request: Request):
     conn = get_connection()
     try:
         kandidaten, fehler = _hole_kandidaten_oder_leer(conn)
     finally:
         conn.close()
-    return templates.TemplateResponse("archivio_vorschau.html", {
+    return templates.TemplateResponse("archivio_import.html", {
         "request": request, "kandidaten": kandidaten, "fehler": fehler,
     })
 
 
-@router.post("/review/archivio-uebernehmen")
+@router.post("/archivio-import/uebernehmen")
 def archivio_uebernehmen():
-    """Uebernimmt ALLE aktuell angezeigten Kandidaten auf einmal."""
+    """Uebernimmt ALLE aktuell angezeigten Kandidaten auf einmal in die Review-Queue."""
     conn = get_connection()
     try:
         kandidaten, _ = _hole_kandidaten_oder_leer(conn)
@@ -52,7 +52,7 @@ def archivio_uebernehmen():
     return RedirectResponse(url="/review", status_code=303)
 
 
-@router.post("/review/archivio-uebernehmen-einzeln")
+@router.post("/archivio-import/uebernehmen-einzeln")
 def archivio_uebernehmen_einzeln(email: str = Form(...)):
     """Uebernimmt genau EINEN Kandidaten (identifiziert per E-Mail-Adresse -
     die ist durch die strenge Vollstaendigkeitspruefung in hole_kandidaten immer
@@ -67,10 +67,10 @@ def archivio_uebernehmen_einzeln(email: str = Form(...)):
                 break
     finally:
         conn.close()
-    return RedirectResponse(url="/review/archivio-vorschau", status_code=303)
+    return RedirectResponse(url="/archivio-import", status_code=303)
 
 
-@router.post("/review/archivio-ablehnen")
+@router.post("/archivio-import/ablehnen")
 def archivio_ablehnen(email: str = Form(...)):
     """Lehnt genau EINEN Kandidaten ab - legt ihn als bereits 'abgelehnt' markierten
     Vorschlag an, damit er bei der naechsten Vorschau nicht wieder auftaucht
@@ -86,4 +86,4 @@ def archivio_ablehnen(email: str = Form(...)):
                 break
     finally:
         conn.close()
-    return RedirectResponse(url="/review/archivio-vorschau", status_code=303)
+    return RedirectResponse(url="/archivio-import", status_code=303)

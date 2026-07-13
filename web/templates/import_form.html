@@ -9,14 +9,37 @@
 </p>
 
 <form method="post" action="/import" enctype="multipart/form-data">
-    <div class="field">
-        <label>vCard-Dateien (.vcf)</label>
-        <input type="file" name="dateien" accept=".vcf" multiple required>
+    <div id="import-dropzone" class="import-dropzone"
+         onclick="document.getElementById('import-dateien').click()"
+         ondragover="event.preventDefault(); this.classList.add('drop-hover')"
+         ondragleave="this.classList.remove('drop-hover')"
+         ondrop="rubricaImportDrop(event)">
+        <p class="import-dropzone-text">Kontakte hier hineinziehen</p>
+        <p class="empty">oder klicken, um .vcf-Dateien auszuwählen — mehrere Dateien gleichzeitig möglich</p>
+        <p id="import-dateiliste" class="empty" style="font-weight:600"></p>
     </div>
+    <input id="import-dateien" type="file" name="dateien" accept=".vcf" multiple required
+           style="display:none" onchange="rubricaImportDateilisteAnzeigen(this.files)">
     <p class="empty" style="font-size:0.85rem">
         Enthält die vCard-Datei Apple-Gruppen (z. B. beim Export einer ganzen Gruppe statt einzelner
         Kontakte), werden diese automatisch als Ordner-Vorschlag übernommen.
     </p>
     <button type="submit">Importieren</button>
 </form>
+
+<script>
+function rubricaImportDateilisteAnzeigen(dateien) {
+    const liste = document.getElementById('import-dateiliste');
+    liste.textContent = dateien.length ? Array.from(dateien).map(d => d.name).join(', ') : '';
+}
+
+function rubricaImportDrop(event) {
+    event.preventDefault();
+    event.currentTarget.classList.remove('drop-hover');
+    const dateien = event.dataTransfer.files;
+    if (!dateien.length) return;
+    document.getElementById('import-dateien').files = dateien;
+    rubricaImportDateilisteAnzeigen(dateien);
+}
+</script>
 {% endblock %}

@@ -29,14 +29,28 @@ def archivio_db(tmp_path):
 
 def test_vorschau_ohne_konfiguration_zeigt_hinweis(tmp_db, monkeypatch):
     monkeypatch.setattr(settings, "_settings", {"archivio": {"db_path": ""}})
-    r = TestClient(app).get("/review/archivio-vorschau")
+    r = TestClient(app).get("/archivio-import")
     assert r.status_code == 200
     assert "Keine Archivio-Datenbank konfiguriert" in r.text
 
 
+def test_nav_zeigt_archivio_import_nur_wenn_konfiguriert(tmp_db, archivio_db, monkeypatch):
+    monkeypatch.setattr(settings, "_settings", {"archivio": {"db_path": ""}})
+    r = TestClient(app).get("/review")
+    assert "/archivio-import" not in r.text
+
+    monkeypatch.setattr(settings, "_settings", {"archivio": {"db_path": "/pfad/existiert/nicht.db"}})
+    r_nicht_existent = TestClient(app).get("/review")
+    assert "/archivio-import" not in r_nicht_existent.text
+
+    monkeypatch.setattr(settings, "_settings", {"archivio": {"db_path": archivio_db}})
+    r2 = TestClient(app).get("/review")
+    assert "/archivio-import" in r2.text
+
+
 def test_vorschau_zeigt_kandidat_ohne_zu_schreiben(tmp_db, archivio_db, monkeypatch):
     monkeypatch.setattr(settings, "_settings", {"archivio": {"db_path": archivio_db, "min_mails": 2}})
-    r = TestClient(app).get("/review/archivio-vorschau")
+    r = TestClient(app).get("/archivio-import")
     assert r.status_code == 200
     assert "Beispiel AG" in r.text
     assert len(queries.list_vorschlaege(tmp_db, status="offen")) == 0
@@ -44,7 +58,7 @@ def test_vorschau_zeigt_kandidat_ohne_zu_schreiben(tmp_db, archivio_db, monkeypa
 
 def test_uebernehmen_schreibt_in_review_queue(tmp_db, archivio_db, monkeypatch):
     monkeypatch.setattr(settings, "_settings", {"archivio": {"db_path": archivio_db, "min_mails": 2}})
-    r = TestClient(app).post("/review/archivio-uebernehmen", follow_redirects=False)
+    r = TestClient(app).post("/archivio-import/uebernehmen", follow_redirects=False)
     assert r.status_code == 303
     vorschlaege = queries.list_vorschlaege(tmp_db, status="offen")
     assert len(vorschlaege) == 1
@@ -55,14 +69,14 @@ def test_uebernehmen_schreibt_in_review_queue(tmp_db, archivio_db, monkeypatch):
 def test_uebernehmen_erzeugt_keine_dubletten_bei_zweitem_lauf(tmp_db, archivio_db, monkeypatch):
     monkeypatch.setattr(settings, "_settings", {"archivio": {"db_path": archivio_db, "min_mails": 2}})
     client = TestClient(app)
-    client.post("/review/archivio-uebernehmen", follow_redirects=False)
-    client.post("/review/archivio-uebernehmen", follow_redirects=False)
+    client.post("/archivio-import/uebernehmen", follow_redirects=False)
+    client.post("/archivio-import/uebernehmen", follow_redirects=False)
     assert len(queries.list_vorschlaege(tmp_db, status="offen")) == 1
 
 
 def test_einzeln_uebernehmen_erzeugt_nur_diesen_vorschlag(tmp_db, archivio_db, monkeypatch):
     monkeypatch.setattr(settings, "_settings", {"archivio": {"db_path": archivio_db, "min_mails": 2}})
-    r = TestClient(app).post("/review/archivio-uebernehmen-einzeln",
+    r = TestClient(app).post("/archivio-import/uebernehmen-einzeln",
                               data={"email": "anna@beispiel.ch"}, follow_redirects=False)
     assert r.status_code == 303
     vorschlaege = queries.list_vorschlaege(tmp_db, status="offen")
@@ -73,7 +87,7 @@ def test_einzeln_uebernehmen_erzeugt_nur_diesen_vorschlag(tmp_db, archivio_db, m
 def test_ablehnen_verhindert_erneutes_erscheinen(tmp_db, archivio_db, monkeypatch):
     monkeypatch.setattr(settings, "_settings", {"archivio": {"db_path": archivio_db, "min_mails": 2}})
     client = TestClient(app)
-    r = client.post("/review/archivio-ablehnen", data={"email": "anna@beispiel.ch"}, follow_redirects=False)
+    r = client.post("/archivio-import/ablehnen", data={"email": "anna@beispiel.ch"}, follow_redirects=False)
     assert r.status_code == 303
 
     # abgelehnter Vorschlag existiert (Status abgelehnt), taucht aber in der
@@ -82,6 +96,6 @@ def test_ablehnen_verhindert_erneutes_erscheinen(tmp_db, archivio_db, monkeypatc
     assert len(queries.list_vorschlaege(tmp_db, status="abgelehnt")) == 1
 
     # und erscheint bei einem erneuten Scan nicht wieder als Kandidat
-    r2 = client.get("/review/archivio-vorschau")
+    r2 = client.get("/archivio-import")
     assert "anna@beispiel.ch" not in r2.text
     assert "0</strong> Vorschlag" in r2.text
