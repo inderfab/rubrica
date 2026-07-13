@@ -211,6 +211,20 @@ def test_update_kontakt_felder_laesst_kontaktdaten_arrays_unangetastet(tmp_db):
     assert kontakt["telefonnummern"][0]["nummer"] == "079 000 00 00"  # unveraendert
 
 
+def test_kategorie_umstellen_nur_passende_eintraege(tmp_db):
+    kontakt_id = queries.create_kontakt(tmp_db, {
+        "vorname": "Anna", "nachname": "Muster",
+        "telefonnummern": [
+            {"typ": "Allgemein", "nummer": "052 111 11 11"},
+            {"typ": "Direkt", "nummer": "052 222 22 22"},
+        ],
+    })
+    queries.kategorie_umstellen(tmp_db, "telefon", kontakt_id, "Allgemein", "Privat")
+    typen = {t["nummer"]: t["typ"] for t in queries.get_kontakt(tmp_db, kontakt_id)["telefonnummern"]}
+    assert typen["052 111 11 11"] == "Privat"
+    assert typen["052 222 22 22"] == "Direkt"
+
+
 def test_bulk_bearbeiten_speichern_laesst_gleiche_felder_unveraendert_wenn_nicht_editiert(tmp_db):
     k1 = queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster", "rolle": "Chefin"})
     k2 = queries.create_kontakt(tmp_db, {"vorname": "Bob", "nachname": "Beispiel", "rolle": "Chefin"})
@@ -227,3 +241,53 @@ def test_bulk_bearbeiten_speichern_laesst_gleiche_felder_unveraendert_wenn_nicht
     }, follow_redirects=False)
     assert queries.get_kontakt(tmp_db, k1)["rolle"] == "Chefin"
     assert queries.get_kontakt(tmp_db, k2)["rolle"] == "Chefin"
+
+
+def test_bulk_kategorie_umstellen_telefon_bei_allen_ausgewaehlten(tmp_db):
+    k1 = queries.create_kontakt(tmp_db, {
+        "vorname": "Anna", "nachname": "Muster",
+        "telefonnummern": [{"typ": "Allgemein", "nummer": "052 111 11 11"}, {"typ": "Direkt", "nummer": "052 999 99 99"}],
+    })
+    k2 = queries.create_kontakt(tmp_db, {
+        "vorname": "Bob", "nachname": "Beispiel",
+        "telefonnummern": [{"typ": "Allgemein", "nummer": "052 222 22 22"}],
+    })
+    _client(tmp_db).post("/kontakte/bulk-kategorie-umstellen", data={
+        "ids": [str(k1), str(k2)], "zurueck_ordner_id": "",
+        "feld": "telefon", "telefon_von": "Allgemein", "telefon_nach": "Privat",
+    }, follow_redirects=False)
+
+    typen_k1 = {t["nummer"]: t["typ"] for t in queries.get_kontakt(tmp_db, k1)["telefonnummern"]}
+    assert typen_k1["052 111 11 11"] == "Privat"
+    assert typen_k1["052 999 99 99"] == "Direkt"  # nicht betroffen, war schon "Direkt"
+    typen_k2 = {t["nummer"]: t["typ"] for t in queries.get_kontakt(tmp_db, k2)["telefonnummern"]}
+    assert typen_k2["052 222 22 22"] == "Privat"
+
+
+def test_bulk_kategorie_umstellen_email_unabhaengig_von_telefon(tmp_db):
+    k1 = queries.create_kontakt(tmp_db, {
+        "vorname": "Anna", "nachname": "Muster",
+        "emails": [{"typ": "Allgemein", "email": "info@firma.ch"}],
+        "telefonnummern": [{"typ": "Allgemein", "nummer": "052 111 11 11"}],
+    })
+    _client(tmp_db).post("/kontakte/bulk-kategorie-umstellen", data={
+        "ids": [str(k1)], "zurueck_ordner_id": "",
+        "feld": "email", "email_von": "Allgemein", "email_nach": "Privat",
+    }, follow_redirects=False)
+
+    kontakt = queries.get_kontakt(tmp_db, k1)
+    assert kontakt["emails"][0]["typ"] == "Privat"
+    assert kontakt["telefonnummern"][0]["typ"] == "Allgemein"  # Telefon bleibt unangetastet
+
+
+def test_bulk_kategorie_umstellen_ignoriert_ungueltiges_feld(tmp_db):
+    k1 = queries.create_kontakt(tmp_db, {
+        "vorname": "Anna", "nachname": "Muster",
+        "telefonnummern": [{"typ": "Allgemein", "nummer": "052 111 11 11"}],
+    })
+    r = _client(tmp_db).post("/kontakte/bulk-kategorie-umstellen", data={
+        "ids": [str(k1)], "zurueck_ordner_id": "",
+        "feld": "adresse", "adresse_von": "Allgemein", "adresse_nach": "Privat",
+    }, follow_redirects=False)
+    assert r.status_code == 303
+    assert queries.get_kontakt(tmp_db, k1)["telefonnummern"][0]["typ"] == "Allgemein"

@@ -69,3 +69,48 @@
         <button type="button" class="secondary" onclick="rubricaModalSchliessen()">Abbrechen</button>
     </div>
 </form>
+
+<form method="post" action="/kontakte/bulk-kategorie-umstellen">
+    <input type="hidden" name="zurueck_ordner_id" value="{{ zurueck_ordner_id or '' }}">
+    {% for id in ids %}<input type="hidden" name="ids" value="{{ id }}">{% endfor %}
+
+    <fieldset>
+        <legend>Telefon-/E-Mail-Kategorie umstellen</legend>
+        <p class="empty" style="padding:0 0 0.5rem">
+            Stellt bei allen {{ kontakte|length }} ausgewählten Kontakten Telefonnummern bzw. E-Mails einer
+            Kategorie auf eine andere um (z. B. alle als „Allgemein" getaggten E-Mails auf „Privat") - bearbeitet
+            nur die Kategorie, nicht die Nummern/Adressen selbst.
+        </p>
+        <div class="grid-2">
+            <div class="field">
+                <label>Telefon: von</label>
+                <select name="telefon_von">
+                    {% for t in telefon_email_typen %}<option value="{{ t }}">{{ t }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="field">
+                <label>Telefon: auf</label>
+                <select name="telefon_nach">
+                    {% for t in telefon_email_typen %}<option value="{{ t }}" {% if loop.index0 == 1 %}selected{% endif %}>{{ t }}</option>{% endfor %}
+                </select>
+            </div>
+        </div>
+        <button type="submit" name="feld" value="telefon" class="secondary">Telefon-Kategorie anwenden</button>
+
+        <div class="grid-2" style="margin-top:0.75rem">
+            <div class="field">
+                <label>E-Mail: von</label>
+                <select name="email_von">
+                    {% for t in telefon_email_typen %}<option value="{{ t }}">{{ t }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="field">
+                <label>E-Mail: auf</label>
+                <select name="email_nach">
+                    {% for t in telefon_email_typen %}<option value="{{ t }}" {% if loop.index0 == 1 %}selected{% endif %}>{{ t }}</option>{% endfor %}
+                </select>
+            </div>
+        </div>
+        <button type="submit" name="feld" value="email" class="secondary">E-Mail-Kategorie anwenden</button>
+    </fieldset>
+</form>
