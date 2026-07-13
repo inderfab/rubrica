@@ -20,19 +20,55 @@ from sync.radicale import kontakt_zu_vcard
 
 CSV_SPALTEN = [
     "Vorname", "Nachname", "Firma", "Funktion", "Rolle",
-    "Telefon", "E-Mail", "Adresse", "Homepage", "Notizen",
+    "Telefon Direkt", "Telefon Privat", "Telefon Allgemein",
+    "E-Mail Direkt", "E-Mail Privat", "E-Mail Allgemein",
+    "Adresse Direkt", "Adresse Privat", "Adresse Allgemein",
+    "Homepage", "Notizen",
 ]
 
-
-def _telefon_text(kontakt: dict) -> str:
-    return "; ".join(f"{t['typ']}: {t['nummer']}" for t in kontakt.get("telefonnummern", []))
-
-
 _PRIVAT_TYPEN = {"privat", "private", "home", "cell", "mobil", "iphone"}
+_ALLGEMEIN_TYPEN = {"allgemein", "main"}
 
 
 def _ist_privat_typ(typ: str) -> bool:
     return (typ or "").strip().lower() in _PRIVAT_TYPEN
+
+
+def _kategorie_von_typ(typ: str) -> str:
+    """Ordnet einen (ggf. noch nicht migrierten/alten) Typwert einer der drei
+    Kategorien zu - fuer die je Kategorie getrennten CSV-Spalten."""
+    t = (typ or "").strip().lower()
+    if t in _PRIVAT_TYPEN:
+        return "Privat"
+    if t in _ALLGEMEIN_TYPEN:
+        return "Allgemein"
+    return "Direkt"
+
+
+def _telefon_kategorie_text(kontakt: dict, kategorie: str) -> str:
+    return "; ".join(
+        t["nummer"] for t in kontakt.get("telefonnummern", []) if _kategorie_von_typ(t.get("typ", "")) == kategorie
+    )
+
+
+def _email_kategorie_text(kontakt: dict, kategorie: str) -> str:
+    return "; ".join(
+        e["email"] for e in kontakt.get("emails", []) if _kategorie_von_typ(e.get("typ", "")) == kategorie
+    )
+
+
+def _adresse_kategorie_text(kontakt: dict, kategorie: str) -> str:
+    zeilen = []
+    for a in kontakt.get("adressen", []):
+        if _kategorie_von_typ(a.get("typ", "")) != kategorie:
+            continue
+        teile = [a.get("strasse", ""), f"{a.get('plz', '')} {a.get('ort', '')}".strip()]
+        teile = [t for t in teile if t]
+        if a.get("land"):
+            teile.append(a["land"])
+        if teile:
+            zeilen.append(", ".join(teile))
+    return "; ".join(zeilen)
 
 
 def _ist_firmenkontakt(kontakt: dict) -> bool:
@@ -104,22 +140,6 @@ def _adresse_pdf(kontakt: dict, privatadresse_zeigen: bool) -> str:
     return "<br/>".join(escape(z) for z in zeilen)
 
 
-def _email_text(kontakt: dict) -> str:
-    return "; ".join(f"{e['typ']}: {e['email']}" for e in kontakt.get("emails", []))
-
-
-def _adresse_text(kontakt: dict) -> str:
-    zeilen = []
-    for a in kontakt.get("adressen", []):
-        teile = [a.get("strasse", ""), f"{a.get('plz', '')} {a.get('ort', '')}".strip()]
-        teile = [t for t in teile if t]
-        if a.get("land"):
-            teile.append(a["land"])
-        if teile:
-            zeilen.append(f"{a.get('typ', '')}: {', '.join(teile)}")
-    return "; ".join(zeilen)
-
-
 def _url_text(kontakt: dict) -> str:
     return "; ".join(u["url"] for u in kontakt.get("urls", []))
 
@@ -171,9 +191,11 @@ def _gruppiere_fuer_export(kontakte: list[dict]) -> list[dict]:
 def kontakte_csv(kontakte: list[dict]) -> bytes:
     """Erzeugt eine Excel-kompatible CSV (UTF-8 mit BOM, Semikolon als Trennzeichen -
     Standard-Spracheinstellung Excel DE verwendet Komma als Dezimaltrennzeichen und
-    interpretiert Kommas in CSV sonst falsch). Zeilen sortiert wie der PDF-Export
-    (nach Funktion/BKP-Nummer, dann Firma), fuer eine konsistente Reihenfolge in
-    beiden Formaten."""
+    interpretiert Kommas in CSV sonst falsch). Telefon/E-Mail/Adresse haben je
+    eine eigene Spalte pro Kategorie (Direkt/Privat/Allgemein) statt einer
+    zusammengefassten Spalte - leichter in Excel weiterzuverarbeiten. Zeilen
+    sortiert wie der PDF-Export (nach Funktion/BKP-Nummer, dann Firma), fuer
+    eine konsistente Reihenfolge in beiden Formaten."""
     puffer = io.StringIO()
     writer = csv.writer(puffer, delimiter=";")
     writer.writerow(CSV_SPALTEN)
@@ -181,8 +203,13 @@ def kontakte_csv(kontakte: list[dict]) -> bytes:
         writer.writerow([
             k.get("vorname", ""), k.get("nachname", ""), k.get("firma", ""),
             k.get("kategorie", ""), k.get("rolle", ""),
-            _telefon_text(k), _email_text(k), _adresse_text(k), _url_text(k),
-            k.get("notizen", ""),
+            _telefon_kategorie_text(k, "Direkt"), _telefon_kategorie_text(k, "Privat"),
+            _telefon_kategorie_text(k, "Allgemein"),
+            _email_kategorie_text(k, "Direkt"), _email_kategorie_text(k, "Privat"),
+            _email_kategorie_text(k, "Allgemein"),
+            _adresse_kategorie_text(k, "Direkt"), _adresse_kategorie_text(k, "Privat"),
+            _adresse_kategorie_text(k, "Allgemein"),
+            _url_text(k), k.get("notizen", ""),
         ])
     return puffer.getvalue().encode("utf-8-sig")
 

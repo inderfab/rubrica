@@ -41,6 +41,16 @@
             </select>
         </form>
 
+        <div id="sammel-leiste" class="sammel-leiste" style="display:none" data-ordner='{{ ordner|tojson }}'>
+            <span id="sammel-anzahl"></span>
+            <button type="button" class="secondary" onclick="rubricaSammelBearbeiten()">Ausgewählte bearbeiten</button>
+            <span style="position:relative;">
+                <button type="button" class="secondary" onclick="rubricaOrdnerZuweisenOeffnen()">Ordner zuweisen</button>
+                <ul id="ordner-zuweisen-liste" class="combobox-liste"></ul>
+            </span>
+            <button type="button" class="secondary" onclick="rubricaAuswahlAufheben()">Auswahl aufheben</button>
+        </div>
+
         <div id="kontakte-ergebnis">
             {% if kontakte %}
             <table>
@@ -86,12 +96,6 @@
             {% endif %}
         </div>
     </div>
-</div>
-
-<div id="sammel-leiste" class="sammel-leiste" style="display:none">
-    <span id="sammel-anzahl"></span>
-    <button type="button" class="secondary" onclick="rubricaSammelBearbeiten()">Ausgewählte bearbeiten</button>
-    <button type="button" class="secondary" onclick="rubricaAuswahlAufheben()">Auswahl aufheben</button>
 </div>
 
 <div id="kontakt-modal-overlay" class="modal-overlay" onclick="if (event.target === this) rubricaModalSchliessen()">
@@ -166,6 +170,30 @@ function rubricaSammelBearbeiten() {
             document.getElementById('kontakt-modal-inhalt').innerHTML = html;
             rubricaModalOeffnen();
         });
+}
+
+function rubricaOrdnerZuweisenOeffnen() {
+    const liste = document.getElementById('ordner-zuweisen-liste');
+    if (liste.classList.contains('sichtbar')) {
+        liste.classList.remove('sichtbar');
+        return;
+    }
+    const ordner = JSON.parse(document.getElementById('sammel-leiste').dataset.ordner || '[]');
+    liste.replaceChildren();
+    for (const o of ordner) {
+        const li = document.createElement('li');
+        li.textContent = o.name;
+        li.addEventListener('mousedown', (e) => { e.preventDefault(); rubricaOrdnerZuweisen(o.id); });
+        liste.appendChild(li);
+    }
+    liste.classList.toggle('sichtbar', ordner.length > 0);
+}
+
+function rubricaOrdnerZuweisen(ordnerId) {
+    const ids = rubricaAusgewaehlteIds();
+    document.getElementById('ordner-zuweisen-liste').classList.remove('sichtbar');
+    Promise.all(ids.map(id => fetch(`/kontakte/${id}/ordner/${ordnerId}/hinzufuegen`, { method: 'POST' })))
+        .then(() => location.reload());
 }
 </script>
 {% endblock %}

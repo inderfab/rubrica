@@ -102,6 +102,18 @@ def test_kontakte_liste_zeigt_ordner_sidebar_mit_anzahl(tmp_db):
     assert "ordner-sidebar" in r.text
 
 
+def test_sammel_leiste_erscheint_vor_der_tabelle_mit_ordner_button(tmp_db):
+    queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster"})
+    queries.get_or_create_projekt(tmp_db, "Testordner")
+    r = _client(tmp_db).get("/kontakte")
+    assert r.status_code == 200
+    sammel_pos = r.text.index('id="sammel-leiste"')
+    tabelle_pos = r.text.index("<table>")
+    assert sammel_pos < tabelle_pos  # Leiste steht vor der Tabelle, nicht danach
+    assert "Ordner zuweisen" in r.text
+    assert "Testordner" in r.text.split('data-ordner=')[1][:200]
+
+
 def test_kontakte_liste_zeigt_bearbeiten_button_kein_namenslink(tmp_db):
     queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster"})
     r = _client(tmp_db).get("/kontakte")

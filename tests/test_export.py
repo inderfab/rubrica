@@ -35,6 +35,32 @@ def test_kontakte_csv_enthaelt_felder_und_kopfzeile():
     assert "Teststrasse 1" in zeilen[1]
 
 
+def test_kontakte_csv_trennt_kategorien_in_eigene_spalten():
+    kontakt = _kontakt(
+        telefonnummern=[
+            {"typ": "work", "nummer": "052 111 11 11"},
+            {"typ": "cell", "nummer": "079 222 22 22"},
+            {"typ": "main", "nummer": "052 333 33 33"},
+        ],
+        emails=[{"typ": "internet", "email": "direkt@firma.ch"}, {"typ": "home", "email": "privat@example.com"}],
+        adressen=[
+            {"typ": "work", "strasse": "Buerostrasse 1", "plz": "8000", "ort": "Zuerich", "region": "", "land": ""},
+            {"typ": "home", "strasse": "Heimweg 2", "plz": "8001", "ort": "Zuerich", "region": "", "land": ""},
+        ],
+    )
+    daten = generator.kontakte_csv([kontakt])
+    header, *rows = daten.decode("utf-8-sig").strip().splitlines()
+    zeile = dict(zip(header.split(";"), rows[0].split(";")))
+
+    assert zeile["Telefon Direkt"] == "052 111 11 11"
+    assert zeile["Telefon Privat"] == "079 222 22 22"
+    assert zeile["Telefon Allgemein"] == "052 333 33 33"
+    assert zeile["E-Mail Direkt"] == "direkt@firma.ch"
+    assert zeile["E-Mail Privat"] == "privat@example.com"
+    assert zeile["Adresse Direkt"] == "Buerostrasse 1, 8000 Zuerich"
+    assert zeile["Adresse Privat"] == "Heimweg 2, 8001 Zuerich"
+
+
 def test_kontakte_csv_leere_liste_nur_kopfzeile():
     daten = generator.kontakte_csv([])
     zeilen = daten.decode("utf-8-sig").strip().splitlines()
