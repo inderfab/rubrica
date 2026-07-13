@@ -834,13 +834,6 @@ Rubrica importiert — deutlich robuster als das proprietäre Schema direkt zu p
     zulegen) - der Kontakt muss in der Kontaktliste manuell korrigiert werden, kein Code-Fehler.
   - 6 neue Tests (`db/migrations.py`, `importer/vcard.py`-Mapping, Webseite-nur-einmal). Alle 113 Tests grün.
 
-**Zurueckgestellt (2026-07-13, Nutzer-Feedback waehrend dieser Session, noch nicht umgesetzt):**
-  - Import-Seite: Drag&Drop-Feld vergroessern, Text "Kontakte hier hineinziehen", Mehrfachauswahl/-Drop.
-  - Review-Queue: Ordner-Zuweisung als Auswahlliste, Bearbeiten einzelner/mehrerer Vorschlaege vor
-    Bestaetigung (analog Sammel-Bearbeiten bei Kontakten), Aktionen "Alle bestaetigen"/"Nur ausgewaehlte
-    bestaetigen"/"Ausgewaehlte ablehnen".
-  - Archivio-Import als eigene Seite zwischen "Review-Queue" und "Import" (nur sichtbar, wenn ein gueltiger
-    Archivio-DB-Pfad in den Einstellungen hinterlegt ist); von dort geht es in die Review-Queue.
 - **Gruppen-Import: Checkbox entfernt, Standardverhalten (2026-07-13):** Nutzer meldete einen "Bug" - beim
   Import eines einzelnen, in Kontakte.app einer Gruppe zugewiesenen Kontakts wurde die Gruppenzuordnung nicht
   uebernommen, obwohl die Checkbox "Gruppen uebernehmen" aktiviert war. Ursache liegt nicht im Rubrica-Code,
@@ -858,6 +851,29 @@ Rubrica importiert — deutlich robuster als das proprietäre Schema direkt zu p
   aber beim Export ganzer Gruppen (z. B. via `scripts/import_from_contacts_app.py` oder manuellem
   Gruppen-Export), wo die Information vorhanden ist. 1 neuer Test. Alle 114 Tests gruen.
 
+- **Sammel-Leiste nach oben, Ordner-Zuweisung fuer mehrere Kontakte, CSV-Spalten je Kategorie (2026-07-13):**
+  Drei weitere Praxis-Rueckmeldungen aus dem Live-Test:
+  - Die Sammel-Leiste ("X ausgewaehlt") erschien am Ende der Kontaktliste - bei langen Listen musste man ganz
+    nach unten scrollen, um sie zu sehen. In `contacts_list.html` vor die Tabelle verschoben (direkt nach dem
+    Filter-Formular); da sie bereits `position: sticky; top: 0` hat (siehe `style.css`), bleibt sie jetzt beim
+    Scrollen tatsaechlich sichtbar oben, statt nur am urspruenglichen Ort zu kleben.
+  - Neuer Button "Ordner zuweisen" in der Sammel-Leiste: oeffnet eine Liste der bestehenden Ordner
+    (`data-ordner` auf der Leiste, per bestehendem `tojson`-Filter), Auswahl ruft fuer jeden ausgewaehlten
+    Kontakt den bereits vorhandenen `POST /kontakte/{id}/ordner/{ordner_id}/hinzufuegen`-Endpunkt auf (kein
+    neuer Server-Code noetig - nur JS, das den bestehenden Einzel-Endpunkt fuer alle ausgewaehlten IDs
+    aufruft). Ergaenzt statt zu ersetzen, wie beim bestehenden Drag&Drop auf einen Ordner.
+  - CSV-Export: Telefon/E-Mail/Adresse hatten je eine zusammengefasste Spalte mit allen Eintraegen - jetzt je
+    Kategorie (Direkt/Privat/Allgemein) eine eigene Spalte (`_kategorie_von_typ()` ordnet auch alte/englische
+    Typwerte einer der drei Kategorien zu), leichter in Excel weiterzuverarbeiten. `_telefon_text()`/
+    `_email_text()`/`_adresse_text()` (die alten, zusammengefassten Helfer) entfernt, da nur noch von der CSV
+    genutzt.
+  - **Noch offen (Nutzer bat ausdruecklich um Rueckfrage vor Umsetzung):** Sammel-Bearbeiten deckt bisher nur
+    Scalar-Felder ab (Vorname/Nachname/Firma/Rolle/Funktion/Notizen) - Telefonnummern/E-Mails/Adressen fehlen,
+    weil jeder Kontakt unterschiedlich viele Eintraege haben kann (kein klares "gleiche Zeile"-Konzept). Nutzer
+    wollte z. B. bei mehreren ausgewaehlten Kontakten "die zweite E-Mail-Adresse" auf "Privat" umkategorisieren.
+    Vor der Umsetzung muss geklaert werden, wie das Verhalten bei unterschiedlicher Eintragsanzahl sein soll.
+  - 3 neue Tests. Alle 116 Tests gruen.
+
 **Zurueckgestellt (2026-07-13, Nutzer-Feedback waehrend dieser Session, noch nicht umgesetzt):**
   - Import-Seite: Drag&Drop-Feld vergroessern, Text "Kontakte hier hineinziehen", Mehrfachauswahl/-Drop.
   - Review-Queue: Ordner-Zuweisung als Auswahlliste, Bearbeiten einzelner/mehrerer Vorschlaege vor
@@ -865,6 +881,7 @@ Rubrica importiert — deutlich robuster als das proprietäre Schema direkt zu p
     bestaetigen"/"Ausgewaehlte ablehnen".
   - Archivio-Import als eigene Seite zwischen "Review-Queue" und "Import" (nur sichtbar, wenn ein gueltiger
     Archivio-DB-Pfad in den Einstellungen hinterlegt ist); von dort geht es in die Review-Queue.
+  - Sammel-Bearbeiten fuer Telefonnummern/E-Mails/Adressen (wartet auf Antwort des Nutzers, siehe oben).
 
 Bekannte Einschränkung: Entwicklungsumgebung läuft unter Python 3.9 (Systemversion) statt der ursprünglich in Abschnitt 6 vermuteten 3.12 — FastAPI-Routenparameter deshalb mit `typing.Optional[int]` statt `int | None` (siehe `CLAUDE.md`). Dies betrifft nur die lokale Entwicklungsumgebung; das produktive `.pkg` bringt sein eigenes Python 3.13 mit und ist davon unabhängig.
 
