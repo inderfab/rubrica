@@ -867,12 +867,22 @@ Rubrica importiert — deutlich robuster als das proprietäre Schema direkt zu p
     Typwerte einer der drei Kategorien zu), leichter in Excel weiterzuverarbeiten. `_telefon_text()`/
     `_email_text()`/`_adresse_text()` (die alten, zusammengefassten Helfer) entfernt, da nur noch von der CSV
     genutzt.
-  - **Noch offen (Nutzer bat ausdruecklich um Rueckfrage vor Umsetzung):** Sammel-Bearbeiten deckt bisher nur
-    Scalar-Felder ab (Vorname/Nachname/Firma/Rolle/Funktion/Notizen) - Telefonnummern/E-Mails/Adressen fehlen,
-    weil jeder Kontakt unterschiedlich viele Eintraege haben kann (kein klares "gleiche Zeile"-Konzept). Nutzer
-    wollte z. B. bei mehreren ausgewaehlten Kontakten "die zweite E-Mail-Adresse" auf "Privat" umkategorisieren.
-    Vor der Umsetzung muss geklaert werden, wie das Verhalten bei unterschiedlicher Eintragsanzahl sein soll.
   - 3 neue Tests. Alle 116 Tests gruen.
+
+- **Sammel-Bearbeiten: Telefon-/E-Mail-Kategorie umstellen (2026-07-13):** Ruckfrage gestellt, wie das
+  Sammel-Bearbeiten von Telefonnummern/E-Mails/Adressen mit unterschiedlicher Eintragsanzahl je Kontakt
+  funktionieren soll (positionsbasiert? nur Kategorie umstellen? vorerst nicht umsetzen?) - Nutzer entschied
+  sich fuer die einfachere, gezielte Loesung: **nur die Kategorie umstellen, nicht die Werte selbst**. Neue,
+  von der generischen Sammel-Bearbeiten-Form bewusst getrennte Aktion im Bulk-Modal (`kontakt_bulk_
+  bearbeiten_modal.html`): zwei Mini-Formulare ("Telefon: von/auf", "E-Mail: von/auf" mit den drei
+  Kategorien), Submit-Buttons tragen ihren `feld`-Wert direkt als `name="feld" value="telefon"` (bzw.
+  `"email"`) - eine einzige neue Route `POST /kontakte/bulk-kategorie-umstellen` liest anhand von `feld`,
+  welches `{feld}_von`/`{feld}_nach`-Paar gilt. Neue `db.queries.kategorie_umstellen()` (Tabellen-Whitelist
+  `{"telefon": "telefonnummern", "email": "emails"}`, kein direktes Interpolieren von Nutzereingaben in den
+  Tabellennamen) aendert nur Eintraege mit exakt passendem Ausgangstyp - alle anderen Eintraege (auch
+  weitere Telefonnummern/E-Mails desselben Kontakts) bleiben unangetastet. Adresse bewusst nicht
+  einbezogen (hat noch keine eigene Direkt/Privat/Allgemein-Combobox im Erfassungsformular). 4 neue Tests
+  (DB-Ebene + Web-Route inkl. Ablehnung eines unbekannten `feld`-Werts). Alle 120 Tests gruen.
 
 **Zurueckgestellt (2026-07-13, Nutzer-Feedback waehrend dieser Session, noch nicht umgesetzt):**
   - Import-Seite: Drag&Drop-Feld vergroessern, Text "Kontakte hier hineinziehen", Mehrfachauswahl/-Drop.
@@ -881,7 +891,6 @@ Rubrica importiert — deutlich robuster als das proprietäre Schema direkt zu p
     bestaetigen"/"Ausgewaehlte ablehnen".
   - Archivio-Import als eigene Seite zwischen "Review-Queue" und "Import" (nur sichtbar, wenn ein gueltiger
     Archivio-DB-Pfad in den Einstellungen hinterlegt ist); von dort geht es in die Review-Queue.
-  - Sammel-Bearbeiten fuer Telefonnummern/E-Mails/Adressen (wartet auf Antwort des Nutzers, siehe oben).
 
 Bekannte Einschränkung: Entwicklungsumgebung läuft unter Python 3.9 (Systemversion) statt der ursprünglich in Abschnitt 6 vermuteten 3.12 — FastAPI-Routenparameter deshalb mit `typing.Optional[int]` statt `int | None` (siehe `CLAUDE.md`). Dies betrifft nur die lokale Entwicklungsumgebung; das produktive `.pkg` bringt sein eigenes Python 3.13 mit und ist davon unabhängig.
 

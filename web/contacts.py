@@ -374,6 +374,7 @@ def kontakte_bulk_bearbeiten_flyover(request: Request, ids: List[int] = Query(..
     return templates.TemplateResponse("kontakt_bulk_bearbeiten_modal.html", {
         "request": request, "kontakte": kontakte, "ids": ids, "felder": felder,
         "ordner": ordner, "funktionen": funktionen, "zurueck_ordner_id": ordner_id,
+        "telefon_email_typen": TELEFON_EMAIL_TYPEN,
     })
 
 
@@ -403,4 +404,29 @@ async def kontakte_bulk_bearbeiten_speichern(request: Request):
             radicale.push_projekt(conn, oid)
     finally:
         conn.close()
+    return RedirectResponse(url=_liste_url(zurueck_ordner_id), status_code=303)
+
+
+@router.post("/kontakte/bulk-kategorie-umstellen")
+async def kontakte_bulk_kategorie_umstellen(request: Request):
+    """Stellt bei allen ausgewaehlten Kontakten Telefonnummern/E-Mails einer
+    Kategorie (Direkt/Privat/Allgemein) auf eine andere um - bewusst getrennt
+    vom generischen Sammel-Bearbeiten oben: Telefonnummern/E-Mails haben pro
+    Kontakt unterschiedlich viele Eintraege, ein positionsbasiertes Bearbeiten
+    der Werte selbst ergibt dort keinen klaren Sinn (siehe docs/konzept.md)."""
+    form = await request.form()
+    ids = [int(i) for i in form.getlist("ids")]
+    zurueck_ordner_id = form.get("zurueck_ordner_id", "").strip()
+    feld = form.get("feld", "").strip()
+    von = form.get(f"{feld}_von", "").strip()
+    nach = form.get(f"{feld}_nach", "").strip()
+
+    if feld in ("telefon", "email") and von and nach and von != nach:
+        conn = get_connection()
+        try:
+            for kontakt_id in ids:
+                queries.kategorie_umstellen(conn, feld, kontakt_id, von, nach)
+                radicale.push_kontakt(conn, kontakt_id)
+        finally:
+            conn.close()
     return RedirectResponse(url=_liste_url(zurueck_ordner_id), status_code=303)

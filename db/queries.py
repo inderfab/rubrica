@@ -136,6 +136,22 @@ def update_kontakt_felder(conn: sqlite3.Connection, kontakt_id: int, felder: dic
         )
 
 
+_KATEGORIE_TABELLEN = {"telefon": "telefonnummern", "email": "emails"}
+
+
+def kategorie_umstellen(conn: sqlite3.Connection, feld: str, kontakt_id: int, von: str, nach: str) -> None:
+    """Stellt bei einem Kontakt alle Telefonnummern/E-Mails einer Kategorie
+    (Direkt/Privat/Allgemein) auf eine andere um - fuer das Sammel-Bearbeiten
+    mehrerer ausgewaehlter Kontakte, ohne die Werte selbst anzufassen (siehe
+    docs/konzept.md: variable Anzahl Eintraege je Kontakt macht ein
+    positionsbasiertes Bearbeiten der Werte selbst nicht sinnvoll)."""
+    tabelle = _KATEGORIE_TABELLEN.get(feld)
+    if not tabelle or not von or not nach:
+        return
+    with conn:
+        conn.execute(f"UPDATE {tabelle} SET typ = ? WHERE kontakt_id = ? AND typ = ?", (nach, kontakt_id, von))
+
+
 def merge_kontakt(conn: sqlite3.Connection, kontakt_id: int, daten: dict) -> None:
     """Wie update_kontakt, aber fuer Vorschlaege: leere Felder ueberschreiben nichts,
     Telefonnummern/E-Mails/Adressen/URLs werden ergaenzt statt ersetzt (kein Datenverlust bei Dedup).
