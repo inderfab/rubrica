@@ -167,9 +167,14 @@ def _server_antwortet() -> bool:
 
 
 def _radicale_antwortet() -> bool:
+    """Ein reiner TCP-Connect (ohne TLS-Handshake) liess Radicale bei jedem Check
+    einen "SSL: UNEXPECTED_EOF_WHILE_READING"-Fehler loggen (Verbindung wird vor
+    dem ClientHello wieder geschlossen) - das fluteten Radicales eigenes Fehlerlog
+    alle 15s mit fuers Debugging irrelevantem Rauschen. Ein echter HTTPS-Request
+    (Antwort-Status ist egal, 401 zaehlt auch als "laeuft") vermeidet das."""
     try:
-        with socket.create_connection(("127.0.0.1", RADICALE_PORT), timeout=2):
-            return True
+        httpx.get(f"https://127.0.0.1:{RADICALE_PORT}/", timeout=2, verify=False)
+        return True
     except Exception:
         return False
 

@@ -1,5 +1,6 @@
 import httpx
 
+from config import settings
 from db import queries
 from sync import radicale
 
@@ -142,3 +143,20 @@ def test_sync_deaktiviert_macht_nichts_und_wirft_nicht(tmp_db, monkeypatch):
 
     radicale.push_kontakt(tmp_db, kontakt_id)
     radicale.delete_kontakt(kontakt_id)
+
+
+def test_client_ist_ohne_base_url_none(monkeypatch):
+    monkeypatch.setattr(settings, "_settings", {"radicale": {"base_url": ""}})
+    assert radicale._client() is None
+
+
+def test_client_braucht_keinen_enabled_schalter(monkeypatch):
+    # Kein "enabled"-Feld gesetzt - Sync muss trotzdem aktiv sein, sobald eine
+    # base_url konfiguriert ist (siehe _client()-Docstring: kein An/Aus-Schalter mehr,
+    # da ein versehentlich falsch gesetzter Schalter schon zu Verwirrung gefuehrt hat).
+    monkeypatch.setattr(settings, "_settings", {
+        "radicale": {"base_url": "https://127.0.0.1:8443", "addressbook_path": "/pas/kontakte/"}
+    })
+    client = radicale._client()
+    assert client is not None
+    client.close()
