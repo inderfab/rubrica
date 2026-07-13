@@ -105,7 +105,7 @@ label { display: block; font-size: 0.85rem; color: var(--text-hell); margin-bott
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
 .diff-old { color: var(--text-hell); text-decoration: line-through; }
 .diff-new { color: var(--akzent); font-weight: 600; }
-.tag { display: inline-block; background: var(--flaeche-hover); border-radius: 4px; padding: 0.1rem 0.5rem; font-size: 0.8rem; margin-right: 0.25rem; }
+.tag { display: inline-block; background: var(--flaeche-hover); border-radius: 4px; padding: 0.1rem 0.5rem; font-size: 0.8rem; margin: 0 0.3rem 0.3rem 0; }
 
 /* Kontakte-Ansicht: Ordner-Seitenleiste + Hauptbereich (Drag & Drop) */
 .kontakte-layout { display: flex; gap: 1.25rem; align-items: flex-start; }
@@ -191,16 +191,37 @@ label { display: block; font-size: 0.85rem; color: var(--text-hell); margin-bott
     padding: 0.25rem;
     list-style: none;
     background: #fff;
+    color: var(--text);
     border: 1px solid var(--rand);
     border-radius: 6px;
     box-shadow: 0 4px 14px rgba(0,0,0,0.08);
     max-height: 220px;
     overflow-y: auto;
+    overflow-x: hidden;
 }
 .combobox-liste.sichtbar { display: block; }
-.combobox-liste li { padding: 0.4rem 0.5rem; border-radius: 4px; font-size: 0.9rem; cursor: pointer; }
+.combobox-liste li { padding: 0.4rem 0.5rem; border-radius: 4px; font-size: 0.9rem; cursor: pointer; white-space: normal; word-break: break-word; }
 .combobox-liste li:hover { background: var(--flaeche-hover); }
 .combobox-liste li.combobox-neu { color: var(--akzent); font-weight: 600; border-top: 1px solid var(--rand); margin-top: 0.2rem; padding-top: 0.5rem; }
+
+/* "Ordner zuweisen" in der Sammel-Leiste: die Liste haengt an einem schmalen
+   <span>, der nur so breit wie der Button ist - links ausrichten und eine
+   Mindestbreite erzwingen, statt sich auf die schmale Span-Breite zu stauchen. */
+#ordner-zuweisen-liste { left: 0; right: auto; min-width: 260px; }
+
+/* Grosse Drag&Drop-Flaeche auf der Import-Seite */
+.import-dropzone {
+    border: 2px dashed var(--rand);
+    border-radius: 10px;
+    padding: 3rem 1.5rem;
+    text-align: center;
+    cursor: pointer;
+    margin-bottom: 1rem;
+    transition: background 0.15s, border-color 0.15s;
+}
+.import-dropzone:hover { background: var(--flaeche-hover); }
+.import-dropzone.drop-hover { background: var(--flaeche-hover); border-color: var(--akzent); }
+.import-dropzone-text { font-size: 1.3rem; font-weight: 600; margin: 0 0 0.4rem; }
 
 /* Sammel-Bearbeiten-Leiste, erscheint sobald Kontakte per Checkbox ausgewaehlt sind */
 .sammel-leiste {

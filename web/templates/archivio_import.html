@@ -1,7 +1,7 @@
 {% extends "base.html" %}
-{% block title %}Archivio-Vorschau – Rubrica{% endblock %}
+{% block title %}Archivio-Import – Rubrica{% endblock %}
 {% block content %}
-<h1>Archivio-Vorschau</h1>
+<h1>Archivio-Import</h1>
 <p class="empty">
     Zeigt Kontaktvorschläge aus bereits von Archivio erfassten E-Mail-Signaturen –
     <strong>rein lesend</strong>, es wird noch nichts gespeichert. Nur Absender mit mehreren
@@ -10,6 +10,7 @@
     unvollständigen Einträgen zu überschwemmen). Bereits vorhandene Kontakte (per E-Mail, Name
     oder Telefonnummer erkannt) werden automatisch übersprungen. Wenige oder keine Vorschläge sind
     normal, u. a. weil Archivios eigener Mail-Scanner E-Mail-Signaturen teilweise abschneidet.
+    Übernommene Vorschläge landen wie jeder andere Import in der <a href="/review">Review-Queue</a>.
 </p>
 
 {% if fehler %}
@@ -32,11 +33,11 @@
             <td>{{ mail }}</td>
             <td>{{ k.anzahl_mails }}</td>
             <td class="actions">
-                <form method="post" action="/review/archivio-uebernehmen-einzeln">
+                <form method="post" action="/archivio-import/uebernehmen-einzeln">
                     <input type="hidden" name="email" value="{{ mail }}">
                     <button type="submit">Übernehmen</button>
                 </form>
-                <form method="post" action="/review/archivio-ablehnen">
+                <form method="post" action="/archivio-import/ablehnen">
                     <input type="hidden" name="email" value="{{ mail }}">
                     <button type="submit" class="secondary">Ablehnen</button>
                 </form>
@@ -46,7 +47,7 @@
     </tbody>
 </table>
 
-<form method="post" action="/review/archivio-uebernehmen" style="margin-top:1rem"
+<form method="post" action="/archivio-import/uebernehmen" style="margin-top:1rem"
       onsubmit="return confirm('Wirklich ALLE {{ kandidaten|length }} angezeigten Vorschläge übernehmen?')">
     <button type="submit" class="secondary">Alle übernehmen</button>
 </form>

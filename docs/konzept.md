@@ -884,13 +884,64 @@ Rubrica importiert — deutlich robuster als das proprietäre Schema direkt zu p
   einbezogen (hat noch keine eigene Direkt/Privat/Allgemein-Combobox im Erfassungsformular). 4 neue Tests
   (DB-Ebene + Web-Route inkl. Ablehnung eines unbekannten `feld`-Werts). Alle 120 Tests gruen.
 
-**Zurueckgestellt (2026-07-13, Nutzer-Feedback waehrend dieser Session, noch nicht umgesetzt):**
-  - Import-Seite: Drag&Drop-Feld vergroessern, Text "Kontakte hier hineinziehen", Mehrfachauswahl/-Drop.
-  - Review-Queue: Ordner-Zuweisung als Auswahlliste, Bearbeiten einzelner/mehrerer Vorschlaege vor
-    Bestaetigung (analog Sammel-Bearbeiten bei Kontakten), Aktionen "Alle bestaetigen"/"Nur ausgewaehlte
-    bestaetigen"/"Ausgewaehlte ablehnen".
-  - Archivio-Import als eigene Seite zwischen "Review-Queue" und "Import" (nur sichtbar, wenn ein gueltiger
-    Archivio-DB-Pfad in den Einstellungen hinterlegt ist); von dort geht es in die Review-Queue.
+- **CSS-Fixes Sammel-Leiste (2026-07-13):** Nutzer-Feedback aus dem Live-Test: "Ordner zuweisen"-Dropdown
+  zeigte weissen Text auf weissem Hintergrund und hatte einen unpraktischen seitlichen Scroll. Ursache:
+  `#ordner-zuweisen-liste` erbte via `.combobox-liste` keine eigene `color` und lag verschachtelt in der
+  dunklen `.sammel-leiste` (die `color: #fff` setzt) - die weisse Schriftfarbe kaskadierte nach unten in
+  die Liste, die selbst einen weissen/hellen Hintergrund hat. Fix: `.combobox-liste` bekommt eine explizite
+  `color: var(--text)` sowie `overflow-x: hidden` und die `<li>`s `white-space: normal; word-break:
+  break-word` (statt am schmalen Button-umschliessenden `<span>` zu ueberlaufen). Zusaetzlich bekommt
+  `#ordner-zuweisen-liste` eine `min-width: 260px`, da sie an einem sehr schmalen, nur-Button-breiten
+  `<span>` haengt und sonst auf dessen Breite gestaucht wird. Ausserdem: den grauen Ordner-"Bubbles"
+  (`.tag`) einen unteren Rand (`margin-bottom: 0.3rem`) spendiert, damit mehrere gestapelte Ordner-Tags in
+  der Liste nicht mehr direkt aneinanderkleben.
+
+**Pendenz (2026-07-13, unsicher ob gute Loesung, bewusst vorerst belassen):**
+  - Sammel-Bearbeiten "Telefon-/E-Mail-Kategorie umstellen" (siehe Eintrag oben): Nutzer ist sich noch nicht
+    sicher, ob die gewaehlte UI (zwei separate Mini-Formulare mit von/auf-Auswahl) die beste Loesung ist,
+    moechte es aber vorerst so belassen statt sofort zu ueberarbeiten. Bei Gelegenheit erneut mit dem
+    Nutzer besprechen, ob eine andere Darstellung (z. B. direkt inline in der Kontaktliste) praktischer waere.
+
+- **Import-Seite: grosse Drag&Drop-Flaeche (2026-07-13):** Das vorherige, unscheinbare
+  `<input type="file">` durch eine grosse, klickbare `.import-dropzone` ersetzt (Text "Kontakte hier
+  hineinziehen" + Hinweis auf Mehrfachauswahl). Klick auf die Flaeche oeffnet weiterhin den normalen
+  Datei-Dialog (`document.getElementById('import-dateien').click()`); Drop setzt `input.files =
+  event.dataTransfer.files` direkt am (versteckten) echten File-Input, damit das bestehende Formular/
+  die bestehende Route (`web/imports.py`) unveraendert bleiben kann - Mehrfachauswahl/-Drop war durch
+  das schon vorhandene `multiple`-Attribut technisch bereits moeglich, war der Nutzerin/dem Nutzer aber
+  durch die kleine Flaeche nicht ersichtlich.
+
+- **Review-Queue: Ordner-Auswahlliste, Bearbeiten, Bulk-Aktionen (2026-07-13):**
+  - Die bisher rein informativen "Ordner:"-Tags (aus Apple-Gruppen erkannt) bleiben unveraendert bestehen,
+    zusaetzlich gibt es pro Vorschlag jetzt eine `.ordner-checkliste` (gleiche Komponente wie im
+    Kontakt-Bearbeiten-Formular) mit allen bestehenden Ordnern - Auswahl wird beim Bestaetigen **zusaetzlich**
+    zugewiesen (ergaenzend, nicht ersetzend, gleiches Prinzip wie der bestehende "Ordner zuweisen"-Button in
+    der Kontaktliste). Umgesetzt ueber einen neuen optionalen Parameter `ordner_ids` in
+    `db.queries.bestaetige_vorschlag()`.
+  - Neue Sammel-Leiste (erscheint bei Checkbox-Auswahl einzelner Vorschlaege, gleiches Muster wie bei
+    Kontakten): Aktionen "Ausgewählte bearbeiten", "Nur ausgewählte bestätigen", "Ausgewählte ablehnen",
+    "Auswahl aufheben". Zusaetzlich ein von der Auswahl unabhaengiger "Alle bestätigen"-Button oben auf der
+    Seite. Neue Routen `POST /review/bulk-bestaetigen` (ohne `ids` = alle offenen Vorschlaege, mit `ids` =
+    nur die uebergebenen) und `POST /review/bulk-ablehnen`.
+  - "Bearbeiten" (einzeln oder fuer mehrere ausgewaehlte Vorschlaege) oeffnet ein Modal analog zum
+    Sammel-Bearbeiten bei Kontakten - bewusst nur Scalar-Felder (Vorname/Nachname/Firma/Rolle/Funktion/
+    Notizen, gleiches `FELDER_MEHRFACHBEARBEITUNG` samt "gemischt"-Logik aus `web/contacts.py`
+    wiederverwendet), Telefon/E-Mail/Adresse-Arrays bleiben bewusst unangetastet, da sie erst beim
+    Bestaetigen zu echten Kontaktdaten werden (gleiche Scope-Entscheidung wie beim Kontakte-Sammel-
+    Bearbeiten). Neue `db.queries.update_vorschlag_rohdaten()` schreibt die Aenderungen direkt ins
+    `rohdaten`-JSON zurueck. Neue Routen `GET/POST /review/bulk-bearbeiten(-flyover)`.
+  - 8 neue Tests in `tests/test_review_web.py`.
+
+- **Archivio-Import als eigene Seite (2026-07-13):** Die bisher nur ueber einen Link in der Review-Queue
+  erreichbare "Archivio-Vorschau" (`web/archivio.py`) ist jetzt eine eigenstaendige Seite unter
+  `/archivio-import` (vorher `/review/archivio-vorschau` + Unterrouten) mit eigenem Navigationspunkt
+  zwischen "Review-Queue" und "Import". Der Nav-Punkt erscheint nur, wenn `archivio.db_path` in den
+  Einstellungen gesetzt **und** die Datei tatsaechlich vorhanden ist (`web/shared.py:
+  _archivio_konfiguriert()`, als aufrufbares Jinja-Global `archivio_konfiguriert()` registriert - bewusst
+  eine Funktion statt eines einmalig berechneten Werts wie `app_version`, damit eine Aenderung in den
+  Einstellungen sofort ohne Neustart wirkt). Der informelle Link in der Review-Queue bleibt zusaetzlich
+  bestehen (zeigt jetzt auf `/archivio-import`), ebenfalls nur wenn konfiguriert. Von dort weiterhin
+  Uebernahme in die Review-Queue (`quelle='archivio'`), unveraendertes Verhalten.
 
 Bekannte Einschränkung: Entwicklungsumgebung läuft unter Python 3.9 (Systemversion) statt der ursprünglich in Abschnitt 6 vermuteten 3.12 — FastAPI-Routenparameter deshalb mit `typing.Optional[int]` statt `int | None` (siehe `CLAUDE.md`). Dies betrifft nur die lokale Entwicklungsumgebung; das produktive `.pkg` bringt sein eigenes Python 3.13 mit und ist davon unabhängig.
 

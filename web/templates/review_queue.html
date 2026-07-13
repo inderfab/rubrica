@@ -4,18 +4,40 @@
 <h1>Review-Queue</h1>
 <p class="empty">
     Vorschläge aus dem Import. Nichts wird automatisch übernommen — erst nach Bestätigung.
-    <a href="/review/archivio-vorschau">Archivio-Vorschau ansehen →</a>
+    {% if archivio_konfiguriert() %}<a href="/archivio-import">Archivio-Import ansehen →</a>{% endif %}
 </p>
 
 {% if vorschlaege %}
+<div style="display:flex; gap:0.75rem; margin-bottom:0.75rem;">
+    <form method="post" action="/review/bulk-bestaetigen" onsubmit="return confirm('Wirklich alle {{ vorschlaege|length }} offenen Vorschläge bestätigen?')">
+        <button type="submit">Alle bestätigen</button>
+    </form>
+</div>
+
+<div id="review-sammel-leiste" class="sammel-leiste" style="display:none">
+    <span id="review-sammel-anzahl"></span>
+    <button type="button" class="secondary" onclick="rubricaReviewSammelBearbeiten()">Ausgewählte bearbeiten</button>
+    <form method="post" action="/review/bulk-bestaetigen" id="review-bulk-bestaetigen-form">
+        <button type="submit" class="secondary">Nur ausgewählte bestätigen</button>
+    </form>
+    <form method="post" action="/review/bulk-ablehnen" id="review-bulk-ablehnen-form"
+          onsubmit="return confirm('Ausgewählte Vorschläge wirklich ablehnen?')">
+        <button type="submit" class="secondary">Ausgewählte ablehnen</button>
+    </form>
+    <button type="button" class="secondary" onclick="rubricaReviewAuswahlAufheben()">Auswahl aufheben</button>
+</div>
+
 {% for v in vorschlaege %}
 <fieldset>
     <legend>
-        {% if v.bestehender_kontakt %}
-            Möglicher Treffer: {{ v.bestehender_kontakt.vorname }} {{ v.bestehender_kontakt.nachname }}
-        {% else %}
-            Neuer Kontakt
-        {% endif %}
+        <label style="display:inline-flex; align-items:center; gap:0.4rem;">
+            <input type="checkbox" class="review-auswahl" value="{{ v.id }}" onchange="rubricaReviewAuswahlGeaendert()">
+            {% if v.bestehender_kontakt %}
+                Möglicher Treffer: {{ v.bestehender_kontakt.vorname }} {{ v.bestehender_kontakt.nachname }}
+            {% else %}
+                Neuer Kontakt
+            {% endif %}
+        </label>
         <span class="tag">{{ v.quelle }}</span>
     </legend>
 
@@ -31,7 +53,7 @@
                 {% for u in v.rohdaten.urls %}{{ u.typ }}: <a href="{{ u.url }}" target="_blank">{{ u.url }}</a><br>{% endfor %}
                 {% if v.rohdaten.notizen %}<em>{{ v.rohdaten.notizen }}</em><br>{% endif %}
                 {% if v.rohdaten.gruppen_als_ordner %}
-                    Ordner: {% for g in v.rohdaten.gruppen_als_ordner %}<span class="tag">{{ g }}</span>{% endfor %}
+                    Ordner (aus Apple-Gruppe erkannt): {% for g in v.rohdaten.gruppen_als_ordner %}<span class="tag">{{ g }}</span>{% endfor %}
                 {% endif %}
             </p>
         </div>
@@ -51,17 +73,83 @@
         {% endif %}
     </div>
 
-    <div class="actions">
-        <form method="post" action="/review/{{ v.id }}/bestaetigen">
+    <form method="post" action="/review/{{ v.id }}/bestaetigen">
+        {% if ordner %}
+        <div class="field">
+            <label>Zusätzlich einem bestehenden Ordner zuweisen (optional)</label>
+            <div class="ordner-checkliste">
+                {% for o in ordner %}
+                <label>
+                    <input type="checkbox" name="ordner_ids" value="{{ o.id }}">
+                    {{ o.name }}
+                </label>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+        <div class="actions">
             <button type="submit">Bestätigen{% if v.bestehender_kontakt %} & zusammenführen{% endif %}</button>
-        </form>
-        <form method="post" action="/review/{{ v.id }}/ablehnen">
-            <button type="submit" class="secondary">Ablehnen</button>
-        </form>
-    </div>
+            <button type="button" class="secondary" onclick="rubricaReviewBearbeiten([{{ v.id }}])">Bearbeiten</button>
+        </div>
+    </form>
+    <form method="post" action="/review/{{ v.id }}/ablehnen">
+        <button type="submit" class="secondary">Ablehnen</button>
+    </form>
 </fieldset>
 {% endfor %}
 {% else %}
 <p class="empty">Keine offenen Vorschläge.</p>
 {% endif %}
+
+<div id="review-modal-overlay" class="modal-overlay" onclick="if (event.target === this) rubricaReviewModalSchliessen()">
+    <div class="modal-panel">
+        <div id="review-modal-inhalt"></div>
+    </div>
+</div>
+
+<script>
+function rubricaReviewAusgewaehlteIds() {
+    return Array.from(document.querySelectorAll('.review-auswahl:checked')).map(cb => cb.value);
+}
+
+function rubricaReviewAuswahlGeaendert() {
+    const ids = rubricaReviewAusgewaehlteIds();
+    document.getElementById('review-sammel-leiste').style.display = ids.length > 0 ? 'flex' : 'none';
+    document.getElementById('review-sammel-anzahl').textContent = ids.length + ' ausgewählt';
+    for (const form of [document.getElementById('review-bulk-bestaetigen-form'), document.getElementById('review-bulk-ablehnen-form')]) {
+        form.querySelectorAll("input[name='ids']").forEach(el => el.remove());
+        for (const id of ids) {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'ids';
+            input.value = id;
+            form.appendChild(input);
+        }
+    }
+}
+
+function rubricaReviewAuswahlAufheben() {
+    document.querySelectorAll('.review-auswahl').forEach(cb => cb.checked = false);
+    rubricaReviewAuswahlGeaendert();
+}
+
+function rubricaReviewSammelBearbeiten() {
+    const ids = rubricaReviewAusgewaehlteIds();
+    if (ids.length) rubricaReviewBearbeiten(ids);
+}
+
+function rubricaReviewBearbeiten(ids) {
+    const params = ids.map(id => 'ids=' + id).join('&');
+    fetch(`/review/bulk-bearbeiten-flyover?${params}`)
+        .then(r => r.text())
+        .then(html => {
+            document.getElementById('review-modal-inhalt').innerHTML = html;
+            document.getElementById('review-modal-overlay').classList.add('sichtbar');
+        });
+}
+
+function rubricaReviewModalSchliessen() {
+    document.getElementById('review-modal-overlay').classList.remove('sichtbar');
+}
+</script>
 {% endblock %}

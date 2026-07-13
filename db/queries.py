@@ -343,9 +343,12 @@ def set_vorschlag_status(conn: sqlite3.Connection, vorschlag_id: int, status: st
         conn.execute("UPDATE vorschlaege SET status = ? WHERE id = ?", (status, vorschlag_id))
 
 
-def bestaetige_vorschlag(conn: sqlite3.Connection, vorschlag_id: int) -> int:
+def bestaetige_vorschlag(conn: sqlite3.Connection, vorschlag_id: int,
+                          ordner_ids: list[int] | None = None) -> int:
     """Uebernimmt den Vorschlag in kontakte (neu anlegen oder mergen) und markiert ihn bestaetigt.
-    Gibt die betroffene kontakt_id zurueck."""
+    Gibt die betroffene kontakt_id zurueck. `ordner_ids` weist zusaetzlich zu den automatisch aus
+    Apple-Gruppen erkannten Ordnern (gruppen_als_ordner) manuell ausgewaehlte, bestehende Ordner zu -
+    ergaenzend, nicht ersetzend (analog zum Ordner-zuweisen-Button in der Kontaktliste)."""
     vorschlag = get_vorschlag(conn, vorschlag_id)
     if vorschlag is None:
         raise ValueError(f"Vorschlag {vorschlag_id} nicht gefunden")
@@ -365,5 +368,27 @@ def bestaetige_vorschlag(conn: sqlite3.Connection, vorschlag_id: int) -> int:
                 (kontakt_id, projekt_id),
             )
 
+    for projekt_id in ordner_ids or []:
+        with conn:
+            conn.execute(
+                "INSERT OR IGNORE INTO kontakte_projekte (kontakt_id, projekt_id) VALUES (?, ?)",
+                (kontakt_id, projekt_id),
+            )
+
     set_vorschlag_status(conn, vorschlag_id, "bestaetigt")
     return kontakt_id
+
+
+def update_vorschlag_rohdaten(conn: sqlite3.Connection, vorschlag_id: int, updates: dict) -> None:
+    """Aendert einzelne Scalar-Felder in vorschlaege.rohdaten (Sammel-Bearbeiten vor Bestaetigung) -
+    Arrays (Telefon/E-Mail/Adresse/URL) und gruppen_als_ordner bleiben unangetastet."""
+    vorschlag = get_vorschlag(conn, vorschlag_id)
+    if vorschlag is None:
+        return
+    rohdaten = vorschlag["rohdaten"]
+    rohdaten.update(updates)
+    with conn:
+        conn.execute(
+            "UPDATE vorschlaege SET rohdaten = ? WHERE id = ?",
+            (json.dumps(rohdaten, ensure_ascii=False), vorschlag_id),
+        )
