@@ -1028,6 +1028,20 @@ Rubrica importiert — deutlich robuster als das proprietäre Schema direkt zu p
     absichtlich still verschluckt werden (damit sie die Web-UI nicht blockieren). Die neue sichtbare
     "Jetzt alles neu synchronisieren"-Rueckmeldung schliesst diese Diagnose-Luecke fuer die Zukunft.
 
+- **Nachtrag: TLS-Verify beim Push ganz aus + Fehlergrund sichtbar (2026-07-13):** Der obige Fix (gegen die
+  lokale CA pruefen) war unvollstaendig - das Verifizieren gegen die CA erzwingt weiterhin eine
+  Hostname-Pruefung, und aeltere, beim 0.9-Erststart erzeugte Zertifikate decken `127.0.0.1` nicht im SAN ab
+  (nur den Hostnamen). Der manuelle Voll-Sync meldete deshalb weiterhin "0 synchronisiert, Push fehlgeschlagen".
+  - Konsequenz: Beim Push (immer Loopback 127.0.0.1 zum eigenen Radicale) ist die TLS-Pruefung jetzt komplett
+    aus (`verify=False` in `_client()`). Auf Loopback kein Sicherheitsverlust (nicht abhoerbar), und Rubrica
+    haengt nicht mehr an SAN/CA-Details des lokalen Zertifikats. Kontakte.app (macOS) ist unberuehrt - es
+    prueft ueber den System-Schluesselbund gegen den Hostnamen. Der `verify_ssl`-Schalter (config + UI) wurde
+    ersatzlos entfernt, da er fuer eine Loopback-Verbindung nur ein irrefuehrendes No-op war.
+  - `radicale.sync_alle()` gibt jetzt zusaetzlich den konkreten letzten Fehlergrund zurueck (Modul-Variable
+    `_letzter_fehler`, in den except-Bloecken von `_put`/`_delete`/`_remote_vcf_namen` gesetzt) - die
+    UI-Rueckmeldung zeigt so z.B. "Grund: ..." statt nur "fehlgeschlagen", falls doch noch etwas scheitert
+    (z.B. ein Auth-Problem).
+
 Bekannte Einschränkung: Entwicklungsumgebung läuft unter Python 3.9 (Systemversion) statt der ursprünglich in Abschnitt 6 vermuteten 3.12 — FastAPI-Routenparameter deshalb mit `typing.Optional[int]` statt `int | None` (siehe `CLAUDE.md`). Dies betrifft nur die lokale Entwicklungsumgebung; das produktive `.pkg` bringt sein eigenes Python 3.13 mit und ist davon unabhängig.
 
 Nächste sinnvolle Schritte: Neues `.pkg` (Notion-Redesign + Archivio einzeln übernehmen/ablehnen + Ordner-

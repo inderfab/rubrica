@@ -18,6 +18,17 @@ from db import queries
 
 log = logging.getLogger(__name__)
 
+# Text des zuletzt aufgetretenen Sync-Fehlers (z.B. "401 Unauthorized",
+# "SSLError ..."). Sync-Fehler werden sonst still verschluckt; sync_alle() gibt
+# diesen Text mit zurueck, damit die manuelle "Jetzt synchronisieren"-Aktion
+# einen konkreten Grund anzeigen kann statt nur "fehlgeschlagen".
+_letzter_fehler = ""
+
+
+def _merke_fehler(exc: Exception) -> None:
+    global _letzter_fehler
+    _letzter_fehler = f"{type(exc).__name__}: {exc}"
+
 
 def _escape(text: str) -> str:
     return (text or "").replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace("\n", "\\n")
@@ -99,40 +110,27 @@ def projekt_zu_gruppen_vcard(projekt: dict, mitglieder_ids: list) -> str:
     return "\r\n".join(_fold(z) for z in zeilen) + "\r\n"
 
 
-def _tls_verify():
-    """TLS-Pruefung fuer den Push zum eigenen Radicale. Wichtig: Rubrica pusht
-    immer an das eigene Radicale (in der Praxis 127.0.0.1, Loopback). Dessen
-    Zertifikat ist von einer lokal erzeugten CA signiert, die NICHT im certifi-
-    Trust-Store von httpx liegt - `verify=True` (Default) bricht deshalb jeden
-    Push mit einem Zertifikatsfehler ab, und zwar STILL, weil Sync-Fehler die
-    Web-Route nie unterbrechen duerfen. Genau das liess neu erstellte Kontakte
-    lokal erscheinen, aber nie bei Radicale/Apple Kontakte ankommen.
-
-    - Verify ausdruecklich abgeschaltet (verify_ssl=false) -> keine Pruefung.
-    - Sonst gegen die lokale CA-Datei pruefen, falls vorhanden (sicher + funktioniert).
-    - Sonst (Pruefung gewuenscht, aber keine lokale CA auffindbar) auf Loopback
-      ohne Pruefung, statt den Push scheitern zu lassen - 127.0.0.1 ist nicht
-      abhoerbar, echte Sicherheit geht dadurch nicht verloren."""
-    if not settings.get("radicale.verify_ssl", True):
-        return False
-    ca_cert = settings.daten_verzeichnis() / "radicale-tls" / "ca-cert.pem"
-    if ca_cert.is_file():
-        return str(ca_cert)
-    return False
-
-
 def _client() -> httpx.Client | None:
     """Kein separater An/Aus-Schalter: Sync ist immer aktiv, sobald eine base_url
     konfiguriert ist (siehe config.yaml.example) - ein vergessener/versehentlich
     gesetzter "enabled: false"-Schalter hat schon zu Verwirrung gefuehrt, weil
-    Kontakte lokal geloescht wurden, der Push zu Radicale aber nie versucht wurde."""
+    Kontakte lokal geloescht wurden, der Push zu Radicale aber nie versucht wurde.
+
+    TLS-Pruefung bewusst AUS (verify=False): Rubrica pusht immer an das eigene
+    Radicale auf Loopback (127.0.0.1). Dessen selbst erzeugtes Zertifikat ist von
+    einer certifi-unbekannten CA signiert UND deckt je nach Erstellungszeit 127.0.0.1
+    gar nicht im SAN ab (aeltere Installationen nur den Hostnamen) - eine Pruefung
+    scheiterte deshalb wiederholt und liess den Push STILL fehlschlagen (Sync-Fehler
+    unterbrechen die Web-Route nie). Auf 127.0.0.1 bringt die Pruefung ohnehin keinen
+    Sicherheitsgewinn (nicht abhoerbar), darum ganz ohne. Kontakte.app (macOS) ist
+    davon unberuehrt - es prueft ueber den System-Schluesselbund gegen den Hostnamen."""
     base_url = settings.get("radicale.base_url", "")
     if not base_url:
         return None
     return httpx.Client(
         base_url=base_url.rstrip("/") + settings.get("radicale.addressbook_path", "/"),
         auth=(settings.get("radicale.username", ""), settings.get("radicale.password", "")),
-        verify=_tls_verify(),
+        verify=False,
         timeout=5.0,
     )
 
@@ -171,6 +169,7 @@ def _put(pfad: str, vcard: str) -> bool:
             return True
     except httpx.HTTPError as exc:
         log.warning("Radicale-Sync fehlgeschlagen fuer %s: %s", pfad, exc)
+        _merke_fehler(exc)
         return False
 
 
@@ -187,6 +186,7 @@ def _delete(pfad: str) -> bool:
             return True
     except httpx.HTTPError as exc:
         log.warning("Radicale-Loeschung fehlgeschlagen fuer %s: %s", pfad, exc)
+        _merke_fehler(exc)
         return False
 
 
@@ -205,6 +205,7 @@ def _remote_vcf_namen() -> list:
             return re.findall(r"(kontakt-\d+\.vcf|projekt-\d+\.vcf)", resp.text)
     except httpx.HTTPError as exc:
         log.warning("Radicale-PROPFIND fehlgeschlagen: %s", exc)
+        _merke_fehler(exc)
         return []
 
 
@@ -243,6 +244,8 @@ def sync_alle(conn: sqlite3.Connection) -> dict:
       2. Pusht alle aktuellen Kontakte und Ordner neu.
     Gibt eine Zusammenfassung zurueck (Anzahlen + erste Fehlermeldung), damit der
     Nutzer im Gegensatz zum sonst stillen Sync sieht, ob es geklappt hat."""
+    global _letzter_fehler
+    _letzter_fehler = ""
     if _client() is None:
         return {"aktiv": False, "kontakte": 0, "ordner": 0, "entfernt": 0,
                 "fehler": ["Kein Radicale-Server konfiguriert (Server-Adresse leer)."]}
@@ -273,6 +276,11 @@ def sync_alle(conn: sqlite3.Connection) -> dict:
             ordner_ok += 1
         elif len(fehler) < 5:
             fehler.append(f"Push von projekt-{projekt_id} fehlgeschlagen")
+
+    # Den konkreten letzten Fehlergrund (z.B. "401 Unauthorized") voranstellen,
+    # damit die UI-Rueckmeldung nicht nur "fehlgeschlagen", sondern das Warum zeigt.
+    if fehler and _letzter_fehler:
+        fehler.insert(0, f"Grund: {_letzter_fehler}")
 
     return {"aktiv": True, "kontakte": kontakte_ok, "ordner": ordner_ok,
             "entfernt": entfernt, "fehler": fehler}

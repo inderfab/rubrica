@@ -87,10 +87,6 @@
                 <input type="text" name="radicale_password" value="{{ radicale_password }}">
             </div>
         </div>
-        <label style="display:flex; align-items:center; gap:0.4rem; font-weight:normal;">
-            <input type="checkbox" name="radicale_verify_ssl" {% if radicale_verify_ssl %}checked{% endif %}>
-            TLS-Zertifikat prüfen (bei selbstsigniertem Zertifikat i.d.R. trotzdem aktiviert lassen)
-        </label>
         <p class="empty" style="padding:0.6rem 0 0.3rem">
             Gleicht alle Kontakte und Ordner erneut mit Radicale ab (nützlich, wenn frühere Änderungen nicht
             angekommen sind) und entfernt dabei verwaiste Einträge, die in Apple Kontakte noch auftauchen,

@@ -43,7 +43,6 @@ def einstellungen_form(request: Request, gespeichert: str = "", sync: str = ""):
         "radicale_addressbook_path": settings.get("radicale.addressbook_path", "") or "",
         "radicale_username": settings.get("radicale.username", "") or "",
         "radicale_password": settings.get("radicale.password", "") or "",
-        "radicale_verify_ssl": bool(settings.get("radicale.verify_ssl", True)),
     })
 
 
@@ -92,7 +91,6 @@ async def einstellungen_speichern(request: Request):
             "addressbook_path": radicale_addressbook_path,
             "username": radicale_username,
             "password": radicale_password,
-            "verify_ssl": form.get("radicale_verify_ssl") is not None,
         },
         "export": {
             "firmenname": export_firmenname,

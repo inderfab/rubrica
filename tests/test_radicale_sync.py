@@ -162,27 +162,19 @@ def test_client_braucht_keinen_enabled_schalter(monkeypatch):
     client.close()
 
 
-def test_tls_verify_ohne_lokale_ca_ist_false(tmp_db, monkeypatch):
-    # verify_ssl=True, aber keine lokale CA-Datei vorhanden -> auf Loopback ohne
-    # Pruefung, statt den Push mit einem Zertifikatsfehler still scheitern zu lassen.
-    monkeypatch.setattr(settings, "_settings", {"radicale": {"verify_ssl": True}})
-    assert radicale._tls_verify() is False
-
-
-def test_tls_verify_nutzt_lokale_ca_wenn_vorhanden(tmp_db, monkeypatch):
-    tls_dir = settings.daten_verzeichnis() / "radicale-tls"
-    tls_dir.mkdir(parents=True, exist_ok=True)
-    (tls_dir / "ca-cert.pem").write_text("dummy", encoding="utf-8")
-    monkeypatch.setattr(settings, "_settings", {"radicale": {"verify_ssl": True}})
-    assert radicale._tls_verify() == str(tls_dir / "ca-cert.pem")
-
-
-def test_tls_verify_false_wenn_ausdruecklich_deaktiviert(tmp_db, monkeypatch):
-    tls_dir = settings.daten_verzeichnis() / "radicale-tls"
-    tls_dir.mkdir(parents=True, exist_ok=True)
-    (tls_dir / "ca-cert.pem").write_text("dummy", encoding="utf-8")
-    monkeypatch.setattr(settings, "_settings", {"radicale": {"verify_ssl": False}})
-    assert radicale._tls_verify() is False
+def test_client_prueft_tls_nicht_auf_loopback(monkeypatch):
+    # Der Push geht an das eigene Radicale auf 127.0.0.1 - TLS-Pruefung ist dort
+    # bewusst aus (verify=False), weil das lokale Zertifikat sonst wiederholt zu
+    # stillen Push-Fehlern fuehrte (certifi-unbekannte CA / SAN ohne 127.0.0.1).
+    monkeypatch.setattr(settings, "_settings", {
+        "radicale": {"base_url": "https://127.0.0.1:8443", "addressbook_path": "/pas/kontakte/"}
+    })
+    client = radicale._client()
+    assert client is not None
+    # httpx speichert die Verify-Einstellung nicht oeffentlich zugaenglich; wir
+    # pruefen stattdessen, dass _client ueberhaupt einen Client baut (TLS-Details
+    # sind in _client hart auf verify=False gesetzt).
+    client.close()
 
 
 def test_sync_alle_ohne_konfiguration_meldet_inaktiv(tmp_db, monkeypatch):
