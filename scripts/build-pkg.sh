@@ -100,6 +100,7 @@ cp config.yaml.example      "$APP/Contents/Resources/"
 cp VERSION                  "$APP/Contents/Resources/"
 cp scripts/radicale_set_password.py "$APP/Contents/Resources/"
 cp menubar/app.py                   "$APP/Contents/Resources/rubrica_menubar.py"
+cp menubar/icon.png                 "$APP/Contents/Resources/"
 cp scripts/generate-cert.sh         "$APP/Contents/Resources/"
 
 # ── Python-Umgebungen ins Bundle kopieren und bereinigen ─────────────────────

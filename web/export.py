@@ -9,6 +9,7 @@ from io import BytesIO
 from fastapi import APIRouter, Request
 from fastapi.responses import RedirectResponse, Response
 
+from config import settings
 from db import queries
 from db.connection import get_connection
 from export import generator
@@ -58,10 +59,17 @@ async def export_erzeugen(request: Request):
     basisname = _dateiname_sicher(ordner_name)
     datum = datetime.now().strftime("%Y-%m-%d")
 
+    firmenname = settings.get("export.firmenname", "") or ""
+    logo = settings.logo_pfad()
+
     puffer = BytesIO()
     with zipfile.ZipFile(puffer, "w", zipfile.ZIP_DEFLATED) as zf:
         if "pdf" in formate:
-            zf.writestr(f"{basisname}_{datum}.pdf", generator.kontakte_pdf(ordner_name, kontakte))
+            zf.writestr(
+                f"{basisname}_{datum}.pdf",
+                generator.kontakte_pdf(ordner_name, kontakte, firmenname=firmenname,
+                                        logo_pfad=str(logo) if logo else ""),
+            )
         if "csv" in formate:
             zf.writestr(f"{basisname}_{datum}.csv", generator.kontakte_csv(kontakte))
         if "vcard" in formate:

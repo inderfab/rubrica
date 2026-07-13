@@ -20,6 +20,7 @@
                 <a href="/export" class="{{ 'aktiv' if pfad.startswith('/export') else '' }}">Export</a>
                 <a href="/einstellungen" class="{{ 'aktiv' if pfad.startswith('/einstellungen') else '' }}">Einstellungen</a>
             </nav>
+            <div class="version-anzeige">Rubrica v{{ app_version }}</div>
         </aside>
         <main class="app-content">
             {% block content %}{% endblock %}
