@@ -339,6 +339,30 @@ def rename_projekt(conn: sqlite3.Connection, projekt_id: int, neuer_name: str) -
         conn.execute("UPDATE projekte SET name = ? WHERE id = ?", (neuer_name, projekt_id))
 
 
+def postfach_zuordnungen(conn: sqlite3.Connection) -> dict:
+    """Postfach -> {projekt_id, name}, fuer alle aktuell zugeordneten Postfaecher."""
+    rows = conn.execute(
+        "SELECT pz.postfach AS postfach, p.id AS projekt_id, p.name AS name "
+        "FROM postfach_zuordnung pz JOIN projekte p ON p.id = pz.projekt_id"
+    ).fetchall()
+    return {r["postfach"]: {"projekt_id": r["projekt_id"], "name": r["name"]} for r in rows}
+
+
+def postfach_zuordnen(conn: sqlite3.Connection, postfach: str, projekt_id: "int | None") -> None:
+    """Ordnet ein Postfach einem Ordner zu (projekt_id=None entfernt die Zuordnung)."""
+    if not postfach:
+        return
+    with conn:
+        if projekt_id is None:
+            conn.execute("DELETE FROM postfach_zuordnung WHERE postfach = ?", (postfach,))
+        else:
+            conn.execute(
+                "INSERT INTO postfach_zuordnung (postfach, projekt_id) VALUES (?, ?) "
+                "ON CONFLICT(postfach) DO UPDATE SET projekt_id = excluded.projekt_id",
+                (postfach, projekt_id),
+            )
+
+
 def list_vorschlaege(conn: sqlite3.Connection, status: str = "offen") -> list[dict]:
     rows = conn.execute(
         "SELECT * FROM vorschlaege WHERE status = ? ORDER BY created_at", (status,)

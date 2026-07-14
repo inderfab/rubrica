@@ -7,7 +7,7 @@ from web.main import app
 
 
 def test_einstellungen_formular_zeigt_aktuellen_wert(tmp_db, monkeypatch):
-    monkeypatch.setattr(settings, "_settings", {"archivio": {"db_path": "/pfad/archivio.db", "min_mails": 3}})
+    monkeypatch.setattr(settings, "_settings", {"archivio": {"signatur_db_path": "/pfad/archivio.db", "min_mails": 3}})
     r = TestClient(app).get("/einstellungen")
     assert r.status_code == 200
     assert "/pfad/archivio.db" in r.text
@@ -56,14 +56,14 @@ def test_einstellungen_speichern_schreibt_config(tmp_db, monkeypatch, tmp_path):
     monkeypatch.setattr(settings, "_settings", {})
 
     r = TestClient(app).post("/einstellungen", data={
-        "archivio_db_path": "/neuer/pfad/archivio.db",
+        "archivio_signatur_db_path": "/neuer/pfad/archivio.db",
         "archivio_min_mails": "5",
         "backup_pfad": "/Volumes/NAS/Rubrica-Backup",
     }, follow_redirects=False)
     assert r.status_code == 303
     assert "gespeichert=1" in r.headers["location"]
 
-    assert settings.get("archivio.db_path") == "/neuer/pfad/archivio.db"
+    assert settings.get("archivio.signatur_db_path") == "/neuer/pfad/archivio.db"
     assert settings.get("archivio.min_mails") == 5
     assert settings.get("backup.pfad") == "/Volumes/NAS/Rubrica-Backup"
 
@@ -115,7 +115,7 @@ def test_einstellungen_speichern_zeigt_bestaetigung(tmp_db, monkeypatch, tmp_pat
     monkeypatch.setattr(settings, "_settings", {})
 
     client = TestClient(app)
-    client.post("/einstellungen", data={"archivio_db_path": "", "archivio_min_mails": "2"})
+    client.post("/einstellungen", data={"archivio_signatur_db_path": "", "archivio_min_mails": "2"})
     r = client.get("/einstellungen?gespeichert=1")
     assert "Gespeichert" in r.text
 
@@ -127,7 +127,7 @@ def test_einstellungen_speichert_firmenname(tmp_db, monkeypatch, tmp_path):
     monkeypatch.setattr(settings, "_settings", {})
 
     TestClient(app).post("/einstellungen", data={
-        "archivio_db_path": "", "archivio_min_mails": "2", "export_firmenname": "Strut Architekten AG",
+        "archivio_signatur_db_path": "", "archivio_min_mails": "2", "export_firmenname": "Strut Architekten AG",
     })
     assert settings.get("export.firmenname") == "Strut Architekten AG"
 
@@ -141,7 +141,7 @@ def test_einstellungen_speichert_export_checkboxen(tmp_db, monkeypatch, tmp_path
     client = TestClient(app)
     # Checkboxen aktiviert (HTML-Formulare senden nur angehakte Checkboxen mit)
     client.post("/einstellungen", data={
-        "archivio_db_path": "", "archivio_min_mails": "2",
+        "archivio_signatur_db_path": "", "archivio_min_mails": "2",
         "privates_telefon_zeigen": "on", "private_email_zeigen": "on", "privatadresse_zeigen": "on",
     })
     assert settings.get("export.privates_telefon_zeigen") is True
@@ -149,7 +149,7 @@ def test_einstellungen_speichert_export_checkboxen(tmp_db, monkeypatch, tmp_path
     assert settings.get("export.privatadresse_zeigen") is True
 
     # Nicht angehakt -> muss auf False zurueckgesetzt werden (nicht einfach fehlen)
-    client.post("/einstellungen", data={"archivio_db_path": "", "archivio_min_mails": "2"})
+    client.post("/einstellungen", data={"archivio_signatur_db_path": "", "archivio_min_mails": "2"})
     assert settings.get("export.privates_telefon_zeigen") is False
 
 
@@ -170,7 +170,7 @@ def test_logo_upload_wird_gespeichert_und_ausgeliefert(tmp_db, monkeypatch, tmp_
 
     client = TestClient(app)
     bild_bytes = b"\x89PNG\r\n\x1a\n" + b"fake-png-inhalt"
-    r = client.post("/einstellungen", data={"archivio_db_path": "", "archivio_min_mails": "2"},
+    r = client.post("/einstellungen", data={"archivio_signatur_db_path": "", "archivio_min_mails": "2"},
                     files={"logo": ("mein-logo.png", bild_bytes, "image/png")}, follow_redirects=False)
     assert r.status_code == 303
 
@@ -189,7 +189,7 @@ def test_logo_upload_lehnt_unerlaubte_dateiendung_ab(tmp_db, monkeypatch, tmp_pa
     monkeypatch.setattr(settings, "_settings", {})
 
     client = TestClient(app)
-    client.post("/einstellungen", data={"archivio_db_path": "", "archivio_min_mails": "2"},
+    client.post("/einstellungen", data={"archivio_signatur_db_path": "", "archivio_min_mails": "2"},
                 files={"logo": ("script.exe", b"nicht ein bild", "application/octet-stream")})
 
     r = client.get("/einstellungen/logo")
@@ -203,7 +203,7 @@ def test_logo_entfernen(tmp_db, monkeypatch, tmp_path):
     monkeypatch.setattr(settings, "_settings", {})
 
     client = TestClient(app)
-    client.post("/einstellungen", data={"archivio_db_path": "", "archivio_min_mails": "2"},
+    client.post("/einstellungen", data={"archivio_signatur_db_path": "", "archivio_min_mails": "2"},
                 files={"logo": ("logo.png", b"echtbild", "image/png")})
     assert client.get("/einstellungen/logo").status_code == 200
 

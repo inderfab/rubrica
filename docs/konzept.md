@@ -614,39 +614,57 @@ Session. Gesammeltes Wissen fuer naechstes Mal:
     Signatur-Quelle zu lesen (falls Archivio Option (a) waehlt, eine zusaetzliche Spalte in der SQL-Abfrage
     beruecksichtigen statt `_letzte_zeilen(dc.content)`).
 
-**ALS NAECHSTES GEPLANT (2026-07-13, mit Nutzer besprochen): Archivio-Signatur-DB + Postfach-Features.**
-Der Nutzer baut Archivio so um, dass der Scanner ALLE Mails zusaetzlich in eine SEPARATE DB schreibt
-(Absender, voller Mailtext inkl. Signatur, Postfach/Ordnername). Rubrica liest diese DB nur lesend und
-erzeugt wie bisher Vorschlaege in die Review-Queue. Umsetzungsplan Rubrica-seitig:
-  - **Erwartetes Archivio-Schema** (mit Nutzer abzustimmen, Rubrica liest read-only):
-    `CREATE TABLE signatur_quelle (id INTEGER PRIMARY KEY, absender TEXT, postfach TEXT, text TEXT, datum TEXT)`
-    - `absender` = Absender-Mailadresse (+ Name falls vorhanden); `postfach` = sprechender, stabiler
-      Postfach-/Ordnername (offene Frage an Nutzer: IMAP-Ordnerpfad wie `INBOX/Projekte/Neubau` oder Konto?);
-      `text` = VOLLER Mailtext inkl. Signatur (nicht abgeschnitten - das war der ganze Sinn der
-      Archivio-Aenderung); `datum` = ISO fuer Aktualitaet / min_mails-Heuristik.
-  - **(a) Konfiguration:** neuer Pfad `archivio.signatur_db_path` in den Einstellungen (ersetzt die alte
-    `archivio.db_path`-Anbindung; alter Code bleibt, bis die neue Quelle laeuft).
-  - **(b) Postfach-Dropdown (Mehrfachauswahl)** auf der Archivio-Import-Seite:
-    `SELECT DISTINCT postfach FROM signatur_quelle` -> anklickbare Mehrfachauswahl (wie Ordner-Checkliste).
-    Kandidatensuche filtert `WHERE postfach IN (...)`. Der bestehende Signatur-Parser
-    (`importer/signatur.py::parse_signatur`) laeuft auf dem vollen `text`. min_mails-Heuristik bleibt.
-  - **(c) Postfach -> Ordner-Zuordnung:** neue Tabelle in Rubricas eigener DB
-    `CREATE TABLE postfach_zuordnung (postfach TEXT PRIMARY KEY, projekt_id INTEGER REFERENCES projekte(id) ON DELETE SET NULL)`.
-    In der Postfach-Liste je Postfach ein "-> Ordner"-Dropdown; zugeordnete Postfaecher taggen jeden daraus
-    gewonnenen Kontakt automatisch mit dem Ordner vor - fliesst als `gruppen_als_ordner`-Vorschlag in die
-    Review-Queue, wird erst beim Bestaetigen gesetzt (nie automatisch ohne Bestaetigung, gemaess Prinzip).
-  - **Vom Nutzer bestaetigt (2026-07-13):** 1 Postfach -> 1 Ordner; die neue Signatur-DB ersetzt die alte
-    Anbindung vollstaendig (Ziel: nur noch EIN Pfad in den Einstellungen einzutragen, nicht zwei parallele
-    Archivio-Config-Felder); Absender in mehreren gewaehlten Postfaechern = 1 Vorschlag mit Vereinigung der
-    zugeordneten Ordner. Die Postfach->Ordner-Zuordnung lohnt sich laut Nutzer bereits ab dem zweiten Import
-    desselben Postfachs (spart das manuelle Neu-Zuordnen bei jedem Scan).
-  - **Kontext zur Postfach-Struktur (Nutzer-Erklaerung 2026-07-13):** Strut nutzt ein gemeinsames Mailkonto
-    `projekte@strut.ch` mit je einem Postfach/Unterordner pro Projekt (z.B. "200 Keller Diamant") - alle
-    Mails darin gehoeren eindeutig zu diesem einen Projekt. Mitarbeiter verschieben projektbezogene Mails aus
-    ihrem persoenlichen Postfach (z.B. `fi@strut.ch`) dorthin, sobald ein Projekt zugewiesen ist. Postfach- und
-    Rubrica-Ordnernamen duerften daher sehr aehnlich sein und liessen sich vermutlich ueber die Projektnummer
-    (z.B. "200") mappen - wird nochmals konkret angeschaut, sobald die Postfachnamen in der neuen Archivio-DB
-    sichtbar sind.
+- **Archivio-Signatur-DB + Postfach-Features umgesetzt (2026-07-14):** Nutzer hat Archivio umgebaut und einen
+  echten Testdatensatz geliefert (10'456 Mails, `/Users/fi/Desktop/rubrica db test/rubrica.db`). Tatsaechliches
+  Schema (etwas reicher als der urspruengliche Plan):
+  ```
+  CREATE TABLE signatur_quelle (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, message_id TEXT UNIQUE NOT NULL,
+      absender TEXT, absender_email TEXT, empfaenger TEXT, cc TEXT,
+      postfach TEXT, projekt TEXT, betreff TEXT, text TEXT, datum TEXT,
+      status TEXT NOT NULL DEFAULT 'pending', status_updated_at TEXT, created_at TEXT NOT NULL
+  )
+  ```
+  `postfach` (Slug, z.B. `200_Keller_Winterthur`) und `projekt` (Anzeigename, z.B. "200 Keller Winterthur")
+  sind 1:1 gekoppelt - `postfach` ist der technische Schluessel fuer die Zuordnung, `projekt` der Anzeigetext.
+  - **Status-Workflow** (Nutzer-Vorgabe: Kandidat geht in Review-Queue; ist er bereits eine Dublette, wird er
+    ignoriert UND in der Archivio-DB als "abgelehnt" markiert): `pending` (Default, unentschieden) ->
+    `uebernommen` (Absender bestaetigt) / `abgelehnt` (Absender abgelehnt ODER als Dublette gegen bestehende
+    Kontakte erkannt). Absender mit noch zu wenig Mails bleiben bewusst `pending` (eine kuenftige Mail kann sie
+    noch ueber die min_mails-Schwelle heben). Jeder Scan filtert `WHERE status = 'pending'`. Neue Funktionen
+    `archivio_bridge.anbindung.markiere_status()` (nach Bestaetigen/Ablehnen in `web/archivio.py`) und die
+    Auto-Ablehnung direkt in `hole_kandidaten()` beim Dublettentreffer.
+  - **Echter Architektur-Fund beim Pruefen der echten Daten:** Archivio liefert jetzt den VOLLEN Thread-Text
+    (aktuelle Nachricht + alle zitierten frueheren Nachrichten samt deren eigenen Signaturen), nicht mehr eine
+    bereits gekappte Einzelnachricht. Die alte "letzte 14 Zeilen"-Heuristik haette dabei oft die Signatur der
+    AELTESTEN zitierten Person erwischt statt der des tatsaechlichen Absenders (am echten Beispiel verifiziert:
+    Absender "Florian Sager", aber die letzten Zeilen des Threads gehoerten zu Marcel Muellhaupt). Fix: neue
+    `_ohne_zitat()` schneidet den zitierten Verlauf ab der ersten Zitat-Zeile ab (Outlook "Von:/Gesendet:/An:/
+    Betreff:", Apple-Mail/Gmail "Am ... schrieb ...:", englische Pendants, "-----Urspruengliche Nachricht-----",
+    klassische ">"-Zitatzeilen), BEVOR die bestehende "letzte Zeilen"-Heuristik + `parse_signatur` angewendet
+    werden.
+  - **Weiterer Fund:** 36% der Testdaten (3814/10456) waren von der eigenen `@strut.ch`-Domain - neue
+    `EIGENE_DOMAIN`-Konstante filtert eigene Mitarbeiter vor der Signatursuche komplett aus (nie ein
+    Import-Kandidat). Ausserdem ein no-reply@plotjet.com (Plot-/Druckauftrags-Benachrichtigung) lieferte einen
+    falschen Kandidaten, weil dessen Vorlagentext zufaellig vollstaendig aussehende Kontaktdaten (des internen
+    Bestellers) enthielt - neue `_AUTOMATISIERTER_ABSENDER`-Regex filtert `no-reply@`/`donotreply@`/
+    `mailer-daemon@`/`postmaster@` generell aus. Mit beiden Filtern: 58 -> 57 Kandidaten am Echtdatensatz,
+    58 Kandidaten in 0.3s (Performance unproblematisch).
+  - **Postfach-Mehrfachauswahl** auf der Archivio-Import-Seite (Checkliste, GET-Filter `?postfaecher=...`) und
+    **Postfach -> Ordner-Zuordnung** (neue Tabelle `postfach_zuordnung(postfach PK, projekt_id -> projekte)`,
+    Dropdown je Postfach direkt auf der Archivio-Import-Seite). Zugeordnete Postfaecher liefern
+    `gruppen_als_ordner` im Kandidaten-Dict (Vereinigung ueber alle Mails/Postfaecher des Absenders) - wird wie
+    gehabt erst beim Bestaetigen in der Review-Queue tatsaechlich gesetzt, nie automatisch.
+  - **Konfiguration vereinfacht** (Nutzer-Vorgabe: nur noch EIN Pfad): `archivio.db_path` ersatzlos entfernt,
+    einziges Feld ist jetzt `archivio.signatur_db_path` (Einstellungen-Seite entsprechend umbenannt).
+  - 26 neue/angepasste Tests (`tests/test_archivio_bridge.py`, `tests/test_archivio_web.py`) - inklusive
+    einem dedizierten Test fuer die Zitat-Abschneidung und fuer den no-reply-Filter.
+  - **Bekannte Einschraenkung, bewusst nicht in dieser Runde behoben:** `importer/signatur.py::parse_signatur`
+    ist fuer saubere Einzelsignaturen gebaut und produziert auf den jetzt viel laengeren, freien Thread-Texten
+    gelegentlich Rauschen (z.B. eine Funktionsbezeichnung statt eines Namens, oder eine Bild-Content-ID aus
+    einem eingebetteten Anhang als "E-Mail" erkannt). Kein Rubrica-Bug im engeren Sinne, sondern eine
+    Heuristik-Grenze; alle Kandidaten landen ohnehin nur als Vorschlag in der Review-Queue und werden dort vor
+    dem Bestaetigen geprueft/korrigiert - bei Bedarf spaeter gezielt nachschaerfen.
 
 - **Funktion & Rolle verwalten (2026-07-13):** Nutzer wollte eine zentrale Uebersicht ueber alle aktuell
   verwendeten Funktion-/Rolle-Werte quer ueber alle Kontakte, um Tippfehler zu korrigieren, einen Wert global

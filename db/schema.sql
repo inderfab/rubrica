@@ -79,6 +79,14 @@ CREATE TABLE IF NOT EXISTS vorschlaege (
     created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 );
 
+-- Postfach -> Ordner-Zuordnung fuer die Archivio-Signatur-Anbindung: markiert gefundene
+-- Kontakte aus Mails eines bestimmten Postfachs automatisch mit dem zugeordneten Ordner vor
+-- (wird trotzdem erst beim Bestaetigen in der Review-Queue tatsaechlich gesetzt).
+CREATE TABLE IF NOT EXISTS postfach_zuordnung (
+    postfach   TEXT    PRIMARY KEY,
+    projekt_id INTEGER REFERENCES projekte(id) ON DELETE SET NULL
+);
+
 -- Migrations-Tabelle
 CREATE TABLE IF NOT EXISTS _migrations (
     id         TEXT PRIMARY KEY,
