@@ -25,6 +25,10 @@ def _logo_entfernen() -> None:
         alte_datei.unlink(missing_ok=True)
 
 
+def _ca_zertifikat_pfad() -> Path:
+    return settings.daten_verzeichnis() / "radicale-tls" / "ca-cert.pem"
+
+
 @router.get("/einstellungen")
 def einstellungen_form(request: Request, gespeichert: str = "", sync: str = ""):
     return templates.TemplateResponse("settings.html", {
@@ -43,6 +47,7 @@ def einstellungen_form(request: Request, gespeichert: str = "", sync: str = ""):
         "radicale_addressbook_path": settings.get("radicale.addressbook_path", "") or "",
         "radicale_username": settings.get("radicale.username", "") or "",
         "radicale_password": settings.get("radicale.password", "") or "",
+        "ca_zertifikat_vorhanden": _ca_zertifikat_pfad().is_file(),
     })
 
 
@@ -58,6 +63,22 @@ def einstellungen_logo():
 def einstellungen_logo_entfernen():
     _logo_entfernen()
     return RedirectResponse(url="/einstellungen?gespeichert=1", status_code=303)
+
+
+@router.get("/einstellungen/ca-zertifikat")
+def einstellungen_ca_zertifikat():
+    """Liefert die lokale CA aus, mit der Radicales TLS-Zertifikat signiert ist -
+    Download-Weg fuer den Rollout auf weiteren Stationen: Datei laden, doppelklicken,
+    im Schluesselbund auf "Immer vertrauen" setzen. Zuverlaessiger als sich auf den
+    "Zertifikat vertrauen"-Dialog beim Account-Einrichten zu verlassen, da der
+    macOS-Hintergrund-Sync-Dienst (contactsd/dataaccessd) eine dort erteilte
+    per-Account-Ausnahme nicht immer uebernimmt - das fuehrt sonst zu genau den
+    stillen Sync-Fehlern, die schon einmal aufgetreten sind."""
+    pfad = _ca_zertifikat_pfad()
+    if not pfad.is_file():
+        return Response(status_code=404)
+    return FileResponse(pfad, media_type="application/x-x509-ca-cert",
+                         filename="rubrica-ca.pem")
 
 
 @router.post("/einstellungen")
