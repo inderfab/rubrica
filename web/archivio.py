@@ -5,6 +5,7 @@ archivio_bridge.anbindung), Uebernahme schreibt in die Review-Queue
 from __future__ import annotations
 
 from typing import List
+from urllib.parse import quote_plus
 
 from fastapi import APIRouter, Form, Query, Request, Response
 from fastapi.responses import RedirectResponse
@@ -13,6 +14,12 @@ from archivio_bridge.anbindung import hole_kandidaten, liste_postfaecher, markie
 from config import settings
 from db import queries
 from db.connection import get_connection
+from web.contacts import (
+    _email_typ_optionen,
+    _funktion_optionen,
+    _parse_kontakt_form,
+    _telefon_typ_optionen,
+)
 from web.shared import templates
 
 router = APIRouter()
@@ -41,6 +48,23 @@ def _postfaecher_oder_leer() -> list:
         return liste_postfaecher(db_pfad)
     except Exception:
         return []
+
+
+def _kandidat_uebernehmen(conn, daten: dict) -> None:
+    daten.pop("anzahl_mails", None)
+    absender_email = daten.pop("absender_email", None)
+    queries.create_vorschlag(conn, daten, quelle="archivio")
+    if absender_email:
+        markiere_status(_signatur_db_pfad(), absender_email, "uebernommen")
+
+
+def _kandidat_ablehnen(conn, daten: dict) -> None:
+    daten.pop("anzahl_mails", None)
+    absender_email = daten.pop("absender_email", None)
+    vorschlag_id = queries.create_vorschlag(conn, daten, quelle="archivio")
+    queries.set_vorschlag_status(conn, vorschlag_id, "abgelehnt")
+    if absender_email:
+        markiere_status(_signatur_db_pfad(), absender_email, "abgelehnt")
 
 
 @router.get("/archivio-import")
@@ -83,11 +107,7 @@ async def archivio_uebernehmen(request: Request):
     try:
         kandidaten, _ = _hole_kandidaten_oder_leer(conn, postfaecher)
         for daten in kandidaten:
-            daten.pop("anzahl_mails", None)
-            absender_email = daten.pop("absender_email", None)
-            queries.create_vorschlag(conn, daten, quelle="archivio")
-            if absender_email:
-                markiere_status(_signatur_db_pfad(), absender_email, "uebernommen")
+            _kandidat_uebernehmen(conn, daten)
     finally:
         conn.close()
     return RedirectResponse(url="/review", status_code=303)
@@ -105,12 +125,26 @@ async def archivio_uebernehmen_einzeln(request: Request, email: str = Form(...))
         kandidaten, _ = _hole_kandidaten_oder_leer(conn, postfaecher)
         for daten in kandidaten:
             if daten["emails"] and daten["emails"][0]["email"].lower() == email.lower():
-                daten.pop("anzahl_mails", None)
-                absender_email = daten.pop("absender_email", None)
-                queries.create_vorschlag(conn, daten, quelle="archivio")
-                if absender_email:
-                    markiere_status(_signatur_db_pfad(), absender_email, "uebernommen")
+                _kandidat_uebernehmen(conn, daten)
                 break
+    finally:
+        conn.close()
+    return RedirectResponse(url="/archivio-import", status_code=303)
+
+
+@router.post("/archivio-import/uebernehmen-ausgewaehlte")
+async def archivio_uebernehmen_ausgewaehlte(request: Request):
+    """Uebernimmt mehrere ausgewaehlte Kandidaten auf einmal (Sammel-Leiste,
+    gleiches Mehrfachauswahl-Prinzip wie bei Kontakten/Review-Queue)."""
+    form = await request.form()
+    postfaecher = form.getlist("postfaecher")
+    emails = {e.lower() for e in form.getlist("emails")}
+    conn = get_connection()
+    try:
+        kandidaten, _ = _hole_kandidaten_oder_leer(conn, postfaecher)
+        for daten in kandidaten:
+            if daten["emails"] and daten["emails"][0]["email"].lower() in emails:
+                _kandidat_uebernehmen(conn, daten)
     finally:
         conn.close()
     return RedirectResponse(url="/archivio-import", status_code=303)
@@ -118,12 +152,17 @@ async def archivio_uebernehmen_einzeln(request: Request, email: str = Form(...))
 
 @router.get("/archivio-import/bearbeiten-flyover")
 def archivio_bearbeiten_flyover(request: Request, email: str, postfaecher: List[str] = Query(default=[])):
-    """Zeigt ein Formular zum Korrigieren eines Kandidaten (z.B. falsch erkannter
-    Name) vor der Uebernahme in die Review-Queue - haeufigster Fall laut Nutzer:
-    die Signatur enthaelt eine Funktionsbezeichnung statt eines Namens."""
+    """Zeigt dasselbe Bearbeiten-Formular wie beim Kontakt-Bearbeiten (alle Felder
+    inkl. Telefon-/E-Mail-Kategorie-Auswahl, "+ Hinzufuegen"-Zeilen, Ordner-
+    Checkliste) - haeufigster Korrekturfall laut Nutzer: die Signatur enthaelt
+    eine Funktionsbezeichnung statt eines Namens."""
     conn = get_connection()
     try:
         kandidaten, _ = _hole_kandidaten_oder_leer(conn, postfaecher)
+        ordner = queries.list_projekte(conn)
+        funktionen = _funktion_optionen(conn)
+        telefon_typen = _telefon_typ_optionen(conn)
+        email_typen = _email_typ_optionen(conn)
     finally:
         conn.close()
     daten = next(
@@ -131,46 +170,36 @@ def archivio_bearbeiten_flyover(request: Request, email: str, postfaecher: List[
     )
     if daten is None:
         return Response(status_code=404)
+
+    gruppen_namen = set(daten.get("gruppen_als_ordner", []))
+    pseudo_kontakt = dict(daten)
+    pseudo_kontakt["projekte"] = [{"id": o["id"]} for o in ordner if o["name"] in gruppen_namen]
+
+    absender_email = daten.get("absender_email", "") or ""
+
     return templates.TemplateResponse("archivio_bearbeiten_modal.html", {
-        "request": request, "daten": daten, "postfaecher": postfaecher,
+        "request": request, "kontakt": pseudo_kontakt, "ordner": ordner, "funktionen": funktionen,
+        "telefon_typen": telefon_typen, "email_typen": email_typen,
+        "action": f"/archivio-import/uebernehmen-bearbeitet?absender_email={quote_plus(absender_email)}",
+        "modal": True, "zurueck_ordner_id": "",
     })
 
 
 @router.post("/archivio-import/uebernehmen-bearbeitet")
-async def archivio_uebernehmen_bearbeitet(request: Request):
+async def archivio_uebernehmen_bearbeitet(request: Request, absender_email: str = ""):
     """Uebernimmt einen Kandidaten mit den vom Nutzer im Bearbeiten-Formular
     korrigierten Werten - im Gegensatz zu den anderen Uebernehmen-Routen wird der
     Kandidat NICHT erneut aus der Archivio-DB geholt (der Nutzer hat die Werte ja
     gerade bewusst geaendert), sondern direkt aus den abgeschickten Formulardaten
-    aufgebaut."""
+    aufgebaut (gleiche Hilfsfunktion _parse_kontakt_form wie beim Kontakt-Bearbeiten)."""
     form = await request.form()
-    absender_email = form.get("absender_email", "").strip()
-
-    telefon_typen = form.getlist("telefon_typ")
-    telefon_nummern = form.getlist("telefon_nummer")
-    email_typen = form.getlist("email_typ")
-    email_adressen = form.getlist("email_email")
-
-    daten = {
-        "vorname": form.get("vorname", "").strip(),
-        "nachname": form.get("nachname", "").strip(),
-        "firma": form.get("firma", "").strip(),
-        "rolle": form.get("rolle", "").strip(),
-        "kategorie": "", "notizen": "",
-        "telefonnummern": [
-            {"typ": t, "nummer": n.strip()} for t, n in zip(telefon_typen, telefon_nummern) if n.strip()
-        ],
-        "emails": [
-            {"typ": t, "email": e.strip()} for t, e in zip(email_typen, email_adressen) if e.strip()
-        ],
-        "adressen": [], "urls": [],
-    }
-    gruppen = form.getlist("gruppen_als_ordner")
-    if gruppen:
-        daten["gruppen_als_ordner"] = gruppen
+    daten = _parse_kontakt_form(form)
+    ordner_ids = {int(o) for o in form.getlist("ordner_ids")}
 
     conn = get_connection()
     try:
+        ordner = queries.list_projekte(conn)
+        daten["gruppen_als_ordner"] = [o["name"] for o in ordner if o["id"] in ordner_ids]
         queries.create_vorschlag(conn, daten, quelle="archivio")
         if absender_email:
             markiere_status(_signatur_db_pfad(), absender_email, "uebernommen")
@@ -191,13 +220,25 @@ async def archivio_ablehnen(request: Request, email: str = Form(...)):
         kandidaten, _ = _hole_kandidaten_oder_leer(conn, postfaecher)
         for daten in kandidaten:
             if daten["emails"] and daten["emails"][0]["email"].lower() == email.lower():
-                daten.pop("anzahl_mails", None)
-                absender_email = daten.pop("absender_email", None)
-                vorschlag_id = queries.create_vorschlag(conn, daten, quelle="archivio")
-                queries.set_vorschlag_status(conn, vorschlag_id, "abgelehnt")
-                if absender_email:
-                    markiere_status(_signatur_db_pfad(), absender_email, "abgelehnt")
+                _kandidat_ablehnen(conn, daten)
                 break
+    finally:
+        conn.close()
+    return RedirectResponse(url="/archivio-import", status_code=303)
+
+
+@router.post("/archivio-import/ablehnen-ausgewaehlte")
+async def archivio_ablehnen_ausgewaehlte(request: Request):
+    """Lehnt mehrere ausgewaehlte Kandidaten auf einmal ab (Sammel-Leiste)."""
+    form = await request.form()
+    postfaecher = form.getlist("postfaecher")
+    emails = {e.lower() for e in form.getlist("emails")}
+    conn = get_connection()
+    try:
+        kandidaten, _ = _hole_kandidaten_oder_leer(conn, postfaecher)
+        for daten in kandidaten:
+            if daten["emails"] and daten["emails"][0]["email"].lower() in emails:
+                _kandidat_ablehnen(conn, daten)
     finally:
         conn.close()
     return RedirectResponse(url="/archivio-import", status_code=303)

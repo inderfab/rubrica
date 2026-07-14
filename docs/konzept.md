@@ -1208,11 +1208,46 @@ Rubrica importiert — deutlich robuster als das proprietäre Schema direkt zu p
     gleichermassen.
   - 6 neue Tests (`tests/test_review_web.py`).
 
+- **Archivio-Import: Mehrfachauswahl + volles Bearbeiten-Formular (2026-07-14):** Nutzer-Feedback nach dem
+  vorigen Rollout: (1) Archivio-Import erlaubte anders als Kontakte/Review-Queue keine Mehrfachauswahl
+  mehrerer Kandidaten; (2) das Bearbeiten-Modal zeigte Telefon/E-Mail nur als reine Textfelder ohne
+  Kategorie-Auswahl (Direkt/Privat/Allgemein) und ohne "+ Hinzufuegen"/"Entfernen" - sollte "exakt dasselbe"
+  wie bei Kontakten sein.
+  - **Bearbeiten-Modal nutzt jetzt dasselbe gemeinsame Formular** wie Kontakt- und Review-Queue-Bearbeiten
+    (`_kontakt_bearbeiten_form.html`, dritte Wiederverwendung derselben Datei) - inkl. Typ-Combobox,
+    dynamischer Telefon-/E-Mail-/Adress-/URL-Zeilen und Ordner-Checkliste. `web/archivio.py` baut dafuer
+    ebenfalls ein Pseudo-Kontakt-Dict (`projekte` aus `gruppen_als_ordner`-Namen abgeleitet, gleiches Muster
+    wie bei der Review-Queue). Die Absender-Mailadresse (fuer die spaetere Status-Markierung in Archivios DB)
+    wird als Query-Parameter in die Formular-`action`-URL codiert (`?absender_email=...`), da das gemeinsame
+    Formular kein generisches "zusaetzliches Hidden-Feld"-Konzept hat. `POST /archivio-import/uebernehmen-
+    bearbeitet` nutzt jetzt dieselbe `_parse_kontakt_form()`-Hilfsfunktion wie Kontakte/Review-Queue.
+  - **Mehrfachauswahl** (Checkbox pro Zeile + Sammel-Leiste, gleiches Muster wie bei Kontakten/Review-Queue):
+    neue Routen `POST /archivio-import/uebernehmen-ausgewaehlte` und `.../ablehnen-ausgewaehlte` (Kandidaten
+    per E-Mail-Menge identifiziert, da Archivio-Kandidaten anders als Kontakte/Vorschlaege keine eigene ID
+    haben, sondern bei jedem Request neu aus der Signatur-DB berechnet werden). Gemeinsame Hilfsfunktionen
+    `_kandidat_uebernehmen`/`_kandidat_ablehnen` fassen die vorher an vier Stellen duplizierte
+    Uebernehmen-/Ablehnen-Logik (create_vorschlag + Status-Markierung) zusammen.
+  - 6 neue Tests (`tests/test_archivio_web.py`).
+
 Bekannte Einschränkung: Entwicklungsumgebung läuft unter Python 3.9 (Systemversion) statt der ursprünglich in Abschnitt 6 vermuteten 3.12 — FastAPI-Routenparameter deshalb mit `typing.Optional[int]` statt `int | None` (siehe `CLAUDE.md`). Dies betrifft nur die lokale Entwicklungsumgebung; das produktive `.pkg` bringt sein eigenes Python 3.13 mit und ist davon unabhängig.
 
+**Offener Punkt (Nutzer-Meldung 2026-07-14, "fuer spaeter", noch nicht behoben):** Nutzer aenderte
+`radicale.username` in den Einstellungen von "pas" auf "contact" (Passwort wurde dabei korrekt in die
+htpasswd-Datei geschrieben, siehe fruehere Fixes), liess aber `radicale.addressbook_path` unveraendert
+(weiterhin `/pas/kontakte/`). Danach synchronisierte nichts mehr; nach Ruecksetzen auf "pas" ging es
+wieder. Vermutete Ursache: unter Radicales `[rights] type = owner_only` darf ein Benutzer NUR auf den mit
+seinem eigenen Namen beginnenden Pfad zugreifen (`/{username}/...`) - `username` und `addressbook_path`
+muessen also IMMER zusammenpassen, das Einstellungen-Formular erzwingt das aber nicht, da beide Felder
+unabhaengige Freitextfelder sind. Ein Aendern von nur `username` (ohne `addressbook_path` anzupassen)
+fuehrt zu einem stillen Auth-/Rechte-Mismatch. Moegliche Loesung fuer spaeter: `addressbook_path`
+automatisch aus `username` ableiten (z.B. immer `/{username}/kontakte/`) statt als getrenntes Freitextfeld,
+oder zumindest ein Warnhinweis im Formular. Noch nicht umgesetzt (Nutzer hat es selbst durch Zuruecksetzen
+auf "pas" geloest und als nicht dringend eingestuft).
+
 Nächste sinnvolle Schritte: neues `.pkg` (alle bisherigen Fixes inkl. Archivio-Signatur-DB-Anbindung,
-Namenserkennung, Bearbeiten-Button, vollstaendiges Review-Queue-Bearbeiten) auf dem iMac installieren; unter
-„Einstellungen" den Pfad zur Archivio-Signatur-Datenbank (`archivio.signatur_db_path`) eintragen und
-Postfächer den passenden Ordnern zuordnen. Offen: `importer/signatur.py::parse_signatur` bleibt eine
-Heuristik mit gelegentlichem Rauschen auf sehr langen/unstrukturierten Thread-Texten (siehe Eintrag oben) -
-bei Bedarf gezielt nachschärfen, sobald sich am echten Datensatz weitere Muster zeigen.
+Namenserkennung, Bearbeiten-Button, vollstaendiges Review-Queue- und Archivio-Import-Bearbeiten,
+Mehrfachauswahl im Archivio-Import) auf dem iMac installieren; unter „Einstellungen" den Pfad zur
+Archivio-Signatur-Datenbank (`archivio.signatur_db_path`) eintragen und Postfächer den passenden Ordnern
+zuordnen. Offen: `importer/signatur.py::parse_signatur` bleibt eine Heuristik mit gelegentlichem Rauschen
+auf sehr langen/unstrukturierten Thread-Texten (siehe Eintrag oben) - bei Bedarf gezielt nachschärfen,
+sobald sich am echten Datensatz weitere Muster zeigen.
