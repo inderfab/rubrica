@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Form, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 
 from db import queries
 from db.connection import get_connection
@@ -36,6 +36,26 @@ def ordner_neu(name: str = Form(...)):
         finally:
             conn.close()
     return RedirectResponse(url="/ordner", status_code=303)
+
+
+@router.post("/ordner/neu-ajax")
+async def ordner_neu_ajax(request: Request):
+    """Wie ordner_neu, aber gibt {id, name} als JSON zurueck statt einen Redirect -
+    fuer das "+ Neuer Ordner"-Miniformular an allen Stellen, wo ein Ordner
+    ausgewaehlt werden kann (Kontakt-/Vorschlag-Bearbeiten, Postfach-Zuordnung,
+    Sammel-Leiste), ohne dass ein Seitenwechsel den Rest des Formulars verwirft."""
+    form = await request.form()
+    name = (form.get("name") or "").strip()
+    if not name:
+        return JSONResponse({"fehler": "Name fehlt"}, status_code=400)
+    conn = get_connection()
+    try:
+        ordner_id = queries.get_or_create_projekt(conn, name)
+        radicale.push_projekt(conn, ordner_id)
+        ordner = next(o for o in queries.list_projekte(conn) if o["id"] == ordner_id)
+    finally:
+        conn.close()
+    return JSONResponse({"id": ordner["id"], "name": ordner["name"]})
 
 
 @router.post("/ordner/{ordner_id}/bearbeiten")

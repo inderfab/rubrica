@@ -236,3 +236,84 @@ def test_archivio_import_seite_zeigt_sammel_leiste_mit_checkboxen(tmp_db, archiv
     assert "archivio-sammel-leiste" in r.text
     assert "/archivio-import/uebernehmen-ausgewaehlte" in r.text
     assert "/archivio-import/ablehnen-ausgewaehlte" in r.text
+    assert "rubricaArchivioSammelBearbeiten" in r.text
+
+
+def _fuege_kandidat_hinzu(pfad, absender_email, sig, postfach="200_projekt", projekt="200 Projekt"):
+    conn = sqlite3.connect(pfad)
+    for i, datum in enumerate(["2026-02-01", "2026-02-05"], start=1):
+        conn.execute(
+            "INSERT INTO signatur_quelle (message_id, absender_email, postfach, projekt, text, datum) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (f"{absender_email}-{i}", absender_email, postfach, projekt, sig, datum),
+        )
+    conn.commit()
+    conn.close()
+
+
+def test_bulk_bearbeiten_flyover_markiert_unterschiedliche_werte_als_gemischt(tmp_db, archivio_db, monkeypatch):
+    monkeypatch.setattr(settings, "_settings", {"archivio": {"signatur_db_path": archivio_db, "min_mails": 2}})
+    _fuege_kandidat_hinzu(archivio_db, "peter@muster.ch",
+                          "Peter Muster\nMuster AG\nT 044 987 65 43\npeter@muster.ch")
+
+    r = TestClient(app).get("/archivio-import/bulk-bearbeiten-flyover",
+                            params={"emails": ["anna@beispiel.ch", "peter@muster.ch"]})
+    assert r.status_code == 200
+    assert "Unterschiedliche Werte" in r.text
+    assert "2 Vorschläge bearbeiten" in r.text
+
+
+def test_bulk_bearbeiten_speichert_gemeinsamen_wert_und_uebernimmt_beide(tmp_db, archivio_db, monkeypatch):
+    monkeypatch.setattr(settings, "_settings", {"archivio": {"signatur_db_path": archivio_db, "min_mails": 2}})
+    _fuege_kandidat_hinzu(archivio_db, "peter@muster.ch",
+                          "Peter Muster\nMuster AG\nT 044 987 65 43\npeter@muster.ch")
+
+    r = TestClient(app).post("/archivio-import/bulk-bearbeiten", data={
+        "emails": ["anna@beispiel.ch", "peter@muster.ch"],
+        "vorname": "", "vorname__gemischt": "1",
+        "nachname": "", "nachname__gemischt": "0",
+        "firma": "", "firma__gemischt": "1",
+        "rolle": "Mitarbeiter", "rolle__gemischt": "0",
+        "kategorie": "", "kategorie__gemischt": "0",
+        "notizen": "", "notizen__gemischt": "0",
+    }, follow_redirects=False)
+    assert r.status_code == 303
+
+    vorschlaege = queries.list_vorschlaege(tmp_db, status="offen")
+    assert len(vorschlaege) == 2
+    vornamen = {v["rohdaten"]["vorname"] for v in vorschlaege}
+    assert vornamen == {"Anna", "Peter"}
+    rollen = {v["rohdaten"]["rolle"] for v in vorschlaege}
+    assert rollen == {"Mitarbeiter"}
+
+    conn = sqlite3.connect(archivio_db)
+    status = {r2[0] for r2 in conn.execute("SELECT status FROM signatur_quelle")}
+    conn.close()
+    assert status == {"uebernommen"}
+
+
+def test_bulk_bearbeiten_uebernimmt_nur_ausgewaehlte(tmp_db, archivio_db, monkeypatch):
+    monkeypatch.setattr(settings, "_settings", {"archivio": {"signatur_db_path": archivio_db, "min_mails": 2}})
+    _fuege_kandidat_hinzu(archivio_db, "peter@muster.ch",
+                          "Peter Muster\nMuster AG\nT 044 987 65 43\npeter@muster.ch")
+
+    r = TestClient(app).post("/archivio-import/bulk-bearbeiten", data={
+        "emails": ["anna@beispiel.ch"],
+        "vorname": "", "vorname__gemischt": "0",
+        "nachname": "", "nachname__gemischt": "0",
+        "firma": "", "firma__gemischt": "0",
+        "rolle": "", "rolle__gemischt": "0",
+        "kategorie": "", "kategorie__gemischt": "0",
+        "notizen": "", "notizen__gemischt": "0",
+    }, follow_redirects=False)
+    assert r.status_code == 303
+
+    vorschlaege = queries.list_vorschlaege(tmp_db, status="offen")
+    assert len(vorschlaege) == 1
+    assert vorschlaege[0]["rohdaten"]["emails"][0]["email"] == "anna@beispiel.ch"
+
+    conn = sqlite3.connect(archivio_db)
+    status = {r2[0] for r2 in conn.execute(
+        "SELECT status FROM signatur_quelle WHERE absender_email = 'peter@muster.ch'")}
+    conn.close()
+    assert status == {"pending"}

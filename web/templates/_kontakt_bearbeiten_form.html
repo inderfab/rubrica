@@ -112,7 +112,7 @@
 
     <fieldset>
         <legend>Ordner</legend>
-        <div class="ordner-checkliste">
+        <div class="ordner-checkliste" id="ordner-checkliste">
             {% for o in ordner %}
             <label>
                 <input type="checkbox" name="ordner_ids" value="{{ o.id }}"
@@ -122,6 +122,10 @@
             {% endfor %}
         </div>
         {% if not ordner %}<p class="empty">Noch keine Ordner angelegt.</p>{% endif %}
+        <div style="display:flex; gap:0.5rem; margin-top:0.5rem;">
+            <input type="text" id="neuer-ordner-name" placeholder="Neuer Ordner…" style="flex:1">
+            <button type="button" class="secondary" onclick="rubricaOrdnerCheckelisteAnlegen('ordner-checkliste', 'neuer-ordner-name')">+ Ordner anlegen</button>
+        </div>
     </fieldset>
 
     <div class="actions">

@@ -77,13 +77,20 @@
         {% if ordner %}
         <div class="field">
             <label>Zusätzlich einem bestehenden Ordner zuweisen (optional)</label>
-            <div class="ordner-checkliste">
+            <div class="ordner-checkliste" id="ordner-checkliste-{{ v.id }}">
                 {% for o in ordner %}
                 <label>
                     <input type="checkbox" name="ordner_ids" value="{{ o.id }}">
                     {{ o.name }}
                 </label>
                 {% endfor %}
+            </div>
+            <div style="display:flex; gap:0.5rem; margin-top:0.5rem;">
+                <input type="text" id="neuer-ordner-name-{{ v.id }}" placeholder="Neuer Ordner…" style="flex:1">
+                <button type="button" class="secondary"
+                        onclick="rubricaOrdnerCheckelisteAnlegen('ordner-checkliste-{{ v.id }}', 'neuer-ordner-name-{{ v.id }}')">
+                    + Ordner anlegen
+                </button>
             </div>
         </div>
         {% endif %}

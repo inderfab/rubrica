@@ -1231,22 +1231,49 @@ Rubrica importiert — deutlich robuster als das proprietäre Schema direkt zu p
 
 Bekannte Einschränkung: Entwicklungsumgebung läuft unter Python 3.9 (Systemversion) statt der ursprünglich in Abschnitt 6 vermuteten 3.12 — FastAPI-Routenparameter deshalb mit `typing.Optional[int]` statt `int | None` (siehe `CLAUDE.md`). Dies betrifft nur die lokale Entwicklungsumgebung; das produktive `.pkg` bringt sein eigenes Python 3.13 mit und ist davon unabhängig.
 
-**Offener Punkt (Nutzer-Meldung 2026-07-14, "fuer spaeter", noch nicht behoben):** Nutzer aenderte
-`radicale.username` in den Einstellungen von "pas" auf "contact" (Passwort wurde dabei korrekt in die
-htpasswd-Datei geschrieben, siehe fruehere Fixes), liess aber `radicale.addressbook_path` unveraendert
-(weiterhin `/pas/kontakte/`). Danach synchronisierte nichts mehr; nach Ruecksetzen auf "pas" ging es
-wieder. Vermutete Ursache: unter Radicales `[rights] type = owner_only` darf ein Benutzer NUR auf den mit
-seinem eigenen Namen beginnenden Pfad zugreifen (`/{username}/...`) - `username` und `addressbook_path`
-muessen also IMMER zusammenpassen, das Einstellungen-Formular erzwingt das aber nicht, da beide Felder
-unabhaengige Freitextfelder sind. Ein Aendern von nur `username` (ohne `addressbook_path` anzupassen)
-fuehrt zu einem stillen Auth-/Rechte-Mismatch. Moegliche Loesung fuer spaeter: `addressbook_path`
-automatisch aus `username` ableiten (z.B. immer `/{username}/kontakte/`) statt als getrenntes Freitextfeld,
-oder zumindest ein Warnhinweis im Formular. Noch nicht umgesetzt (Nutzer hat es selbst durch Zuruecksetzen
-auf "pas" geloest und als nicht dringend eingestuft).
+**Geloest (2026-07-14):** Radicale-Benutzername/Adressbuch-Pfad-Mismatch (siehe vorheriger Eintrag) —
+statt Validierung einzubauen, hat der Nutzer sich fuer die einfachere Loesung entschieden: beide Felder
+sind in den Einstellungen nur noch **anzeigend** (`radicale_username`/`radicale_addressbook_path` werden
+beim Speichern nicht mehr aus dem Formular gelesen, sondern unveraendert aus der bestehenden Config
+uebernommen — `web/settings.py::einstellungen_speichern`). Nur `radicale.password` (schreibt weiterhin die
+htpasswd-Datei) und `radicale.base_url` bleiben editierbar. `settings.html` zeigt "Benutzer: pas" als reinen
+Text unter einem Hinweis, dass Benutzername/Pfad hier nicht aenderbar sind.
+
+- **"+ Neuer Ordner" ueberall wo ein Ordner ausgewaehlt werden kann (2026-07-14):** Nutzer-Wunsch: an jeder
+  Stelle mit Ordner-Auswahl soll man auch direkt einen neuen anlegen koennen, ohne den aktuellen
+  Bearbeiten-Kontext zu verlassen (bisher nur ueber die eigene "/ordner"-Seite moeglich, was
+  Inline-Bearbeitungen unterbrochen haette). Neue Route `POST /ordner/neu-ajax` (`web/folders.py`, JSON
+  in/out, nutzt bestehendes `queries.get_or_create_projekt` + `radicale.push_projekt`) plus drei
+  wiederverwendbare JS-Helfer in `app.js`: `rubricaOrdnerAnlegen(name)` (rohes Fetch-Promise),
+  `rubricaOrdnerCheckelisteAnlegen(checklisteId, inputId)` (fuer die Checklisten in
+  `_kontakt_bearbeiten_form.html`/`_kontakt_felder.html`/Review-Queue — haengt den neuen Ordner direkt
+  angehakt an), `rubricaOrdnerSelectAnlegen(selectId)` (fuer das `<select>`-Dropdown der Postfach→Ordner-
+  Zuordnung im Archivio-Import — `window.prompt()`-basiert). Vierte Stelle (`/kontakte`'s Sammel-Leiste
+  "Ordner zuweisen", ein JS-generiertes `<ul>` statt eines Server-Templates) bekam eine eigene Loesung: ein
+  "+ Neuer Ordner…" Eintrag am Ende der Liste (`rubricaOrdnerZuweisenOeffnen` in `contacts_list.html`), der
+  bei Klick den Ordner anlegt und ihn sofort den ausgewaehlten Kontakten zuweist — gleiches Verhalten wie
+  jeder andere Listeneintrag.
+- **Archivio-Import: "Ausgewählte bearbeiten" (Bulk-Edit) (2026-07-14):** Letzte fehlende Parität
+  gegenueber Kontakte/Review-Queue. Da Archivio-Kandidaten anders als Vorschlaege NICHT persistiert sind
+  (bei jeder Anfrage frisch aus der Signatur-DB berechnet), gibt es keinen Zwischenzustand zum
+  "Speichern ohne Uebernehmen": `GET /archivio-import/bulk-bearbeiten-flyover` (gleiches
+  gemischt/Scalar-Feld-Prinzip wie `review_bulk_bearbeiten_flyover`) und `POST /archivio-import/bulk-bearbeiten`
+  wenden die editierten Werte direkt auf die passenden, neu geholten Kandidaten an und uebernehmen sie
+  sofort in die Review-Queue (`_kandidat_uebernehmen`, markiert die Mails in der Archivio-DB als
+  "uebernommen") — neues Template `archivio_bulk_bearbeiten_modal.html`. 3 neue Tests.
+- **Import-Seite: Link zu manueller Kontakt-Neuanlage (2026-07-14):** Nutzer dachte, die Funktion "Neuer
+  Kontakt von 0 an, mit Signatur-Einfuegen" sei verschwunden — sie existierte weiterhin unveraendert unter
+  `/kontakte/neu`, war aber von der Import-Seite aus nicht mehr auffindbar (keine echte Regression, nur ein
+  Navigations-/Auffindbarkeits-Luecke). `import_form.html` bekam einen erklaerenden Hinweislink dorthin.
+- **Nav-Reihenfolge + Rubrica/Version zusammen oben (2026-07-14):** Navigation in `base.html` auf
+  Kontakte/Ordner/Import/Archivio-Import/Review-Queue/Export/Einstellungen sortiert (Nutzer-Vorgabe). Die
+  bisher separate Versionsanzeige unten in der Sidebar entfernt, Version steht jetzt direkt neben "Rubrica"
+  oben (`<span class="brand-version">`).
 
 Nächste sinnvolle Schritte: neues `.pkg` (alle bisherigen Fixes inkl. Archivio-Signatur-DB-Anbindung,
 Namenserkennung, Bearbeiten-Button, vollstaendiges Review-Queue- und Archivio-Import-Bearbeiten,
-Mehrfachauswahl im Archivio-Import) auf dem iMac installieren; unter „Einstellungen" den Pfad zur
+Mehrfachauswahl + Bulk-Edit im Archivio-Import, "+ Neuer Ordner" ueberall, Radicale-Einstellungen nur noch
+anzeigend fuer Benutzer/Pfad) auf dem iMac installieren; unter „Einstellungen" den Pfad zur
 Archivio-Signatur-Datenbank (`archivio.signatur_db_path`) eintragen und Postfächer den passenden Ordnern
 zuordnen. Offen: `importer/signatur.py::parse_signatur` bleibt eine Heuristik mit gelegentlichem Rauschen
 auf sehr langen/unstrukturierten Thread-Texten (siehe Eintrag oben) - bei Bedarf gezielt nachschärfen,

@@ -42,6 +42,7 @@ body {
     color: var(--text);
     padding: 0.4rem 0.6rem 1rem;
 }
+.global-sidebar .brand-version { font-weight: 400; font-size: 0.75rem; color: var(--text-hell); }
 .global-sidebar nav { display: flex; flex-direction: column; gap: 0.1rem; }
 .global-sidebar nav a {
     display: block;
@@ -53,7 +54,6 @@ body {
 }
 .global-sidebar nav a:hover { background: var(--flaeche-hover); }
 .global-sidebar nav a.aktiv { background: var(--rand); font-weight: 600; }
-.version-anzeige { margin-top: auto; padding: 0.6rem 0.6rem 0.2rem; font-size: 0.75rem; color: var(--text-hell); }
 
 .app-content { flex: 1; min-width: 0; padding: 2rem 2.5rem; }
 
