@@ -312,8 +312,8 @@ Radicale-Anbindung, launchd-Plists und `.pkg`-Build (Phase 2 ff.) werden zu gege
 | 0 – Import + Dedup | Grundfunktion steht (vCard-Upload, Matching, Review-Queue) |
 | 1 – Zentrale DB + Web-UI | Grundfunktion steht (Kontakte/Ordner-CRUD, Live-Suche) |
 | 2 – Radicale/CardDAV | Sync-Engine steht (Push bei Kontakt-/Ordner-Änderung, echte htpasswd-Auth), end-to-end gegen echten Radicale-Server verifiziert |
-| 3 – Export (Excel/PDF) | Noch nicht begonnen |
-| 4 – Archivio-Integration | Zurückgestellt |
+| 3 – Export (Excel/PDF) | Steht: PDF-Adressliste (BKP-sortiert, Firmengruppierung, Kopf/Fusszeile, konfigurierbarer Firmenname/Logo) + CSV mit Spalten je Kategorie (Direkt/Privat/Allgemein) |
+| 4 – Archivio-Integration | Vorstufe steht (Archivio-Import-Seite: liest Signatur-Kandidaten, uebernimmt in Review-Queue). Volle Matching-Engine auf Freitext weiterhin zurückgestellt |
 
 Umgesetzt und end-to-end im Browser verifiziert (2026-07-10):
 - Kontakte bearbeiten/löschen inkl. mehrerer Telefonnummern/E-Mails/Adressen/URLs, Notizen, Zuordnung zu Ordnern. Bewusst keine manuelle Neuanlage in der App (siehe 5.1) — Anlage erfolgt in Kontakte.app + Import
