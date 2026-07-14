@@ -146,81 +146,97 @@ _MKCOL_BODY = """<?xml version="1.0" encoding="utf-8"?>
 </create>"""
 
 
-def _put(pfad: str, vcard: str) -> bool:
+def _put(pfad: str, vcard: str, client: "httpx.Client | None" = None) -> bool:
     """Gibt True bei Erfolg zurueck, False bei uebersprungenem/fehlgeschlagenem Push.
-    Fehler werden geloggt, aber nie geworfen (Sync darf die Web-Route nie unterbrechen)."""
-    client = _client()
+    Fehler werden geloggt, aber nie geworfen (Sync darf die Web-Route nie unterbrechen).
+    `client`: optionaler, wiederverwendeter Client (siehe sync_alle) - dann bleibt die
+    Verbindung offen, statt pro Aufruf neu (mit TLS-Handshake) aufgebaut zu werden."""
+    eigener = client is None
+    if eigener:
+        client = _client()
     if client is None:
         log.debug("Radicale-Sync deaktiviert, ueberspringe PUT %s", pfad)
         return False
     try:
-        with client:
+        resp = client.put(pfad, content=vcard.encode("utf-8"),
+                           headers={"Content-Type": "text/vcard; charset=utf-8"})
+        if resp.status_code == 409:
+            # Adressbuch-Collection existiert noch nicht - einmalig anlegen und erneut versuchen.
+            mkcol = client.request("MKCOL", "", content=_MKCOL_BODY,
+                                    headers={"Content-Type": "application/xml"})
+            if mkcol.status_code not in (201, 405):
+                mkcol.raise_for_status()
             resp = client.put(pfad, content=vcard.encode("utf-8"),
                                headers={"Content-Type": "text/vcard; charset=utf-8"})
-            if resp.status_code == 409:
-                # Adressbuch-Collection existiert noch nicht - einmalig anlegen und erneut versuchen.
-                mkcol = client.request("MKCOL", "", content=_MKCOL_BODY,
-                                        headers={"Content-Type": "application/xml"})
-                if mkcol.status_code not in (201, 405):
-                    mkcol.raise_for_status()
-                resp = client.put(pfad, content=vcard.encode("utf-8"),
-                                   headers={"Content-Type": "text/vcard; charset=utf-8"})
-            resp.raise_for_status()
-            return True
+        resp.raise_for_status()
+        return True
     except httpx.HTTPError as exc:
         log.warning("Radicale-Sync fehlgeschlagen fuer %s: %s", pfad, exc)
         _merke_fehler(exc)
         return False
+    finally:
+        if eigener:
+            client.close()
 
 
-def _delete(pfad: str) -> bool:
-    client = _client()
+def _delete(pfad: str, client: "httpx.Client | None" = None) -> bool:
+    eigener = client is None
+    if eigener:
+        client = _client()
     if client is None:
         log.debug("Radicale-Sync deaktiviert, ueberspringe DELETE %s", pfad)
         return False
     try:
-        with client:
-            resp = client.delete(pfad)
-            if resp.status_code not in (204, 404):
-                resp.raise_for_status()
-            return True
+        resp = client.delete(pfad)
+        if resp.status_code not in (204, 404):
+            resp.raise_for_status()
+        return True
     except httpx.HTTPError as exc:
         log.warning("Radicale-Loeschung fehlgeschlagen fuer %s: %s", pfad, exc)
         _merke_fehler(exc)
         return False
+    finally:
+        if eigener:
+            client.close()
 
 
-def _remote_vcf_namen() -> list:
+def _remote_vcf_namen(client: "httpx.Client | None" = None) -> list:
     """Listet die vcf-Dateinamen im Radicale-Adressbuch per PROPFIND (Tiefe 1).
     Bewusst tolerantes Regex statt XML-Parser: es interessieren nur die von Rubrica
     selbst vergebenen, streng gemusterten Namen (kontakt-N.vcf / projekt-N.vcf)."""
-    client = _client()
+    eigener = client is None
+    if eigener:
+        client = _client()
     if client is None:
         return []
     try:
-        with client:
-            resp = client.request("PROPFIND", "", headers={"Depth": "1"})
-            if resp.status_code >= 400:
-                return []
-            return re.findall(r"(kontakt-\d+\.vcf|projekt-\d+\.vcf)", resp.text)
+        resp = client.request("PROPFIND", "", headers={"Depth": "1"})
+        if resp.status_code >= 400:
+            return []
+        return re.findall(r"(kontakt-\d+\.vcf|projekt-\d+\.vcf)", resp.text)
     except httpx.HTTPError as exc:
         log.warning("Radicale-PROPFIND fehlgeschlagen: %s", exc)
         _merke_fehler(exc)
         return []
+    finally:
+        if eigener:
+            client.close()
 
 
-def push_kontakt(conn: sqlite3.Connection, kontakt_id: int) -> bool:
+def push_kontakt(conn: sqlite3.Connection, kontakt_id: int,
+                 client: "httpx.Client | None" = None) -> bool:
     kontakt = queries.get_kontakt(conn, kontakt_id)
     if kontakt is None:
         return False
-    return _put(f"kontakt-{kontakt_id}.vcf", kontakt_zu_vcard(kontakt))
+    return _put(f"kontakt-{kontakt_id}.vcf", kontakt_zu_vcard(kontakt), client=client)
 
 
 def delete_kontakt(kontakt_id: int) -> bool:
     return _delete(f"kontakt-{kontakt_id}.vcf")
 
 
-def push_projekt(conn: sqlite3.Connection, projekt_id: int) -> bool:
+def push_projekt(conn: sqlite3.Connection, projekt_id: int,
+                 client: "httpx.Client | None" = None) -> bool:
     row = conn.execute("SELECT * FROM projekte WHERE id = ?", (projekt_id,)).fetchone()
     if row is None:
         return False
@@ -230,7 +246,7 @@ def push_projekt(conn: sqlite3.Connection, projekt_id: int) -> bool:
             "SELECT kontakt_id FROM kontakte_projekte WHERE projekt_id = ? ORDER BY kontakt_id", (projekt_id,)
         )
     ]
-    return _put(f"projekt-{projekt_id}.vcf", projekt_zu_gruppen_vcard(projekt, mitglieder_ids))
+    return _put(f"projekt-{projekt_id}.vcf", projekt_zu_gruppen_vcard(projekt, mitglieder_ids), client=client)
 
 
 def delete_projekt(projekt_id: int) -> bool:
@@ -246,36 +262,43 @@ def sync_alle(conn: sqlite3.Connection) -> dict:
     Nutzer im Gegensatz zum sonst stillen Sync sieht, ob es geklappt hat."""
     global _letzter_fehler
     _letzter_fehler = ""
-    if _client() is None:
+    client = _client()
+    if client is None:
         return {"aktiv": False, "kontakte": 0, "ordner": 0, "entfernt": 0,
                 "fehler": ["Kein Radicale-Server konfiguriert (Server-Adresse leer)."]}
 
-    kontakt_ids = [row["id"] for row in conn.execute("SELECT id FROM kontakte")]
-    projekt_ids = [row["id"] for row in conn.execute("SELECT id FROM projekte")]
-    gueltig = {f"kontakt-{i}.vcf" for i in kontakt_ids} | {f"projekt-{i}.vcf" for i in projekt_ids}
+    # Eine Verbindung fuer den gesamten Lauf wiederverwenden: bei ~1500 Datensaetzen
+    # spart das ~1500 TLS-Handshakes/Verbindungsaufbauten (der langsamste Teil des
+    # Voll-Syncs). Die serverseitige bcrypt-Passwortpruefung pro Anfrage bleibt.
+    try:
+        kontakt_ids = [row["id"] for row in conn.execute("SELECT id FROM kontakte")]
+        projekt_ids = [row["id"] for row in conn.execute("SELECT id FROM projekte")]
+        gueltig = {f"kontakt-{i}.vcf" for i in kontakt_ids} | {f"projekt-{i}.vcf" for i in projekt_ids}
 
-    fehler = []
-    entfernt = 0
-    for name in set(_remote_vcf_namen()):
-        if name not in gueltig:
-            if _delete(name):
-                entfernt += 1
-            else:
-                fehler.append(f"Konnte verwaiste {name} nicht entfernen")
+        fehler = []
+        entfernt = 0
+        for name in set(_remote_vcf_namen(client=client)):
+            if name not in gueltig:
+                if _delete(name, client=client):
+                    entfernt += 1
+                else:
+                    fehler.append(f"Konnte verwaiste {name} nicht entfernen")
 
-    kontakte_ok = 0
-    for kontakt_id in kontakt_ids:
-        if push_kontakt(conn, kontakt_id):
-            kontakte_ok += 1
-        elif len(fehler) < 5:
-            fehler.append(f"Push von kontakt-{kontakt_id} fehlgeschlagen")
+        kontakte_ok = 0
+        for kontakt_id in kontakt_ids:
+            if push_kontakt(conn, kontakt_id, client=client):
+                kontakte_ok += 1
+            elif len(fehler) < 5:
+                fehler.append(f"Push von kontakt-{kontakt_id} fehlgeschlagen")
 
-    ordner_ok = 0
-    for projekt_id in projekt_ids:
-        if push_projekt(conn, projekt_id):
-            ordner_ok += 1
-        elif len(fehler) < 5:
-            fehler.append(f"Push von projekt-{projekt_id} fehlgeschlagen")
+        ordner_ok = 0
+        for projekt_id in projekt_ids:
+            if push_projekt(conn, projekt_id, client=client):
+                ordner_ok += 1
+            elif len(fehler) < 5:
+                fehler.append(f"Push von projekt-{projekt_id} fehlgeschlagen")
+    finally:
+        client.close()
 
     # Den konkreten letzten Fehlergrund (z.B. "401 Unauthorized") voranstellen,
     # damit die UI-Rueckmeldung nicht nur "fehlgeschlagen", sondern das Warum zeigt.
