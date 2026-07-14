@@ -667,14 +667,18 @@ erzeugt wie bisher Vorschlaege in die Review-Queue. Umsetzungsplan Rubrica-seiti
     betroffenen kontakt_ids zurueck, damit die Route sie erneut zu Radicale pushen kann, da sich damit auch
     das CATEGORIES/TITLE-Feld der vCard aendert).
   - 8 neue Tests (DB-Ebene + Web-Routen).
-Fuer den Rollout auf mehrere Stationen: der reine "Zertifikat vertrauen"-Dialog beim Account-Einrichten
-reicht nicht zuverlaessig (Hintergrund-Sync-Dienst contactsd/dataaccessd honoriert per-Account-Ausnahmen
-nicht immer -> stiller Sync-Fehler, genau das Muster der Sync-Bugs). Zuverlaessig: die lokale CA
-(`radicale-tls/ca-cert.pem`) einmal pro Station in den Schluesselbund importieren + "Immer vertrauen".
-Geplant: ein "CA-Zertifikat herunterladen"-Link in den Einstellungen (liefert `ca-cert.pem` aus), damit
-man auf jeder Station nur die Rubrica-Weboberflaeche oeffnen, die CA laden, doppelklicken und vertrauen
-muss - statt die Datei manuell per USB/Netz zu verteilen. Loest zugleich den alten "TLS-Zertifikat auf
-allen Stationen"-Punkt aus Abschnitt 7.
+
+- **CA-Zertifikat-Download in den Einstellungen (2026-07-13):** Fuer den Rollout auf mehrere Stationen
+  reicht der reine "Zertifikat vertrauen"-Dialog beim Account-Einrichten nicht zuverlaessig (der macOS-
+  Hintergrund-Sync-Dienst contactsd/dataaccessd honoriert eine dort erteilte per-Account-Ausnahme nicht
+  immer -> stiller Sync-Fehler, genau das Muster der frueheren Sync-Bugs). Zuverlaessig: die lokale CA
+  (`radicale-tls/ca-cert.pem`) einmal pro Station in den Schluesselbund importieren + "Immer vertrauen".
+  Neuer Download-Link "CA-Zertifikat herunterladen" im CardDAV-Fieldset der Einstellungen (nur sichtbar,
+  wenn die Datei existiert) - liefert sie unter dem Dateinamen `rubrica-ca.pem` aus
+  (`GET /einstellungen/ca-zertifikat`, `media_type=application/x-x509-ca-cert`, 404 falls nicht vorhanden).
+  Damit muss man auf jeder Station nur kurz die Rubrica-Weboberflaeche oeffnen, die CA laden, doppelklicken
+  und vertrauen - statt die Datei manuell per USB/Netz zu verteilen. Loest den alten "TLS-Zertifikat auf
+  allen Stationen"-Punkt aus Abschnitt 7. 4 neue Tests.
 
 - **Visuelles Redesign an Notion angelehnt (2026-07-12):** Nutzer-Feedback: Optik sollte generell mehr wie
   Notion aussehen; ausserdem gemeldeter Layout-Bug ("links viel Abstand, rechts ist der schwarze Balken

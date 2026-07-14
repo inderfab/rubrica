@@ -14,6 +14,34 @@ def test_einstellungen_formular_zeigt_aktuellen_wert(tmp_db, monkeypatch):
     assert 'value="3"' in r.text
 
 
+def test_ca_zertifikat_download_ohne_datei_ist_404(tmp_db):
+    r = TestClient(app).get("/einstellungen/ca-zertifikat")
+    assert r.status_code == 404
+
+
+def test_ca_zertifikat_download_liefert_datei(tmp_db):
+    tls_dir = settings.daten_verzeichnis() / "radicale-tls"
+    tls_dir.mkdir(parents=True, exist_ok=True)
+    (tls_dir / "ca-cert.pem").write_text("-----BEGIN CERTIFICATE-----\ndummy\n-----END CERTIFICATE-----\n",
+                                          encoding="utf-8")
+
+    r = TestClient(app).get("/einstellungen/ca-zertifikat")
+    assert r.status_code == 200
+    assert b"BEGIN CERTIFICATE" in r.content
+
+
+def test_einstellungen_seite_zeigt_download_link_nur_wenn_zertifikat_vorhanden(tmp_db):
+    r = TestClient(app).get("/einstellungen")
+    assert "/einstellungen/ca-zertifikat" not in r.text
+
+    tls_dir = settings.daten_verzeichnis() / "radicale-tls"
+    tls_dir.mkdir(parents=True, exist_ok=True)
+    (tls_dir / "ca-cert.pem").write_text("dummy", encoding="utf-8")
+
+    r2 = TestClient(app).get("/einstellungen")
+    assert "/einstellungen/ca-zertifikat" in r2.text
+
+
 def test_radicale_sync_button_ohne_konfiguration_meldet_inaktiv(tmp_db, monkeypatch):
     monkeypatch.setattr(settings, "_settings", {"radicale": {"base_url": ""}})
     r = TestClient(app).post("/einstellungen/radicale-sync", follow_redirects=False)

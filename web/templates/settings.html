@@ -91,6 +91,14 @@
                 <input type="text" name="radicale_password" value="{{ radicale_password }}">
             </div>
         </div>
+        {% if ca_zertifikat_vorhanden %}
+        <p class="empty" style="padding:0.6rem 0 0.3rem">
+            Für weitere Stationen: das CA-Zertifikat einmal herunterladen, per Doppelklick öffnen und im
+            Schlüsselbund auf „Immer vertrauen" setzen. Zuverlässiger als der Zertifikat-Dialog beim
+            Account-Einrichten, da der Hintergrund-Sync sonst manchmal trotzdem stillschweigend scheitert.
+        </p>
+        <a href="/einstellungen/ca-zertifikat" class="btn secondary" download>CA-Zertifikat herunterladen</a>
+        {% endif %}
         <p class="empty" style="padding:0.6rem 0 0.3rem">
             Gleicht alle Kontakte und Ordner erneut mit Radicale ab (nützlich, wenn frühere Änderungen nicht
             angekommen sind) und entfernt dabei verwaiste Einträge, die in Apple Kontakte noch auftauchen,
