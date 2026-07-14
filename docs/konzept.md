@@ -1176,11 +1176,43 @@ Rubrica importiert — deutlich robuster als das proprietäre Schema direkt zu p
   `client` auf (unveraendert: eigener Client, wird geschlossen). 1 neuer Test prueft, dass der Voll-Sync
   `_client()` nur einmal aufruft.
 
+- **Review-Queue: vollstaendiges Bearbeiten wie bei Kontakten (2026-07-14):** Nutzer-Feedback: der
+  Bearbeiten-Button in der Review-Queue zeigte nur Scalar-Felder (Vorname/Nachname/Firma/Rolle/Funktion/
+  Notizen), obwohl der Vorschlag auch Telefon/E-Mail/Adresse/URLs enthaelt - sollte "genau gleich wie im
+  Reiter Kontakte, mit allen Optionen" sein, und bei mehreren ausgewaehlten Vorschlaegen weiterhin wie
+  bisher funktionieren.
+  - **Beim Bearbeiten EINES Vorschlags** wird jetzt exakt dasselbe Formular/Template wiederverwendet wie
+    beim echten Kontakt-Bearbeiten (`_kontakt_bearbeiten_form.html`, inkl. dynamischer Telefon-/E-Mail-/
+    Adress-/URL-Zeilen und Ordner-Checkliste) - keine Kopie, dieselbe Datei. Da `rohdaten` (dict) dieselben
+    Schluessel wie ein echtes Kontakt-Dict traegt (vorname/telefonnummern/emails/... via Jinja-Punktzugriff
+    auch auf dicts), funktioniert das Template unveraendert; einzig `kontakt.projekte` (Liste mit "id", fuer
+    die Ordner-Checkliste) gibt es bei einem Vorschlag nicht direkt - wird in `web/review.py`
+    server-seitig aus `rohdaten.gruppen_als_ordner` (Namen aus Apple-Gruppen-Erkennung) nachgebaut, indem
+    passende bestehende Ordner anhand des Namens gesucht werden.
+  - **Bei MEHREREN ausgewaehlten Vorschlaegen** bleibt das bestehende Sammel-Bearbeiten (nur Scalar-Felder
+    mit "gemischt"-Logik) unveraendert - aus denselben Gruenden wie beim Kontakte-Sammel-Bearbeiten
+    (unterschiedliche Anzahl Telefon/E-Mail-Eintraege je Vorschlag macht ein klares Bulk-Editing der
+    Arrays nicht sinnvoll). Die Client-JS (`rubricaReviewBearbeiten`) verzweigt je nach Anzahl
+    ausgewaehlter IDs zwischen dem neuen Einzel- und dem bestehenden Sammel-Pfad.
+  - Neue Routen `GET/POST /review/{vorschlag_id}/bearbeiten-flyover` bzw. `.../bearbeiten-vollstaendig`;
+    Speichern ruft `_parse_kontakt_form()` (bereits bestehende, framework-unabhaengige Hilfsfunktion aus
+    `web/contacts.py`, unveraendert wiederverwendet) und schreibt alle Felder (inkl. Arrays) direkt ins
+    `rohdaten`-JSON zurueck.
+  - **Technischer Stolperstein dabei gefunden:** `_kontakt_bearbeiten_form.html` enthielt einen eingebetteten
+    `<script>`-Block (`addRow`/`ROW_SPECS` fuer die "+ Telefonnummer" usw. Buttons). Der wird von der
+    Kontakte-Seite per htmx eingebunden (htmx fuehrt beim Swap eingebettete `<script>`-Tags aus), die
+    Review-Queue laedt Formulare aber per einfachem `fetch()` + `.innerHTML =` (fuehrt eingefuegte
+    `<script>`-Tags NICHT aus) - "+ Telefonnummer" waere dort stumm kaputt gewesen. Behoben, indem
+    `addRow`/`ROW_SPECS` nach `app.js` verschoben wurden (global, immer schon geladen, unabhaengig vom
+    Einbindungsweg) - robuster als eine Umstellung der Review-Queue auf htmx, und nuetzt beiden Seiten
+    gleichermassen.
+  - 6 neue Tests (`tests/test_review_web.py`).
+
 Bekannte Einschränkung: Entwicklungsumgebung läuft unter Python 3.9 (Systemversion) statt der ursprünglich in Abschnitt 6 vermuteten 3.12 — FastAPI-Routenparameter deshalb mit `typing.Optional[int]` statt `int | None` (siehe `CLAUDE.md`). Dies betrifft nur die lokale Entwicklungsumgebung; das produktive `.pkg` bringt sein eigenes Python 3.13 mit und ist davon unabhängig.
 
 Nächste sinnvolle Schritte: neues `.pkg` (alle bisherigen Fixes inkl. Archivio-Signatur-DB-Anbindung,
-Namenserkennung, Bearbeiten-Button) auf dem iMac installieren; unter „Einstellungen" den Pfad zur
-Archivio-Signatur-Datenbank (`archivio.signatur_db_path`) eintragen und Postfächer den passenden Ordnern
-zuordnen. Offen: `importer/signatur.py::parse_signatur` bleibt eine Heuristik mit gelegentlichem Rauschen
-auf sehr langen/unstrukturierten Thread-Texten (siehe Eintrag oben) - bei Bedarf gezielt nachschärfen,
-sobald sich am echten Datensatz weitere Muster zeigen.
+Namenserkennung, Bearbeiten-Button, vollstaendiges Review-Queue-Bearbeiten) auf dem iMac installieren; unter
+„Einstellungen" den Pfad zur Archivio-Signatur-Datenbank (`archivio.signatur_db_path`) eintragen und
+Postfächer den passenden Ordnern zuordnen. Offen: `importer/signatur.py::parse_signatur` bleibt eine
+Heuristik mit gelegentlichem Rauschen auf sehr langen/unstrukturierten Thread-Texten (siehe Eintrag oben) -
+bei Bedarf gezielt nachschärfen, sobald sich am echten Datensatz weitere Muster zeigen.

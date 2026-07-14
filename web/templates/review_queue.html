@@ -139,8 +139,13 @@ function rubricaReviewSammelBearbeiten() {
 }
 
 function rubricaReviewBearbeiten(ids) {
-    const params = ids.map(id => 'ids=' + id).join('&');
-    fetch(`/review/bulk-bearbeiten-flyover?${params}`)
+    // Genau EIN Vorschlag: volles Formular wie beim Kontakt-Bearbeiten (alle Felder
+    // inkl. Telefon/E-Mail/Adresse/URL). Mehrere ausgewaehlt: das bestehende
+    // Sammel-Bearbeiten (nur Scalar-Felder, gleiches Prinzip wie bei Kontakten).
+    const url = ids.length === 1
+        ? `/review/${ids[0]}/bearbeiten-flyover`
+        : `/review/bulk-bearbeiten-flyover?${ids.map(id => 'ids=' + id).join('&')}`;
+    fetch(url)
         .then(r => r.text())
         .then(html => {
             document.getElementById('review-modal-inhalt').innerHTML = html;
@@ -150,6 +155,14 @@ function rubricaReviewBearbeiten(ids) {
 
 function rubricaReviewModalSchliessen() {
     document.getElementById('review-modal-overlay').classList.remove('sichtbar');
+}
+
+// Das gemeinsame Kontakt-Bearbeiten-Formular (_kontakt_bearbeiten_form.html, hier
+// ueber review_bearbeiten_modal.html eingebunden) ruft beim "Abbrechen"-Button fest
+// "rubricaModalSchliessen()" auf (Name aus der Kontakte-Seite) - als Alias auf den
+// hiesigen Namen, statt das gemeinsame Formular dafuer anzupassen.
+function rubricaModalSchliessen() {
+    rubricaReviewModalSchliessen();
 }
 </script>
 {% endblock %}

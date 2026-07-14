@@ -56,3 +56,72 @@ function rubricaComboboxBlur(event) {
     // der Liste noch verarbeitet wird.
     setTimeout(() => wrapper.querySelector('.combobox-liste').classList.remove('sichtbar'), 150);
 }
+
+// Dynamisches Hinzufuegen von Telefon-/E-Mail-/Adress-/URL-Zeilen im gemeinsamen
+// Kontakt-Bearbeiten-Formular (_kontakt_bearbeiten_form.html). Bewusst hier in
+// app.js statt in einem <script>-Block innerhalb des Formular-Partials: das
+// Partial wird teils per htmx (fuehrt eingebettete <script>-Tags beim Swap aus),
+// teils per einfachem fetch()+innerHTML= geladen (Review-Queue) - Letzteres
+// fuehrt eingefuegte <script>-Tags NICHT aus, wodurch "addRow" sonst undefiniert
+// waere. Als globale Funktion in der immer schon geladenen app.js ist sie in
+// beiden Faellen sofort verfuegbar.
+//
+// "typInput" (tel/mail) rendert statt eines einfachen Textfelds die Combobox
+// fuer die Kategorie (Direkt/Privat/Allgemein) - die Optionsliste kommt aus
+// dem data-optionen-Attribut des "+ ..."-Buttons (button-Parameter), da neu
+// per JS eingefuegte Zeilen die Jinja-Vorlagenwerte sonst nicht kennen.
+const ROW_SPECS = {
+    tel: {cls: 'tel-row', typInput: 'telefon_typ', fields: [['telefon_nummer', 'Nummer', null]]},
+    mail: {cls: 'mail-row', typInput: 'email_typ', fields: [['email_adresse', 'E-Mail', null]]},
+    url: {cls: 'mail-row', fields: [['url_typ', 'Typ', '6rem'], ['url_adresse', 'https://…', null]]},
+    adr: {cls: 'tel-row', fields: [
+        ['adresse_typ', 'Typ', '5rem'], ['adresse_strasse', 'Strasse', null],
+        ['adresse_plz', 'PLZ', '4.5rem'], ['adresse_ort', 'Ort', null],
+        ['adresse_region', 'Kanton', '5rem'], ['adresse_land', 'Land', '6rem'],
+    ]},
+};
+
+function addRow(containerId, kind, button) {
+    const container = document.getElementById(containerId);
+    const spec = ROW_SPECS[kind];
+    const row = document.createElement('div');
+    row.className = spec.cls;
+
+    if (spec.typInput) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'combobox';
+        wrapper.style.width = '8rem';
+        wrapper.dataset.optionen = (button && button.dataset.optionen) || '[]';
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'combobox-input';
+        input.name = spec.typInput;
+        input.autocomplete = 'off';
+        input.addEventListener('input', rubricaComboboxInput);
+        input.addEventListener('focus', rubricaComboboxInput);
+        input.addEventListener('blur', rubricaComboboxBlur);
+        const liste = document.createElement('ul');
+        liste.className = 'combobox-liste';
+        wrapper.appendChild(input);
+        wrapper.appendChild(liste);
+        row.appendChild(wrapper);
+    }
+
+    spec.fields.forEach(([name, placeholder, width]) => {
+        const feld = document.createElement('input');
+        feld.type = 'text';
+        feld.name = name;
+        feld.placeholder = placeholder;
+        if (width) feld.style.width = width;
+        row.appendChild(feld);
+    });
+
+    const entfernenBtn = document.createElement('button');
+    entfernenBtn.type = 'button';
+    entfernenBtn.className = 'secondary';
+    entfernenBtn.textContent = 'Entfernen';
+    entfernenBtn.addEventListener('click', () => row.remove());
+    row.appendChild(entfernenBtn);
+
+    container.appendChild(row);
+}
