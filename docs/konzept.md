@@ -614,6 +614,41 @@ Session. Gesammeltes Wissen fuer naechstes Mal:
     Signatur-Quelle zu lesen (falls Archivio Option (a) waehlt, eine zusaetzliche Spalte in der SQL-Abfrage
     beruecksichtigen statt `_letzte_zeilen(dc.content)`).
 
+**ALS NAECHSTES GEPLANT (2026-07-13, mit Nutzer besprochen): Archivio-Signatur-DB + Postfach-Features.**
+Der Nutzer baut Archivio so um, dass der Scanner ALLE Mails zusaetzlich in eine SEPARATE DB schreibt
+(Absender, voller Mailtext inkl. Signatur, Postfach/Ordnername). Rubrica liest diese DB nur lesend und
+erzeugt wie bisher Vorschlaege in die Review-Queue. Umsetzungsplan Rubrica-seitig:
+  - **Erwartetes Archivio-Schema** (mit Nutzer abzustimmen, Rubrica liest read-only):
+    `CREATE TABLE signatur_quelle (id INTEGER PRIMARY KEY, absender TEXT, postfach TEXT, text TEXT, datum TEXT)`
+    - `absender` = Absender-Mailadresse (+ Name falls vorhanden); `postfach` = sprechender, stabiler
+      Postfach-/Ordnername (offene Frage an Nutzer: IMAP-Ordnerpfad wie `INBOX/Projekte/Neubau` oder Konto?);
+      `text` = VOLLER Mailtext inkl. Signatur (nicht abgeschnitten - das war der ganze Sinn der
+      Archivio-Aenderung); `datum` = ISO fuer Aktualitaet / min_mails-Heuristik.
+  - **(a) Konfiguration:** neuer Pfad `archivio.signatur_db_path` in den Einstellungen (ersetzt die alte
+    `archivio.db_path`-Anbindung; alter Code bleibt, bis die neue Quelle laeuft).
+  - **(b) Postfach-Dropdown (Mehrfachauswahl)** auf der Archivio-Import-Seite:
+    `SELECT DISTINCT postfach FROM signatur_quelle` -> anklickbare Mehrfachauswahl (wie Ordner-Checkliste).
+    Kandidatensuche filtert `WHERE postfach IN (...)`. Der bestehende Signatur-Parser
+    (`importer/signatur.py::parse_signatur`) laeuft auf dem vollen `text`. min_mails-Heuristik bleibt.
+  - **(c) Postfach -> Ordner-Zuordnung:** neue Tabelle in Rubricas eigener DB
+    `CREATE TABLE postfach_zuordnung (postfach TEXT PRIMARY KEY, projekt_id INTEGER REFERENCES projekte(id) ON DELETE SET NULL)`.
+    In der Postfach-Liste je Postfach ein "-> Ordner"-Dropdown; zugeordnete Postfaecher taggen jeden daraus
+    gewonnenen Kontakt automatisch mit dem Ordner vor - fliesst als `gruppen_als_ordner`-Vorschlag in die
+    Review-Queue, wird erst beim Bestaetigen gesetzt (nie automatisch ohne Bestaetigung, gemaess Prinzip).
+  - **Angenommene Entscheidungen** (vom Nutzer noch final zu bestaetigen): 1 Postfach -> 1 Ordner; die neue
+    Signatur-DB ersetzt die alte Anbindung; Absender in mehreren gewaehlten Postfaechern = 1 Vorschlag mit
+    Vereinigung der zugeordneten Ordner.
+
+**ALS NAECHSTES GEPLANT (2026-07-13): CA-Zertifikat-Download in den Einstellungen (Rollout-Hilfe).**
+Fuer den Rollout auf mehrere Stationen: der reine "Zertifikat vertrauen"-Dialog beim Account-Einrichten
+reicht nicht zuverlaessig (Hintergrund-Sync-Dienst contactsd/dataaccessd honoriert per-Account-Ausnahmen
+nicht immer -> stiller Sync-Fehler, genau das Muster der Sync-Bugs). Zuverlaessig: die lokale CA
+(`radicale-tls/ca-cert.pem`) einmal pro Station in den Schluesselbund importieren + "Immer vertrauen".
+Geplant: ein "CA-Zertifikat herunterladen"-Link in den Einstellungen (liefert `ca-cert.pem` aus), damit
+man auf jeder Station nur die Rubrica-Weboberflaeche oeffnen, die CA laden, doppelklicken und vertrauen
+muss - statt die Datei manuell per USB/Netz zu verteilen. Loest zugleich den alten "TLS-Zertifikat auf
+allen Stationen"-Punkt aus Abschnitt 7.
+
 - **Visuelles Redesign an Notion angelehnt (2026-07-12):** Nutzer-Feedback: Optik sollte generell mehr wie
   Notion aussehen; ausserdem gemeldeter Layout-Bug ("links viel Abstand, rechts ist der schwarze Balken
   nicht gleich lang wie die Tabelle darunter"). Ursache des Bugs: `nav` spannte die volle Fensterbreite auf,
