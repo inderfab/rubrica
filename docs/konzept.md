@@ -1041,6 +1041,19 @@ Rubrica importiert — deutlich robuster als das proprietäre Schema direkt zu p
     `_letzter_fehler`, in den except-Bloecken von `_put`/`_delete`/`_remote_vcf_namen` gesetzt) - die
     UI-Rueckmeldung zeigt so z.B. "Grund: ..." statt nur "fehlgeschlagen", falls doch noch etwas scheitert
     (z.B. ein Auth-Problem).
+  - Verifiziert: Voll-Sync von 1506 Kontakten + 33 Ordnern erfolgreich (Nutzer-Rueckmeldung), Test1/Test2
+    kamen in Apple Kontakte an. Der Lauf dauerte ~5 min, weil pro Datensatz eine eigene Verbindung mit
+    TLS-Handshake aufgebaut wurde und Radicale je Anfrage eine (absichtlich langsame) bcrypt-Passwortpruefung
+    macht.
+
+- **Voll-Sync-Effizienz: eine Verbindung wiederverwenden (2026-07-13):** `_put`/`_delete`/`_remote_vcf_namen`/
+  `push_kontakt`/`push_projekt` nehmen jetzt einen optionalen `client`-Parameter. `sync_alle()` baut EINEN
+  httpx-Client und reicht ihn durch alle ~1500 Operationen (Keep-Alive), statt pro Datensatz eine neue
+  Verbindung samt TLS-Handshake aufzubauen - der langsamste Teil des Voll-Syncs faellt damit weg (die
+  serverseitige bcrypt-Pruefung pro Anfrage bleibt, ist aber deutlich schneller als ein voller
+  Verbindungsaufbau). Der normale Auto-Sync bei Einzelaenderungen ruft die Funktionen weiterhin ohne
+  `client` auf (unveraendert: eigener Client, wird geschlossen). 1 neuer Test prueft, dass der Voll-Sync
+  `_client()` nur einmal aufruft.
 
 Bekannte Einschränkung: Entwicklungsumgebung läuft unter Python 3.9 (Systemversion) statt der ursprünglich in Abschnitt 6 vermuteten 3.12 — FastAPI-Routenparameter deshalb mit `typing.Optional[int]` statt `int | None` (siehe `CLAUDE.md`). Dies betrifft nur die lokale Entwicklungsumgebung; das produktive `.pkg` bringt sein eigenes Python 3.13 mit und ist davon unabhängig.
 

@@ -198,7 +198,10 @@ def test_sync_alle_pusht_alle_und_entfernt_verwaiste(tmp_db, monkeypatch):
             return httpx.Response(207, text=xml)
         return httpx.Response(201)
 
+    client_aufrufe = []
+
     def mock_client():
+        client_aufrufe.append(1)
         return httpx.Client(transport=httpx.MockTransport(handler), base_url="https://test/a/")
 
     monkeypatch.setattr(radicale, "_client", mock_client)
@@ -212,3 +215,5 @@ def test_sync_alle_pusht_alle_und_entfernt_verwaiste(tmp_db, monkeypatch):
     assert ("DELETE", "/a/kontakt-999.vcf") in gesendet
     assert ("PUT", f"/a/kontakt-{k1}.vcf") in gesendet
     assert ("PUT", f"/a/kontakt-{k2}.vcf") in gesendet
+    # Effizienz: der gesamte Voll-Sync nutzt EINE Verbindung, nicht eine pro Datensatz.
+    assert len(client_aufrufe) == 1
