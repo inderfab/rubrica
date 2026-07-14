@@ -16,12 +16,13 @@ radicale:
   username: __RUBRICA_USER__
   password: ""
 
-# Phase 4 (Vorstufe): Archivio-Anbindung - liest bereits von Archivio extrahierte
-# E-Mail-Signaturen und erzeugt daraus Kontaktvorschlaege in der Review-Queue.
-# Deaktiviert, solange db_path leer ist. Nie automatisches Anlegen von Kontakten -
-# landet immer erst als Vorschlag (siehe docs/konzept.md Abschnitt 5.1/9).
+# Phase 4: Archivio-Anbindung - liest die von Archivio gefuehrte Signatur-DB
+# (Tabelle signatur_quelle: Absender, Postfach, voller Mailtext, Status) und
+# erzeugt daraus Kontaktvorschlaege in der Review-Queue. Deaktiviert, solange
+# signatur_db_path leer ist. Nie automatisches Anlegen von Kontakten - landet
+# immer erst als Vorschlag (siehe docs/konzept.md Abschnitt 5.1/9).
 archivio:
-  db_path: ""
+  signatur_db_path: ""
   min_mails: 2
 
 # Automatisches Backup: nach jeder aendernden Anfrage wird ein Snapshot der

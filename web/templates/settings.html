@@ -112,13 +112,14 @@
     <fieldset>
         <legend>Archivio-Anbindung</legend>
         <p class="empty" style="padding:0 0 0.5rem">
-            Liest bereits von Archivio erfasste E-Mail-Signaturen und schlägt daraus neue Kontakte in der
-            Review-Queue vor. Leer lassen, um die Funktion zu deaktivieren.
+            Liest die von Archivio gepflegte Signatur-Datenbank (Tabelle <code>signatur_quelle</code>:
+            Absender, Postfach, voller Mailtext) und schlägt daraus neue Kontakte in der Review-Queue vor.
+            Leer lassen, um die Funktion zu deaktivieren.
         </p>
         <div class="field">
-            <label>Pfad zur Archivio-Datenbank</label>
-            <input type="text" name="archivio_db_path" value="{{ archivio_db_path }}"
-                   placeholder="/Users/…/Library/Application Support/Archivio/archivio.db" style="width:100%">
+            <label>Pfad zur Archivio-Signatur-Datenbank</label>
+            <input type="text" name="archivio_signatur_db_path" value="{{ archivio_signatur_db_path }}"
+                   placeholder="/Users/…/Library/Application Support/Archivio/rubrica.db" style="width:100%">
         </div>
         <div class="field">
             <label>Mindestanzahl E-Mails pro Absender (Indiz für echte Korrespondenz)</label>

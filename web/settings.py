@@ -35,7 +35,7 @@ def einstellungen_form(request: Request, gespeichert: str = "", sync: str = ""):
         "request": request,
         "gespeichert": bool(gespeichert),
         "sync_ergebnis": sync,
-        "archivio_db_path": settings.get("archivio.db_path", "") or "",
+        "archivio_signatur_db_path": settings.get("archivio.signatur_db_path", "") or "",
         "archivio_min_mails": settings.get("archivio.min_mails", 2),
         "backup_pfad": settings.get("backup.pfad", "") or "",
         "export_firmenname": settings.get("export.firmenname", "") or "",
@@ -84,7 +84,7 @@ def einstellungen_ca_zertifikat():
 @router.post("/einstellungen")
 async def einstellungen_speichern(request: Request):
     form = await request.form()
-    db_path = (form.get("archivio_db_path") or "").strip()
+    signatur_db_path = (form.get("archivio_signatur_db_path") or "").strip()
     try:
         min_mails = int(form.get("archivio_min_mails") or 2)
     except ValueError:
@@ -105,7 +105,7 @@ async def einstellungen_speichern(request: Request):
             ziel.write_bytes(await logo.read())
 
     settings.save({
-        "archivio": {"db_path": db_path, "min_mails": min_mails},
+        "archivio": {"signatur_db_path": signatur_db_path, "min_mails": min_mails},
         "backup": {"pfad": backup_pfad},
         "radicale": {
             "base_url": radicale_base_url,

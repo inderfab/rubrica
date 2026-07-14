@@ -4,14 +4,68 @@
 <h1>Archivio-Import</h1>
 <p class="empty">
     Zeigt Kontaktvorschläge aus bereits von Archivio erfassten E-Mail-Signaturen –
-    <strong>rein lesend</strong>, es wird noch nichts gespeichert. Nur Absender mit mehreren
-    E-Mails werden geprüft, und nur wenn Name, Firma, Telefonnummer <em>und</em> E-Mail
+    <strong>rein lesend</strong> bezüglich Kontaktdaten, es wird noch nichts gespeichert. Nur Absender mit
+    mehreren E-Mails werden geprüft, und nur wenn Name, Firma, Telefonnummer <em>und</em> E-Mail
     <strong>alle vollständig</strong> erkannt wurden (bewusst streng, um die Kontaktliste nicht mit
-    unvollständigen Einträgen zu überschwemmen). Bereits vorhandene Kontakte (per E-Mail, Name
-    oder Telefonnummer erkannt) werden automatisch übersprungen. Wenige oder keine Vorschläge sind
-    normal, u. a. weil Archivios eigener Mail-Scanner E-Mail-Signaturen teilweise abschneidet.
-    Übernommene Vorschläge landen wie jeder andere Import in der <a href="/review">Review-Queue</a>.
+    unvollständigen Einträgen zu überschwemmen). Bereits vorhandene Kontakte (per E-Mail, Name oder
+    Telefonnummer erkannt) werden automatisch übersprungen und in der Archivio-Datenbank als „abgelehnt"
+    markiert, damit sie nicht wieder auftauchen. Übernommene Vorschläge landen wie jeder andere Import in
+    der <a href="/review">Review-Queue</a>.
 </p>
+
+{% if alle_postfaecher %}
+<fieldset>
+    <legend>Nach Postfach filtern</legend>
+    <form method="get" action="/archivio-import">
+        <div class="ordner-checkliste">
+            {% for p in alle_postfaecher %}
+            <label>
+                <input type="checkbox" name="postfaecher" value="{{ p.postfach }}"
+                       {% if p.postfach in ausgewaehlte_postfaecher %}checked{% endif %}>
+                {{ p.projekt or p.postfach }}
+            </label>
+            {% endfor %}
+        </div>
+        <button type="submit" class="secondary" style="margin-top:0.5rem">Filtern</button>
+        {% if ausgewaehlte_postfaecher %}
+        <a href="/archivio-import" class="btn secondary" style="margin-top:0.5rem">Filter zurücksetzen</a>
+        {% endif %}
+    </form>
+</fieldset>
+
+<fieldset>
+    <legend>Postfach → Ordner zuweisen</legend>
+    <p class="empty" style="padding:0 0 0.5rem">
+        Kontakte aus Mails eines zugeordneten Postfachs werden beim Übernehmen automatisch mit diesem Ordner
+        vorgetaggt.
+    </p>
+    <table>
+        <thead><tr><th>Postfach</th><th>Ordner</th><th></th></tr></thead>
+        <tbody>
+            {% for p in alle_postfaecher %}
+            <tr>
+                <td>{{ p.projekt or p.postfach }}</td>
+                <td>
+                    <form method="post" action="/archivio-import/postfach-zuordnen" style="display:flex; gap:0.5rem;">
+                        <input type="hidden" name="postfach" value="{{ p.postfach }}">
+                        <select name="projekt_id" style="flex:1">
+                            <option value="">– kein Ordner –</option>
+                            {% for o in ordner %}
+                            <option value="{{ o.id }}"
+                                {% if zuordnungen.get(p.postfach) and zuordnungen[p.postfach].projekt_id == o.id %}selected{% endif %}>
+                                {{ o.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <button type="submit" class="secondary">Speichern</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</fieldset>
+{% endif %}
 
 {% if fehler %}
 <p class="fehler">{{ fehler }}</p>
@@ -21,7 +75,7 @@
 {% if kandidaten %}
 <table>
     <thead>
-        <tr><th>Name</th><th>Firma</th><th>Telefon</th><th>E-Mail</th><th>Anzahl Mails</th><th></th></tr>
+        <tr><th>Name</th><th>Firma</th><th>Telefon</th><th>E-Mail</th><th>Ordner</th><th>Anzahl Mails</th><th></th></tr>
     </thead>
     <tbody>
         {% for k in kandidaten %}
@@ -31,14 +85,17 @@
             <td>{{ k.firma }}</td>
             <td>{% for t in k.telefonnummern %}{{ t.nummer }}{% if not loop.last %}, {% endif %}{% endfor %}</td>
             <td>{{ mail }}</td>
+            <td>{% for g in k.gruppen_als_ordner %}<span class="tag">{{ g }}</span>{% endfor %}</td>
             <td>{{ k.anzahl_mails }}</td>
             <td class="actions">
                 <form method="post" action="/archivio-import/uebernehmen-einzeln">
                     <input type="hidden" name="email" value="{{ mail }}">
+                    {% for p in ausgewaehlte_postfaecher %}<input type="hidden" name="postfaecher" value="{{ p }}">{% endfor %}
                     <button type="submit">Übernehmen</button>
                 </form>
                 <form method="post" action="/archivio-import/ablehnen">
                     <input type="hidden" name="email" value="{{ mail }}">
+                    {% for p in ausgewaehlte_postfaecher %}<input type="hidden" name="postfaecher" value="{{ p }}">{% endfor %}
                     <button type="submit" class="secondary">Ablehnen</button>
                 </form>
             </td>
@@ -49,6 +106,7 @@
 
 <form method="post" action="/archivio-import/uebernehmen" style="margin-top:1rem"
       onsubmit="return confirm('Wirklich ALLE {{ kandidaten|length }} angezeigten Vorschläge übernehmen?')">
+    {% for p in ausgewaehlte_postfaecher %}<input type="hidden" name="postfaecher" value="{{ p }}">{% endfor %}
     <button type="submit" class="secondary">Alle übernehmen</button>
 </form>
 {% else %}

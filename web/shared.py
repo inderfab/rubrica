@@ -14,12 +14,12 @@ templates = Jinja2Templates(
 def _archivio_konfiguriert() -> bool:
     """Prueft nicht nur, ob ein Pfad eingetragen ist, sondern ob dort tatsaechlich eine
     Datei liegt - ein veralteter/falscher Pfad soll den Nav-Punkt nicht anzeigen."""
-    db_pfad = (settings.get("archivio.db_path", "") or "").strip()
+    db_pfad = (settings.get("archivio.signatur_db_path", "") or "").strip()
     return bool(db_pfad) and Path(db_pfad).is_file()
 
 
 # Als aufrufbares Jinja-Global (nicht als einmalig berechneter Wert wie app_version),
-# damit die Navigation den aktuellen Stand sofort zeigt, wenn archivio.db_path in
+# damit die Navigation den aktuellen Stand sofort zeigt, wenn archivio.signatur_db_path in
 # den Einstellungen geaendert wird - settings.get() liest bei jedem Aufruf den
 # aktuellen (bei save() neu geladenen) Konfigurationsstand.
 templates.env.globals["archivio_konfiguriert"] = _archivio_konfiguriert

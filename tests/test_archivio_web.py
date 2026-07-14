@@ -13,43 +13,50 @@ def archivio_db(tmp_path):
     pfad = tmp_path / "archivio-test.db"
     conn = sqlite3.connect(pfad)
     conn.executescript("""
-        CREATE TABLE documents (id INTEGER PRIMARY KEY, source_type TEXT);
-        CREATE TABLE document_content (document_id INTEGER, content TEXT);
-        CREATE TABLE mails (document_id INTEGER, sender TEXT, date TEXT);
+        CREATE TABLE signatur_quelle (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            message_id TEXT UNIQUE NOT NULL,
+            absender TEXT, absender_email TEXT, empfaenger TEXT, cc TEXT,
+            postfach TEXT, projekt TEXT, betreff TEXT, text TEXT, datum TEXT,
+            status TEXT NOT NULL DEFAULT 'pending', status_updated_at TEXT,
+            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+        );
     """)
     sig = "Anna Beispiel\nBeispiel AG\nT 044 123 45 67\nanna@beispiel.ch"
     for i, datum in enumerate(["2026-01-01", "2026-01-05"], start=1):
-        conn.execute("INSERT INTO documents (id, source_type) VALUES (?, 'email')", (i,))
-        conn.execute("INSERT INTO document_content (document_id, content) VALUES (?, ?)", (i, sig))
-        conn.execute("INSERT INTO mails (document_id, sender, date) VALUES (?, 'anna@beispiel.ch', ?)", (i, datum))
+        conn.execute(
+            "INSERT INTO signatur_quelle (message_id, absender_email, postfach, projekt, text, datum) "
+            "VALUES (?, 'anna@beispiel.ch', '200_projekt', '200 Projekt', ?, ?)",
+            (f"m{i}", sig, datum),
+        )
     conn.commit()
     conn.close()
     return str(pfad)
 
 
 def test_vorschau_ohne_konfiguration_zeigt_hinweis(tmp_db, monkeypatch):
-    monkeypatch.setattr(settings, "_settings", {"archivio": {"db_path": ""}})
+    monkeypatch.setattr(settings, "_settings", {"archivio": {"signatur_db_path": ""}})
     r = TestClient(app).get("/archivio-import")
     assert r.status_code == 200
-    assert "Keine Archivio-Datenbank konfiguriert" in r.text
+    assert "Keine Archivio-Signatur-Datenbank konfiguriert" in r.text
 
 
 def test_nav_zeigt_archivio_import_nur_wenn_konfiguriert(tmp_db, archivio_db, monkeypatch):
-    monkeypatch.setattr(settings, "_settings", {"archivio": {"db_path": ""}})
+    monkeypatch.setattr(settings, "_settings", {"archivio": {"signatur_db_path": ""}})
     r = TestClient(app).get("/review")
     assert "/archivio-import" not in r.text
 
-    monkeypatch.setattr(settings, "_settings", {"archivio": {"db_path": "/pfad/existiert/nicht.db"}})
+    monkeypatch.setattr(settings, "_settings", {"archivio": {"signatur_db_path": "/pfad/existiert/nicht.db"}})
     r_nicht_existent = TestClient(app).get("/review")
     assert "/archivio-import" not in r_nicht_existent.text
 
-    monkeypatch.setattr(settings, "_settings", {"archivio": {"db_path": archivio_db}})
+    monkeypatch.setattr(settings, "_settings", {"archivio": {"signatur_db_path": archivio_db}})
     r2 = TestClient(app).get("/review")
     assert "/archivio-import" in r2.text
 
 
 def test_vorschau_zeigt_kandidat_ohne_zu_schreiben(tmp_db, archivio_db, monkeypatch):
-    monkeypatch.setattr(settings, "_settings", {"archivio": {"db_path": archivio_db, "min_mails": 2}})
+    monkeypatch.setattr(settings, "_settings", {"archivio": {"signatur_db_path": archivio_db, "min_mails": 2}})
     r = TestClient(app).get("/archivio-import")
     assert r.status_code == 200
     assert "Beispiel AG" in r.text
@@ -57,7 +64,7 @@ def test_vorschau_zeigt_kandidat_ohne_zu_schreiben(tmp_db, archivio_db, monkeypa
 
 
 def test_uebernehmen_schreibt_in_review_queue(tmp_db, archivio_db, monkeypatch):
-    monkeypatch.setattr(settings, "_settings", {"archivio": {"db_path": archivio_db, "min_mails": 2}})
+    monkeypatch.setattr(settings, "_settings", {"archivio": {"signatur_db_path": archivio_db, "min_mails": 2}})
     r = TestClient(app).post("/archivio-import/uebernehmen", follow_redirects=False)
     assert r.status_code == 303
     vorschlaege = queries.list_vorschlaege(tmp_db, status="offen")
@@ -66,8 +73,18 @@ def test_uebernehmen_schreibt_in_review_queue(tmp_db, archivio_db, monkeypatch):
     assert vorschlaege[0]["rohdaten"]["firma"] == "Beispiel AG"
 
 
+def test_uebernehmen_markiert_mails_als_uebernommen(tmp_db, archivio_db, monkeypatch):
+    monkeypatch.setattr(settings, "_settings", {"archivio": {"signatur_db_path": archivio_db, "min_mails": 2}})
+    TestClient(app).post("/archivio-import/uebernehmen", follow_redirects=False)
+
+    conn = sqlite3.connect(archivio_db)
+    status = {r[0] for r in conn.execute("SELECT status FROM signatur_quelle WHERE absender_email = 'anna@beispiel.ch'")}
+    conn.close()
+    assert status == {"uebernommen"}
+
+
 def test_uebernehmen_erzeugt_keine_dubletten_bei_zweitem_lauf(tmp_db, archivio_db, monkeypatch):
-    monkeypatch.setattr(settings, "_settings", {"archivio": {"db_path": archivio_db, "min_mails": 2}})
+    monkeypatch.setattr(settings, "_settings", {"archivio": {"signatur_db_path": archivio_db, "min_mails": 2}})
     client = TestClient(app)
     client.post("/archivio-import/uebernehmen", follow_redirects=False)
     client.post("/archivio-import/uebernehmen", follow_redirects=False)
@@ -75,7 +92,7 @@ def test_uebernehmen_erzeugt_keine_dubletten_bei_zweitem_lauf(tmp_db, archivio_d
 
 
 def test_einzeln_uebernehmen_erzeugt_nur_diesen_vorschlag(tmp_db, archivio_db, monkeypatch):
-    monkeypatch.setattr(settings, "_settings", {"archivio": {"db_path": archivio_db, "min_mails": 2}})
+    monkeypatch.setattr(settings, "_settings", {"archivio": {"signatur_db_path": archivio_db, "min_mails": 2}})
     r = TestClient(app).post("/archivio-import/uebernehmen-einzeln",
                               data={"email": "anna@beispiel.ch"}, follow_redirects=False)
     assert r.status_code == 303
@@ -85,7 +102,7 @@ def test_einzeln_uebernehmen_erzeugt_nur_diesen_vorschlag(tmp_db, archivio_db, m
 
 
 def test_ablehnen_verhindert_erneutes_erscheinen(tmp_db, archivio_db, monkeypatch):
-    monkeypatch.setattr(settings, "_settings", {"archivio": {"db_path": archivio_db, "min_mails": 2}})
+    monkeypatch.setattr(settings, "_settings", {"archivio": {"signatur_db_path": archivio_db, "min_mails": 2}})
     client = TestClient(app)
     r = client.post("/archivio-import/ablehnen", data={"email": "anna@beispiel.ch"}, follow_redirects=False)
     assert r.status_code == 303
@@ -99,3 +116,36 @@ def test_ablehnen_verhindert_erneutes_erscheinen(tmp_db, archivio_db, monkeypatc
     r2 = client.get("/archivio-import")
     assert "anna@beispiel.ch" not in r2.text
     assert "0</strong> Vorschlag" in r2.text
+
+
+def test_ablehnen_markiert_mails_in_archivio_db_als_abgelehnt(tmp_db, archivio_db, monkeypatch):
+    monkeypatch.setattr(settings, "_settings", {"archivio": {"signatur_db_path": archivio_db, "min_mails": 2}})
+    TestClient(app).post("/archivio-import/ablehnen", data={"email": "anna@beispiel.ch"}, follow_redirects=False)
+
+    conn = sqlite3.connect(archivio_db)
+    status = {r[0] for r in conn.execute("SELECT status FROM signatur_quelle WHERE absender_email = 'anna@beispiel.ch'")}
+    conn.close()
+    assert status == {"abgelehnt"}
+
+
+def test_postfach_zuordnen_speichert_und_wirkt_auf_kandidaten(tmp_db, archivio_db, monkeypatch):
+    monkeypatch.setattr(settings, "_settings", {"archivio": {"signatur_db_path": archivio_db, "min_mails": 2}})
+    ordner_id = queries.get_or_create_projekt(tmp_db, "Projekt 200")
+
+    r = TestClient(app).post("/archivio-import/postfach-zuordnen", data={
+        "postfach": "200_projekt", "projekt_id": str(ordner_id),
+    }, follow_redirects=False)
+    assert r.status_code == 303
+
+    zuordnungen = queries.postfach_zuordnungen(tmp_db)
+    assert zuordnungen["200_projekt"]["name"] == "Projekt 200"
+
+    r2 = TestClient(app).get("/archivio-import")
+    assert "Projekt 200" in r2.text
+
+
+def test_postfach_filter_auf_seite_zeigt_ausgewaehltes_postfach(tmp_db, archivio_db, monkeypatch):
+    monkeypatch.setattr(settings, "_settings", {"archivio": {"signatur_db_path": archivio_db, "min_mails": 2}})
+    r = TestClient(app).get("/archivio-import", params={"postfaecher": ["200_projekt"]})
+    assert r.status_code == 200
+    assert "Beispiel AG" in r.text
