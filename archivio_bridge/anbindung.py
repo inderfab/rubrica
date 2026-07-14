@@ -91,6 +91,88 @@ def _normalisiere_telefon(nummer: str) -> str:
     return re.sub(r"\D", "", nummer).lstrip("0")
 
 
+# Woerter/Wortstaemme, die auf eine Funktion oder Organisation statt eine Person
+# hindeuten - bewusst als reine Teilstring-Suche (nicht mit \b-Wortgrenzen), weil
+# deutsche Komposita ("Gesamtprojektleiter") keine Wortgrenze vor dem Wortstamm
+# haben. Am echten Testdatensatz mehrfach beobachtet, dass eine Funktions- oder
+# Organisationszeile faelschlich als Personenname erkannt wurde (z.B.
+# "Projektleitung Systeme", "Gesamtprojektleiter HLKS", "Zweigniederlassung
+# Winterthur", "EINWOHNERGEMEINDE DERENDINGEN").
+_KEIN_PERSONENNAME_TEILSTRING = [
+    "projektleit", "bauleit", "sachbearbeit", "zeichner", "abteilung", "bereich",
+    "zweigniederlassung", "niederlassung", "gemeinde", "team", "gruppe", "manager",
+    "office", "kundendienst", "empfang", "sekretariat", "büro", "buero",
+]
+
+
+def _ist_plausibler_personenname(vorname: str, nachname: str) -> bool:
+    """Grobe Plausibilitaetspruefung fuer ein von parse_signatur erkanntes 'Name'-
+    Feld: verwirft Funktions-/Organisationsbezeichnungen, die zufaellig wie ein
+    Name aussehen (2-4 grossgeschriebene Woerter)."""
+    text = f"{vorname} {nachname}".strip()
+    if not text:
+        return False
+    text_klein = text.lower()
+    if any(teilstring in text_klein for teilstring in _KEIN_PERSONENNAME_TEILSTRING):
+        return False
+    if text.isupper() and len(text.split()) > 1:
+        # Durchgehend Grossbuchstaben ueber mehrere Woerter ist typischerweise ein
+        # Organisationsname (z.B. "EINWOHNERGEMEINDE DERENDINGEN"), waehrend ein
+        # Personenname allenfalls beim NACHNAMEN komplett grossgeschrieben ist
+        # (z.B. "Roland GUNZENHAUSER" - dort ist "isupper()" wegen "Roland" False).
+        return False
+    return True
+
+
+# Generische Mail-Lokalteile, aus denen sich kein Personenname ableiten laesst.
+_GENERISCHE_LOKALTEILE = {
+    "info", "office", "contact", "kontakt", "support", "team", "verkauf", "sales",
+    "admin", "empfang", "sekretariat", "buero", "mail", "welcome", "hello", "hallo",
+}
+
+
+def _name_aus_email(absender_email: str) -> tuple:
+    """Leitet Vor-/Nachname aus dem lokalen Teil der Mailadresse ab (z.B.
+    'h.minder@...' -> ('H', 'Minder')). Liefert ('', '') wenn das Muster nicht
+    zweiteilig ist oder der lokale Teil generisch ist (info@, kontakt@ etc.)."""
+    lokal = absender_email.split("@", 1)[0]
+    teile = [t for t in re.split(r"[._-]+", lokal) if t.isalpha()]
+    if len(teile) != 2 or teile[0].lower() in _GENERISCHE_LOKALTEILE:
+        return "", ""
+    return teile[0].capitalize(), teile[1].capitalize()
+
+
+def _name_im_text_verifizieren(text: str, nachname: str):
+    """Sucht im Mailtext nach 'Vorname Nachname' (z.B. in einer Grussformel wie
+    'Freundliche Gruesse Hanspeter Minder') - liefert die im Text tatsaechlich
+    vorkommende Schreibweise (korrekter Vorname/Gross-Kleinschreibung), nicht die
+    aus der Mailadresse grob kapitalisierte Variante. None wenn nichts gefunden."""
+    muster = re.compile(r"\b([A-ZÄÖÜ][A-Za-zäöüÄÖÜß\-]+)\s+(" + re.escape(nachname) + r")\b",
+                         re.IGNORECASE)
+    m = muster.search(text)
+    if not m:
+        return None
+    return m.group(1), m.group(2)
+
+
+def _verbessere_namenerkennung(daten: dict, absender_email: str, text: str) -> None:
+    """Wenn der von parse_signatur erkannte Name keiner ist (Funktion/Organisation
+    statt Person), wird versucht, ihn aus der Mailadresse abzuleiten und im vollen
+    Mailtext zu verifizieren/vervollstaendigen - siehe Nutzer-Beobachtung: bei
+    H.Minder@gilgen.com wurde "Projektleitung Systeme" statt eines echten Namens
+    erkannt, obwohl im Text vermutlich "... Gruesse Hanspeter Minder" o.ae. steht."""
+    if _ist_plausibler_personenname(daten["vorname"], daten["nachname"]):
+        return
+    vorname_aus_mail, nachname_aus_mail = _name_aus_email(absender_email)
+    if not nachname_aus_mail:
+        return
+    gefunden = _name_im_text_verifizieren(text, nachname_aus_mail)
+    if gefunden:
+        daten["vorname"], daten["nachname"] = gefunden
+    else:
+        daten["vorname"], daten["nachname"] = vorname_aus_mail, nachname_aus_mail
+
+
 def _ist_vollstaendig(daten: dict) -> bool:
     return bool(
         daten["vorname"] and daten["nachname"] and daten["firma"]
@@ -208,6 +290,7 @@ def hole_kandidaten(signatur_db_pfad: str, rubrica_conn: sqlite3.Connection,
             for eintrag in eintraege[:MAX_VERSUCHE_PRO_ABSENDER]:
                 bereinigt = _ohne_zitat(eintrag["text"])
                 versuch = parse_signatur(_letzte_zeilen(bereinigt))
+                _verbessere_namenerkennung(versuch, absender_email, bereinigt)
                 if not versuch["emails"] and _EMAIL_EINFACH.match(absender_email):
                     versuch["emails"] = [{"typ": "Direkt", "email": absender_email}]
                 if _ist_vollstaendig(versuch):

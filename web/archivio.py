@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from typing import List
 
-from fastapi import APIRouter, Form, Query, Request
+from fastapi import APIRouter, Form, Query, Request, Response
 from fastapi.responses import RedirectResponse
 
 from archivio_bridge.anbindung import hole_kandidaten, liste_postfaecher, markiere_status
@@ -114,6 +114,69 @@ async def archivio_uebernehmen_einzeln(request: Request, email: str = Form(...))
     finally:
         conn.close()
     return RedirectResponse(url="/archivio-import", status_code=303)
+
+
+@router.get("/archivio-import/bearbeiten-flyover")
+def archivio_bearbeiten_flyover(request: Request, email: str, postfaecher: List[str] = Query(default=[])):
+    """Zeigt ein Formular zum Korrigieren eines Kandidaten (z.B. falsch erkannter
+    Name) vor der Uebernahme in die Review-Queue - haeufigster Fall laut Nutzer:
+    die Signatur enthaelt eine Funktionsbezeichnung statt eines Namens."""
+    conn = get_connection()
+    try:
+        kandidaten, _ = _hole_kandidaten_oder_leer(conn, postfaecher)
+    finally:
+        conn.close()
+    daten = next(
+        (k for k in kandidaten if k["emails"] and k["emails"][0]["email"].lower() == email.lower()), None
+    )
+    if daten is None:
+        return Response(status_code=404)
+    return templates.TemplateResponse("archivio_bearbeiten_modal.html", {
+        "request": request, "daten": daten, "postfaecher": postfaecher,
+    })
+
+
+@router.post("/archivio-import/uebernehmen-bearbeitet")
+async def archivio_uebernehmen_bearbeitet(request: Request):
+    """Uebernimmt einen Kandidaten mit den vom Nutzer im Bearbeiten-Formular
+    korrigierten Werten - im Gegensatz zu den anderen Uebernehmen-Routen wird der
+    Kandidat NICHT erneut aus der Archivio-DB geholt (der Nutzer hat die Werte ja
+    gerade bewusst geaendert), sondern direkt aus den abgeschickten Formulardaten
+    aufgebaut."""
+    form = await request.form()
+    absender_email = form.get("absender_email", "").strip()
+
+    telefon_typen = form.getlist("telefon_typ")
+    telefon_nummern = form.getlist("telefon_nummer")
+    email_typen = form.getlist("email_typ")
+    email_adressen = form.getlist("email_email")
+
+    daten = {
+        "vorname": form.get("vorname", "").strip(),
+        "nachname": form.get("nachname", "").strip(),
+        "firma": form.get("firma", "").strip(),
+        "rolle": form.get("rolle", "").strip(),
+        "kategorie": "", "notizen": "",
+        "telefonnummern": [
+            {"typ": t, "nummer": n.strip()} for t, n in zip(telefon_typen, telefon_nummern) if n.strip()
+        ],
+        "emails": [
+            {"typ": t, "email": e.strip()} for t, e in zip(email_typen, email_adressen) if e.strip()
+        ],
+        "adressen": [], "urls": [],
+    }
+    gruppen = form.getlist("gruppen_als_ordner")
+    if gruppen:
+        daten["gruppen_als_ordner"] = gruppen
+
+    conn = get_connection()
+    try:
+        queries.create_vorschlag(conn, daten, quelle="archivio")
+        if absender_email:
+            markiere_status(_signatur_db_pfad(), absender_email, "uebernommen")
+    finally:
+        conn.close()
+    return RedirectResponse(url="/review", status_code=303)
 
 
 @router.post("/archivio-import/ablehnen")

@@ -249,6 +249,66 @@ def test_liste_postfaecher_gibt_distinkte_paare(archivio_db):
     assert ("200_projekt", "200 Projekt") in eintraege
 
 
+def test_titelname_wird_durch_email_und_textverifikation_korrigiert(tmp_path, tmp_db):
+    """Realer Fund: parse_signatur erkannte 'Projektleitung Systeme' als Name, weil
+    die Zeile oberflaechlich wie zwei grossgeschriebene Woerter aussieht. Aus der
+    Mailadresse h.minder@gilgen.com abgeleitet + im Volltext verifiziert soll der
+    echte Name (aus einer Gruss-/Signaturzeile) gefunden werden."""
+    pfad = tmp_path / "archivio-titelname.db"
+    conn = _neue_signatur_db(pfad)
+    text = (
+        "Hallo zusammen\n\nAnbei die gewuenschten Unterlagen.\n\n"
+        "Freundliche Gruesse\n\nHanspeter Minder\nProjektleitung Systeme\nGilgen Logistics AG\n"
+        "Wangentalstrasse 252, 3173 Oberwangen\nT +41 31 985 35 21\nH.Minder@gilgen.com"
+    )
+    _mail(conn, "m1", "H.Minder@gilgen.com", text, "2026-01-01")
+    _mail(conn, "m2", "H.Minder@gilgen.com", text, "2026-01-02")
+    conn.commit()
+    conn.close()
+
+    kandidaten = hole_kandidaten(str(pfad), tmp_db, min_mails=2)
+    assert len(kandidaten) == 1
+    assert kandidaten[0]["vorname"] == "Hanspeter"
+    assert kandidaten[0]["nachname"] == "Minder"
+
+
+def test_ist_plausibler_personenname():
+    from archivio_bridge.anbindung import _ist_plausibler_personenname
+    assert _ist_plausibler_personenname("Anna", "Muster") is True
+    assert _ist_plausibler_personenname("Roland", "GUNZENHAUSER") is True
+    assert _ist_plausibler_personenname("Projektleitung", "Systeme") is False
+    assert _ist_plausibler_personenname("EINWOHNERGEMEINDE", "DERENDINGEN") is False
+    assert _ist_plausibler_personenname("", "") is False
+
+
+def test_name_aus_email():
+    from archivio_bridge.anbindung import _name_aus_email
+    assert _name_aus_email("h.minder@gilgen.com") == ("H", "Minder")
+    assert _name_aus_email("anna.muster@example.ch") == ("Anna", "Muster")
+    assert _name_aus_email("info@example.ch") == ("", "")
+    assert _name_aus_email("nur-ein-teil-ohne-punkt@example.ch") == ("", "")
+
+
+def test_name_bleibt_unveraendert_wenn_keine_ableitung_aus_email_moeglich(tmp_path, tmp_db):
+    """Wenn sich aus der Mailadresse kein Name ableiten laesst (z.B. generisches
+    info@), bleibt der urspruengliche (ggf. unplausible) Name stehen statt auf leer
+    zurueckgesetzt zu werden - der Kandidat erscheint weiterhin (Firma/Telefon/
+    E-Mail sind ja korrekt), der Nutzer kann den Namen ueber "Bearbeiten" von Hand
+    korrigieren."""
+    pfad = tmp_path / "archivio-generisch.db"
+    conn = _neue_signatur_db(pfad)
+    text = "Project Manager\nAVS Systeme AG\nT 041 784 45 44\ninfo@avs-systeme.com"
+    _mail(conn, "m1", "info@avs-systeme.com", text, "2026-01-01")
+    _mail(conn, "m2", "info@avs-systeme.com", text, "2026-01-02")
+    conn.commit()
+    conn.close()
+
+    kandidaten = hole_kandidaten(str(pfad), tmp_db, min_mails=2)
+    assert len(kandidaten) == 1
+    assert kandidaten[0]["vorname"] == "Project"
+    assert kandidaten[0]["nachname"] == "Manager"
+
+
 def test_postfach_zuordnen_und_wieder_aufheben(tmp_db):
     ordner_id = queries.get_or_create_projekt(tmp_db, "Testordner")
     queries.postfach_zuordnen(tmp_db, "irgendein_postfach", ordner_id)

@@ -149,3 +149,40 @@ def test_postfach_filter_auf_seite_zeigt_ausgewaehltes_postfach(tmp_db, archivio
     r = TestClient(app).get("/archivio-import", params={"postfaecher": ["200_projekt"]})
     assert r.status_code == 200
     assert "Beispiel AG" in r.text
+
+
+def test_bearbeiten_flyover_zeigt_vorausgefuelltes_formular(tmp_db, archivio_db, monkeypatch):
+    monkeypatch.setattr(settings, "_settings", {"archivio": {"signatur_db_path": archivio_db, "min_mails": 2}})
+    r = TestClient(app).get("/archivio-import/bearbeiten-flyover", params={"email": "anna@beispiel.ch"})
+    assert r.status_code == 200
+    assert 'value="Anna"' in r.text
+    assert 'value="Beispiel AG"' in r.text
+
+
+def test_bearbeiten_flyover_unbekannte_email_ist_404(tmp_db, archivio_db, monkeypatch):
+    monkeypatch.setattr(settings, "_settings", {"archivio": {"signatur_db_path": archivio_db, "min_mails": 2}})
+    r = TestClient(app).get("/archivio-import/bearbeiten-flyover", params={"email": "unbekannt@nirgends.ch"})
+    assert r.status_code == 404
+
+
+def test_uebernehmen_bearbeitet_verwendet_korrigierte_werte(tmp_db, archivio_db, monkeypatch):
+    monkeypatch.setattr(settings, "_settings", {"archivio": {"signatur_db_path": archivio_db, "min_mails": 2}})
+    r = TestClient(app).post("/archivio-import/uebernehmen-bearbeitet", data={
+        "absender_email": "anna@beispiel.ch",
+        "vorname": "Hanna",  # vom Nutzer korrigiert (statt "Anna")
+        "nachname": "Beispiel",
+        "firma": "Beispiel AG",
+        "rolle": "",
+        "telefon_typ": "Direkt", "telefon_nummer": "044 123 45 67",
+        "email_typ": "Direkt", "email_email": "anna@beispiel.ch",
+    }, follow_redirects=False)
+    assert r.status_code == 303
+
+    vorschlaege = queries.list_vorschlaege(tmp_db, status="offen")
+    assert len(vorschlaege) == 1
+    assert vorschlaege[0]["rohdaten"]["vorname"] == "Hanna"
+
+    conn = sqlite3.connect(archivio_db)
+    status = {r[0] for r in conn.execute("SELECT status FROM signatur_quelle WHERE absender_email = 'anna@beispiel.ch'")}
+    conn.close()
+    assert status == {"uebernommen"}

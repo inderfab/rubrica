@@ -55,10 +55,13 @@ _KEIN_NAME = re.compile(
     re.IGNORECASE,
 )
 
-# Gruss-/Schlussformeln, die wie ein Name aussehen koennen ("Freundliche Grüsse").
+# Gruss-/Schlussformeln, die wie ein Name aussehen koennen ("Freundliche Grüsse",
+# aber auch eine informelle EINGANGS-Anrede wie "Hoi Marcel" - ohne diesen Zusatz
+# wurde am echten Testdatensatz der Empfaenger-Name aus der Anrede faelschlich als
+# Absender-Name erkannt, siehe archivio_bridge/anbindung.py).
 _GRUSSFORMEL = re.compile(
     r"grüsse|grüße|gruss|gruß|grüessli|regards|hochachtung|freundlich\w*|"
-    r"gesendet von|sent from|beste\b|liebe\b|herzlich\w*",
+    r"gesendet von|sent from|beste\b|liebe\b|herzlich\w*|\bhoi\b|\bhallo\b",
     re.IGNORECASE,
 )
 
@@ -107,6 +110,11 @@ def _ist_plausible_telefonnummer(normalisiert: str) -> bool:
 def parse_signatur(text: str) -> dict:
     """Nimmt Signatur-Freitext, gibt ein Kontakt-Dict zurueck (alle Felder optional)."""
     text = (text or "").replace("\r\n", "\n").replace("\r", "\n")
+    # Manche Quell-Mails sind eigentlich HTML, dessen Zeilenumbrueche als woertliche
+    # "<br>"-Tags im (vermeintlichen) Klartext landen (am echten Testdatensatz
+    # beobachtet: "Marcel Müllhaupt<br>" wurde so als Name erkannt) - als echten
+    # Zeilenumbruch behandeln statt als Teil des Textes stehen zu lassen.
+    text = re.sub(r"<br\s*/?>", "\n", text, flags=re.IGNORECASE)
     zeilen = [z.strip() for z in text.split("\n")]
     zeilen_nonempty = [z for z in zeilen if z]
 

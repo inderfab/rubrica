@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from urllib.parse import quote_plus
 from fastapi.templating import Jinja2Templates
 
 from config import settings
@@ -41,3 +42,7 @@ templates.env.globals["app_version"] = APP_VERSION
 # Browser dekodiert das beim Attribut-Parsing wieder zurueck - das JSON bleibt
 # beim Lesen ueber element.dataset also intakt.
 templates.env.filters["tojson"] = lambda value: json.dumps(value, ensure_ascii=False)
+
+# Fuer per Hand zusammengesetzte hx-get/href-Query-Strings (z.B. E-Mail-Adressen
+# als Parameter) - Jinja2 bringt anders als Flask kein urlencode-Filter mit.
+templates.env.filters["urlencode"] = lambda value: quote_plus(str(value))

@@ -666,6 +666,43 @@ Session. Gesammeltes Wissen fuer naechstes Mal:
     Heuristik-Grenze; alle Kandidaten landen ohnehin nur als Vorschlag in der Review-Queue und werden dort vor
     dem Bestaetigen geprueft/korrigiert - bei Bedarf spaeter gezielt nachschaerfen.
 
+- **Archivio-Import: bessere Namenserkennung + Bearbeiten-Button (2026-07-14):** Nutzer testete den obigen
+  Stand am echten 10'456-Mail-Datensatz und meldete: oft steht ein Funktionsname statt eines echten Namens
+  (Beispiel: "Projektleitung Systeme" bei `H.Minder@gilgen.com`, wo der echte Name im Text stand). Vorschlag
+  des Nutzers direkt umgesetzt: aus dem lokalen Teil der Mailadresse einen Namen ableiten und im Volltext
+  verifizieren/vervollstaendigen.
+  - **Namens-Plausibilitaetspruefung** (`_ist_plausibler_personenname`): verwirft Funktions-/Organisations-
+    bezeichnungen als Teilstring-Suche (nicht `\b`-Wortgrenzen, da deutsche Komposita wie
+    "Gesamtprojektleiter" keine Wortgrenze vor dem Wortstamm haben) sowie durchgehend grossgeschriebene
+    Mehrwort-Zeilen (Organisationen wie "EINWOHNERGEMEINDE DERENDINGEN" - ein Nachname wie "Roland
+    GUNZENHAUSER" bleibt unberuehrt, da "Roland" gemischt geschrieben ist).
+  - **`_name_aus_email`**: leitet Vor-/Nachname aus dem Mail-Lokalteil ab (z.B. `h.minder@...` ->
+    `Minder`), verwirft generische Lokalteile (`info@`, `kontakt@` etc.).
+  - **`_name_im_text_verifizieren`**: sucht im Volltext nach "Vorname Nachname" mit dem abgeleiteten
+    Nachnamen (z.B. findet "... Gruesse Hans-Ulrich Minder" im Text) - liefert die im Text tatsaechlich
+    vorkommende Schreibweise (korrekter/vollstaendiger Vorname), nicht nur die aus der Mailadresse grob
+    kapitalisierte Kurzform. Ohne Treffer im Text bleibt die schwaechere, aus der Mailadresse abgeleitete
+    Variante (z.B. nur der Initial "T"/"Mueller") - besser als ein Funktionsname, aber ueber den neuen
+    Bearbeiten-Button leicht nachkorrigierbar. Wenn auch keine Mailadressen-Ableitung moeglich ist (z.B.
+    `info@`), bleibt der urspruengliche (ggf. schlechte) Name unveraendert stehen.
+  - **Ergebnis am Echtdatensatz:** 57 -> 116 Kandidaten (fast verdoppelt), da viele zuvor als "unvollstaendig"
+    verworfene Kandidaten (Funktionsname statt Name gefunden) jetzt einen brauchbaren Namen bekommen.
+  - **Nebenfund:** eine informelle Anrede am Textanfang ("Hoi Marcel") wurde faelschlich als Absender-Name
+    erkannt (der Empfaenger wurde angesprochen, nicht der Absender signierte so) - "hoi"/"hallo" zur
+    bestehenden `_GRUSSFORMEL`-Erkennung in `importer/signatur.py` ergaenzt. Ausserdem: manche Quell-Mails
+    sind eigentlich HTML, dessen Umbrueche als woertliche `<br>`-Tags im Text landen (z.B.
+    "Marcel Müllhaupt<br>") - `parse_signatur` ersetzt `<br>`/`<br/>` jetzt durch echte Zeilenumbrueche.
+  - **Bearbeiten-Button + "Übernehmen in RQ"** (Nutzer-Wunsch: Vorschlaege direkt in der Liste korrigieren
+    statt blind zu uebernehmen): neue Spalte/Button in der Kandidatenliste oeffnet ein Modal
+    (`archivio_bearbeiten_modal.html`, gleiches Muster wie der Kontakt-Bearbeiten-Flyover: htmx `hx-get` +
+    modal-overlay) mit editierbaren Feldern (Vorname/Nachname/Firma/Rolle/Telefon/E-Mail). Neue Route
+    `POST /archivio-import/uebernehmen-bearbeitet` baut den Vorschlag direkt aus den abgeschickten
+    Formulardaten auf (im Gegensatz zu den anderen Uebernehmen-Routen NICHT erneut aus der Archivio-DB
+    geholt, da der Nutzer die Werte ja bewusst geaendert hat). Neuer `urlencode`-Jinja-Filter in
+    `web/shared.py` (Jinja2 bringt anders als Flask keinen mit) fuer die E-Mail-Adresse in der
+    hx-get-Query-String (kann `+` enthalten).
+  - 10 neue Tests (`tests/test_archivio_bridge.py`, `tests/test_archivio_web.py`, `tests/test_signatur.py`).
+
 - **Funktion & Rolle verwalten (2026-07-13):** Nutzer wollte eine zentrale Uebersicht ueber alle aktuell
   verwendeten Funktion-/Rolle-Werte quer ueber alle Kontakte, um Tippfehler zu korrigieren, einen Wert global
   umzubenennen oder ihn zu loeschen und die betroffenen Kontakte einem anderen Wert zuzuweisen - ohne jeden
@@ -1141,7 +1178,9 @@ Rubrica importiert — deutlich robuster als das proprietäre Schema direkt zu p
 
 Bekannte Einschränkung: Entwicklungsumgebung läuft unter Python 3.9 (Systemversion) statt der ursprünglich in Abschnitt 6 vermuteten 3.12 — FastAPI-Routenparameter deshalb mit `typing.Optional[int]` statt `int | None` (siehe `CLAUDE.md`). Dies betrifft nur die lokale Entwicklungsumgebung; das produktive `.pkg` bringt sein eigenes Python 3.13 mit und ist davon unabhängig.
 
-Nächste sinnvolle Schritte: Neues `.pkg` (Notion-Redesign + Archivio einzeln übernehmen/ablehnen + Ordner-
-Bearbeiten + alle bisherigen Fixes) auf dem iMac installieren; unter „Einstellungen" `archivio.db_path`
-setzen, falls Archivio dort genutzt werden soll. Danach: Archivio-Scanner-Anpassung (Signatur separat
-speichern, siehe offener Punkt oben) durch den Nutzer selbst, gefolgt von einem Postfach-Rescan auf dem iMac.
+Nächste sinnvolle Schritte: neues `.pkg` (alle bisherigen Fixes inkl. Archivio-Signatur-DB-Anbindung,
+Namenserkennung, Bearbeiten-Button) auf dem iMac installieren; unter „Einstellungen" den Pfad zur
+Archivio-Signatur-Datenbank (`archivio.signatur_db_path`) eintragen und Postfächer den passenden Ordnern
+zuordnen. Offen: `importer/signatur.py::parse_signatur` bleibt eine Heuristik mit gelegentlichem Rauschen
+auf sehr langen/unstrukturierten Thread-Texten (siehe Eintrag oben) - bei Bedarf gezielt nachschärfen,
+sobald sich am echten Datensatz weitere Muster zeigen.

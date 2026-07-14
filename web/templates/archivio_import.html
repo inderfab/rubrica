@@ -93,6 +93,12 @@
                     {% for p in ausgewaehlte_postfaecher %}<input type="hidden" name="postfaecher" value="{{ p }}">{% endfor %}
                     <button type="submit">Übernehmen</button>
                 </form>
+                <button type="button" class="secondary"
+                        hx-get="/archivio-import/bearbeiten-flyover?email={{ mail|urlencode }}{% for p in ausgewaehlte_postfaecher %}&postfaecher={{ p|urlencode }}{% endfor %}"
+                        hx-target="#archivio-modal-inhalt" hx-swap="innerHTML"
+                        onclick="rubricaArchivioModalOeffnen()">
+                    Bearbeiten
+                </button>
                 <form method="post" action="/archivio-import/ablehnen">
                     <input type="hidden" name="email" value="{{ mail }}">
                     {% for p in ausgewaehlte_postfaecher %}<input type="hidden" name="postfaecher" value="{{ p }}">{% endfor %}
@@ -113,4 +119,19 @@
 <p class="empty">Keine Kandidaten gefunden (bei so wenig gescannten E-Mails ist das normal).</p>
 {% endif %}
 {% endif %}
+
+<div id="archivio-modal-overlay" class="modal-overlay" onclick="if (event.target === this) rubricaArchivioModalSchliessen()">
+    <div class="modal-panel">
+        <div id="archivio-modal-inhalt"></div>
+    </div>
+</div>
+
+<script>
+function rubricaArchivioModalOeffnen() {
+    document.getElementById('archivio-modal-overlay').classList.add('sichtbar');
+}
+function rubricaArchivioModalSchliessen() {
+    document.getElementById('archivio-modal-overlay').classList.remove('sichtbar');
+}
+</script>
 {% endblock %}

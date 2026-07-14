@@ -40,6 +40,16 @@ def test_firma_und_name():
     assert d["nachname"] == "Brändli"
 
 
+def test_literale_br_tags_werden_als_zeilenumbruch_behandelt():
+    # Realer Fund: manche Quell-Mails sind eigentlich HTML, dessen Umbrueche als
+    # woertliche "<br>"-Tags im Text landen - ohne Behandlung haengt der Tag am
+    # Namen und verunstaltet ihn ("Marcel Müllhaupt<br>").
+    text = "Freundliche Gruesse<br>Marcel Müllhaupt<br>Architekt FH<br>Strut Architekten AG"
+    d = parse_signatur(text)
+    assert d["vorname"] == "Marcel"
+    assert d["nachname"] == "Müllhaupt"
+
+
 def test_adresse():
     d = parse_signatur(SIG_TYPISCH)
     assert len(d["adressen"]) == 1
