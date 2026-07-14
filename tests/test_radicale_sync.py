@@ -183,6 +183,21 @@ def test_sync_alle_ohne_konfiguration_meldet_inaktiv(tmp_db, monkeypatch):
     assert ergebnis["aktiv"] is False
 
 
+def test_client_verwendet_immer_den_fest_verdrahteten_benutzer(monkeypatch):
+    # RADICALE_BENUTZER ist bewusst nicht konfigurierbar (siehe sync/radicale.py) -
+    # selbst wenn config.yaml (z.B. aus einer alten Installation) noch einen
+    # abweichenden username/addressbook_path enthaelt, muss Rubrica trotzdem immer
+    # gegen "pas" pushen. Verhindert den bereits aufgetretenen owner_only-Mismatch.
+    monkeypatch.setattr(settings, "_settings", {
+        "radicale": {"base_url": "https://127.0.0.1:8443",
+                     "username": "contact", "addressbook_path": "/contact/kontakte/"}
+    })
+    client = radicale._client()
+    assert str(client.base_url).endswith(f"/{radicale.RADICALE_BENUTZER}/kontakte/")
+    assert client.auth is not None
+    client.close()
+
+
 def test_sync_alle_pusht_alle_und_entfernt_verwaiste(tmp_db, monkeypatch):
     k1 = queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster"})
     k2 = queries.create_kontakt(tmp_db, {"vorname": "Bob", "nachname": "Beispiel"})

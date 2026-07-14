@@ -1,7 +1,10 @@
 """Phase 4: Vorschau + Uebernahme von Archivio-Kontaktvorschlaegen aus der Archivio-
 Signatur-DB (Tabelle signatur_quelle). Vorschau liest (und markiert Status, siehe
-archivio_bridge.anbindung), Uebernahme schreibt in die Review-Queue
-(vorschlaege, quelle='archivio') - nie direkt in kontakte."""
+archivio_bridge.anbindung); Uebernahme legt den Kontakt direkt an bzw. mergt ihn
+(keine Review-Queue mehr, siehe docs/konzept.md 2026-07-14) - die vorschlaege-Tabelle
+(quelle='archivio') wird intern weiterhin geschrieben, dient aber nur noch der
+Dublettenerkennung (siehe archivio_bridge.anbindung._BestehenderBestand), nicht mehr
+einem manuellen Bestaetigungsschritt."""
 from __future__ import annotations
 
 from typing import List
@@ -14,6 +17,7 @@ from archivio_bridge.anbindung import hole_kandidaten, liste_postfaecher, markie
 from config import settings
 from db import queries
 from db.connection import get_connection
+from sync import radicale
 from web.contacts import (
     FELDER_MEHRFACHBEARBEITUNG,
     _email_typ_optionen,
@@ -51,12 +55,18 @@ def _postfaecher_oder_leer() -> list:
         return []
 
 
-def _kandidat_uebernehmen(conn, daten: dict) -> None:
+def _kandidat_uebernehmen(conn, daten: dict) -> int:
+    """Legt den Kandidaten direkt als Kontakt an bzw. mergt ihn in einen erkannten
+    bestehenden Kontakt (queries.merge_kontakt ist nie destruktiv) und pusht ihn
+    nach Radicale. Gibt die betroffene kontakt_id zurueck."""
     daten.pop("anzahl_mails", None)
     absender_email = daten.pop("absender_email", None)
-    queries.create_vorschlag(conn, daten, quelle="archivio")
+    vorschlag_id = queries.create_vorschlag(conn, daten, quelle="archivio")
+    kontakt_id = queries.bestaetige_vorschlag(conn, vorschlag_id)
+    radicale.push_kontakt_mit_ordnern(conn, kontakt_id)
     if absender_email:
         markiere_status(_signatur_db_pfad(), absender_email, "uebernommen")
+    return kontakt_id
 
 
 def _kandidat_ablehnen(conn, daten: dict) -> None:
@@ -101,7 +111,7 @@ async def archivio_postfach_zuordnen(request: Request):
 
 @router.post("/archivio-import/uebernehmen")
 async def archivio_uebernehmen(request: Request):
-    """Uebernimmt ALLE aktuell angezeigten Kandidaten auf einmal in die Review-Queue."""
+    """Uebernimmt ALLE aktuell angezeigten Kandidaten auf einmal direkt in kontakte."""
     form = await request.form()
     postfaecher = form.getlist("postfaecher")
     conn = get_connection()
@@ -111,14 +121,14 @@ async def archivio_uebernehmen(request: Request):
             _kandidat_uebernehmen(conn, daten)
     finally:
         conn.close()
-    return RedirectResponse(url="/review", status_code=303)
+    return RedirectResponse(url="/archivio-import", status_code=303)
 
 
 @router.post("/archivio-import/uebernehmen-einzeln")
 async def archivio_uebernehmen_einzeln(request: Request, email: str = Form(...)):
     """Uebernimmt genau EINEN Kandidaten (identifiziert per E-Mail-Adresse -
     die ist durch die strenge Vollstaendigkeitspruefung in hole_kandidaten immer
-    vorhanden) als offenen Vorschlag in die Review-Queue."""
+    vorhanden) direkt in kontakte."""
     form = await request.form()
     postfaecher = form.getlist("postfaecher")
     conn = get_connection()
@@ -136,7 +146,7 @@ async def archivio_uebernehmen_einzeln(request: Request, email: str = Form(...))
 @router.post("/archivio-import/uebernehmen-ausgewaehlte")
 async def archivio_uebernehmen_ausgewaehlte(request: Request):
     """Uebernimmt mehrere ausgewaehlte Kandidaten auf einmal (Sammel-Leiste,
-    gleiches Mehrfachauswahl-Prinzip wie bei Kontakten/Review-Queue)."""
+    gleiches Mehrfachauswahl-Prinzip wie bei Kontakten)."""
     form = await request.form()
     postfaecher = form.getlist("postfaecher")
     emails = {e.lower() for e in form.getlist("emails")}
@@ -156,8 +166,8 @@ def archivio_bulk_bearbeiten_flyover(
     request: Request, emails: List[str] = Query(...), postfaecher: List[str] = Query(default=[])
 ):
     """Sammel-Bearbeiten fuer mehrere ausgewaehlte Archivio-Kandidaten - gleiches
-    gemischt-Prinzip wie review_bulk_bearbeiten_flyover: nur Scalar-Felder, Arrays
-    (Telefon/E-Mail/Adresse) bleiben unangetastet."""
+    gemischt-Prinzip wie beim Sammel-Bearbeiten der Kontaktliste: nur Scalar-Felder,
+    Arrays (Telefon/E-Mail/Adresse) bleiben unangetastet."""
     emails_lower = {e.lower() for e in emails}
     conn = get_connection()
     try:
@@ -186,10 +196,9 @@ def archivio_bulk_bearbeiten_flyover(
 @router.post("/archivio-import/bulk-bearbeiten")
 async def archivio_bulk_bearbeiten_speichern(request: Request):
     """Wendet die editierten Scalar-Werte auf die ausgewaehlten Kandidaten an und
-    uebernimmt sie direkt in die Review-Queue - im Gegensatz zum Sammel-Bearbeiten
-    in der Review-Queue selbst (dort bereits als Vorschlag persistiert) gibt es fuer
-    Archivio-Kandidaten keinen Zwischenzustand zum Speichern-ohne-Bestaetigen: sie
-    werden bei jeder Anfrage frisch aus der Archivio-DB berechnet."""
+    uebernimmt sie direkt in kontakte - Archivio-Kandidaten haben keinen
+    Zwischenzustand zum Speichern-ohne-Uebernehmen: sie werden bei jeder Anfrage
+    frisch aus der Archivio-DB berechnet."""
     form = await request.form()
     emails = {e.lower() for e in form.getlist("emails")}
     postfaecher = form.getlist("postfaecher")
@@ -211,7 +220,7 @@ async def archivio_bulk_bearbeiten_speichern(request: Request):
                 _kandidat_uebernehmen(conn, daten)
     finally:
         conn.close()
-    return RedirectResponse(url="/review", status_code=303)
+    return RedirectResponse(url="/archivio-import", status_code=303)
 
 
 @router.get("/archivio-import/bearbeiten-flyover")
@@ -252,10 +261,11 @@ def archivio_bearbeiten_flyover(request: Request, email: str, postfaecher: List[
 @router.post("/archivio-import/uebernehmen-bearbeitet")
 async def archivio_uebernehmen_bearbeitet(request: Request, absender_email: str = ""):
     """Uebernimmt einen Kandidaten mit den vom Nutzer im Bearbeiten-Formular
-    korrigierten Werten - im Gegensatz zu den anderen Uebernehmen-Routen wird der
-    Kandidat NICHT erneut aus der Archivio-DB geholt (der Nutzer hat die Werte ja
-    gerade bewusst geaendert), sondern direkt aus den abgeschickten Formulardaten
-    aufgebaut (gleiche Hilfsfunktion _parse_kontakt_form wie beim Kontakt-Bearbeiten)."""
+    korrigierten Werten direkt in kontakte - im Gegensatz zu den anderen
+    Uebernehmen-Routen wird der Kandidat NICHT erneut aus der Archivio-DB geholt
+    (der Nutzer hat die Werte ja gerade bewusst geaendert), sondern direkt aus den
+    abgeschickten Formulardaten aufgebaut (gleiche Hilfsfunktion _parse_kontakt_form
+    wie beim Kontakt-Bearbeiten)."""
     form = await request.form()
     daten = _parse_kontakt_form(form)
     ordner_ids = {int(o) for o in form.getlist("ordner_ids")}
@@ -264,12 +274,14 @@ async def archivio_uebernehmen_bearbeitet(request: Request, absender_email: str 
     try:
         ordner = queries.list_projekte(conn)
         daten["gruppen_als_ordner"] = [o["name"] for o in ordner if o["id"] in ordner_ids]
-        queries.create_vorschlag(conn, daten, quelle="archivio")
+        vorschlag_id = queries.create_vorschlag(conn, daten, quelle="archivio")
+        kontakt_id = queries.bestaetige_vorschlag(conn, vorschlag_id)
+        radicale.push_kontakt_mit_ordnern(conn, kontakt_id)
         if absender_email:
             markiere_status(_signatur_db_pfad(), absender_email, "uebernommen")
     finally:
         conn.close()
-    return RedirectResponse(url="/review", status_code=303)
+    return RedirectResponse(url="/archivio-import", status_code=303)
 
 
 @router.post("/archivio-import/ablehnen")

@@ -43,9 +43,13 @@ echo "→ Datenbank einspielen…"
 cp "$WORK/rubrica.db" "$DATA_DIR/rubrica.db"
 
 echo "→ Radicale-CardDAV-Benutzernamen dieser Maschine ermitteln…"
+# Fest verdrahtet auf "pas" (siehe sync/radicale.py RADICALE_BENUTZER) - ein
+# bestehender, abweichend benannter Collection-Ordner (aeltere Installation) hat
+# Vorrang, damit ein Restore auf eine noch nicht migrierte Maschine nicht
+# versehentlich einen zweiten, leeren Collection-Ordner anlegt.
 CARDDAV_USER=$(ls "$DATA_DIR/radicale/collection-root" 2>/dev/null | head -1)
 if [ -z "$CARDDAV_USER" ]; then
-  CARDDAV_USER="$(whoami)"
+  CARDDAV_USER="pas"
   echo "  (kein bestehender Collection-Ordner gefunden, verwende '$CARDDAV_USER')"
 else
   echo "  gefunden: $CARDDAV_USER"

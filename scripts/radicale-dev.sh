@@ -21,8 +21,9 @@ fi
 
 HTPASSWD_PATH="$DATA_DIR/radicale-htpasswd"
 if [ ! -f "$HTPASSWD_PATH" ]; then
-  echo "Kein Radicale-Passwort gesetzt. Bitte zuerst ausfuehren:"
-  echo "  .venv/bin/python scripts/radicale_set_password.py fabio <passwort>"
+  echo "Kein Radicale-Passwort gesetzt. Bitte zuerst ausfuehren (Benutzername ist fest \"pas\","
+  echo "siehe sync/radicale.py):"
+  echo "  .venv/bin/python scripts/radicale_set_password.py pas <passwort>"
   exit 1
 fi
 

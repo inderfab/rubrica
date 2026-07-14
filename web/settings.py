@@ -44,8 +44,8 @@ def einstellungen_form(request: Request, gespeichert: str = "", sync: str = ""):
         "private_email_zeigen": bool(settings.get("export.private_email_zeigen", False)),
         "privatadresse_zeigen": bool(settings.get("export.privatadresse_zeigen", False)),
         "radicale_base_url": settings.get("radicale.base_url", "") or "",
-        "radicale_addressbook_path": settings.get("radicale.addressbook_path", "") or "",
-        "radicale_username": settings.get("radicale.username", "") or "",
+        "radicale_addressbook_path": f"/{radicale.RADICALE_BENUTZER}/kontakte/",
+        "radicale_username": radicale.RADICALE_BENUTZER,
         "radicale_password": settings.get("radicale.password", "") or "",
         "ca_zertifikat_vorhanden": _ca_zertifikat_pfad().is_file(),
     })
@@ -92,13 +92,6 @@ async def einstellungen_speichern(request: Request):
     backup_pfad = (form.get("backup_pfad") or "").strip()
     export_firmenname = (form.get("export_firmenname") or "").strip()
     radicale_base_url = (form.get("radicale_base_url") or "").strip()
-    # Benutzername und Adressbuch-Pfad sind bewusst NICHT mehr ueber dieses Formular
-    # aenderbar (siehe settings.html) - unter Radicales "owner_only"-Rechtemodell
-    # muessen beide immer zusammenpassen (Pfad muss mit "/{username}/" beginnen);
-    # ein Aendern von nur einem der beiden Werte fuehrte bereits zu einem stillen
-    # Sync-Ausfall. Beide bleiben daher unveraendert aus der bestehenden Konfiguration.
-    radicale_addressbook_path = settings.get("radicale.addressbook_path", "") or ""
-    radicale_username = settings.get("radicale.username", "") or ""
     radicale_password = form.get("radicale_password") or ""
 
     logo = form.get("logo")
@@ -114,8 +107,6 @@ async def einstellungen_speichern(request: Request):
         "backup": {"pfad": backup_pfad},
         "radicale": {
             "base_url": radicale_base_url,
-            "addressbook_path": radicale_addressbook_path,
-            "username": radicale_username,
             "password": radicale_password,
         },
         "export": {
@@ -130,8 +121,8 @@ async def einstellungen_speichern(request: Request):
     # Die htpasswd-Datei, gegen die der Radicale-SERVER Logins prueft (Kontakte.app UND
     # Rubrica), muss mitgezogen werden - sonst schlaegt jeder Login fehl. Radicale liest
     # die Datei live neu ein, ein Neustart ist nicht noetig.
-    if radicale_username and radicale_password:
-        htpasswd.set_password(radicale_username, radicale_password)
+    if radicale_password:
+        htpasswd.set_password(radicale.RADICALE_BENUTZER, radicale_password)
 
     return RedirectResponse(url="/einstellungen?gespeichert=1", status_code=303)
 

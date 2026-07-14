@@ -21,6 +21,9 @@ import rumps
 
 WEB_PORT = 8001
 RADICALE_PORT = 8443
+# Muss mit sync.radicale.RADICALE_BENUTZER uebereinstimmen (hier dupliziert statt
+# importiert, damit die Menubar-App ihre bewusst minimalen Abhaengigkeiten behaelt).
+RADICALE_BENUTZER = "pas"
 
 _HERE = Path(__file__).resolve().parent  # Contents/Resources im gepackten Bundle
 _ICON = str(_HERE / "icon.png")
@@ -53,9 +56,6 @@ def _hostname_local() -> str:
     return f"{name or socket.gethostname()}.local"
 
 
-def _benutzername() -> str:
-    return os.environ.get("USER", "rubrica")
-
 
 def _env() -> dict:
     env = os.environ.copy()
@@ -77,8 +77,7 @@ def _bereite_datenverzeichnis_vor():
     config = _DATA_DIR / "config.yaml"
     beispiel = _HERE / "config.yaml.example"
     if not config.exists() and beispiel.exists():
-        text = beispiel.read_text().replace("__RUBRICA_USER__", _benutzername())
-        config.write_text(text)
+        config.write_text(beispiel.read_text())
         log.info("config.yaml aus Beispiel erstellt")
 
 
@@ -110,9 +109,8 @@ def _bereite_radicale_vor():
 
     htpasswd = _DATA_DIR / "radicale-htpasswd"
     if not htpasswd.exists():
-        benutzer = _benutzername()
         passwort = secrets.token_urlsafe(12)
-        subprocess.run([sys.executable, str(_HERE / "radicale_set_password.py"), benutzer, passwort],
+        subprocess.run([sys.executable, str(_HERE / "radicale_set_password.py"), RADICALE_BENUTZER, passwort],
                         check=False, timeout=30, env=_env())
         # Dasselbe generierte Passwort auch in config.yaml schreiben (Client-Seite),
         # damit Rubricas eigener Push von Anfang an gegen das gleiche Passwort
@@ -124,16 +122,16 @@ def _bereite_radicale_vor():
             f"Rubrica CardDAV-Zugangsdaten (generiert {time.strftime('%c')})\n"
             f"Server:   {hostname}\n"
             f"Port:     {RADICALE_PORT}\n"
-            f"Benutzer: {benutzer}\n"
+            f"Benutzer: {RADICALE_BENUTZER}\n"
             f"Passwort: {passwort}\n"
-            f"Pfad:     /{benutzer}/kontakte/\n"
+            f"Pfad:     /{RADICALE_BENUTZER}/kontakte/\n"
         )
         zugangsdaten.chmod(0o600)
         _osascript_alert(
             "Rubrica CardDAV eingerichtet",
             f"Server: {hostname}\nPort: {RADICALE_PORT}\n"
-            f"Benutzer: {benutzer}\nPasswort: {passwort}\n"
-            f"Pfad: /{benutzer}/kontakte/\n\n"
+            f"Benutzer: {RADICALE_BENUTZER}\nPasswort: {passwort}\n"
+            f"Pfad: /{RADICALE_BENUTZER}/kontakte/\n\n"
             f"Auch gespeichert in:\n{zugangsdaten}",
         )
         log.info("Radicale-Passwort erzeugt, Zugangsdaten gespeichert")

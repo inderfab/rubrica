@@ -34,6 +34,10 @@ def archivio_db(tmp_path):
     return str(pfad)
 
 
+def _kontakte(conn):
+    return [dict(r) for r in conn.execute("SELECT * FROM kontakte")]
+
+
 def test_vorschau_ohne_konfiguration_zeigt_hinweis(tmp_db, monkeypatch):
     monkeypatch.setattr(settings, "_settings", {"archivio": {"signatur_db_path": ""}})
     r = TestClient(app).get("/archivio-import")
@@ -43,15 +47,15 @@ def test_vorschau_ohne_konfiguration_zeigt_hinweis(tmp_db, monkeypatch):
 
 def test_nav_zeigt_archivio_import_nur_wenn_konfiguriert(tmp_db, archivio_db, monkeypatch):
     monkeypatch.setattr(settings, "_settings", {"archivio": {"signatur_db_path": ""}})
-    r = TestClient(app).get("/review")
+    r = TestClient(app).get("/kontakte")
     assert "/archivio-import" not in r.text
 
     monkeypatch.setattr(settings, "_settings", {"archivio": {"signatur_db_path": "/pfad/existiert/nicht.db"}})
-    r_nicht_existent = TestClient(app).get("/review")
+    r_nicht_existent = TestClient(app).get("/kontakte")
     assert "/archivio-import" not in r_nicht_existent.text
 
     monkeypatch.setattr(settings, "_settings", {"archivio": {"signatur_db_path": archivio_db}})
-    r2 = TestClient(app).get("/review")
+    r2 = TestClient(app).get("/kontakte")
     assert "/archivio-import" in r2.text
 
 
@@ -60,17 +64,23 @@ def test_vorschau_zeigt_kandidat_ohne_zu_schreiben(tmp_db, archivio_db, monkeypa
     r = TestClient(app).get("/archivio-import")
     assert r.status_code == 200
     assert "Beispiel AG" in r.text
-    assert len(queries.list_vorschlaege(tmp_db, status="offen")) == 0
+    assert tmp_db.execute("SELECT COUNT(*) FROM kontakte").fetchone()[0] == 0
 
 
-def test_uebernehmen_schreibt_in_review_queue(tmp_db, archivio_db, monkeypatch):
+def test_uebernehmen_legt_kontakt_direkt_an(tmp_db, archivio_db, monkeypatch):
     monkeypatch.setattr(settings, "_settings", {"archivio": {"signatur_db_path": archivio_db, "min_mails": 2}})
     r = TestClient(app).post("/archivio-import/uebernehmen", follow_redirects=False)
     assert r.status_code == 303
-    vorschlaege = queries.list_vorschlaege(tmp_db, status="offen")
+
+    kontakte = _kontakte(tmp_db)
+    assert len(kontakte) == 1
+    assert kontakte[0]["firma"] == "Beispiel AG"
+
+    # Der Vorgang bleibt intern als Vorschlag nachvollziehbar (Dublettenerkennung),
+    # ist aber sofort bestaetigt - keine offene Review-Queue mehr.
+    vorschlaege = queries.list_vorschlaege(tmp_db, status="bestaetigt")
     assert len(vorschlaege) == 1
     assert vorschlaege[0]["quelle"] == "archivio"
-    assert vorschlaege[0]["rohdaten"]["firma"] == "Beispiel AG"
 
 
 def test_uebernehmen_markiert_mails_als_uebernommen(tmp_db, archivio_db, monkeypatch):
@@ -88,17 +98,18 @@ def test_uebernehmen_erzeugt_keine_dubletten_bei_zweitem_lauf(tmp_db, archivio_d
     client = TestClient(app)
     client.post("/archivio-import/uebernehmen", follow_redirects=False)
     client.post("/archivio-import/uebernehmen", follow_redirects=False)
-    assert len(queries.list_vorschlaege(tmp_db, status="offen")) == 1
+    assert tmp_db.execute("SELECT COUNT(*) FROM kontakte").fetchone()[0] == 1
 
 
-def test_einzeln_uebernehmen_erzeugt_nur_diesen_vorschlag(tmp_db, archivio_db, monkeypatch):
+def test_einzeln_uebernehmen_erzeugt_nur_diesen_kontakt(tmp_db, archivio_db, monkeypatch):
     monkeypatch.setattr(settings, "_settings", {"archivio": {"signatur_db_path": archivio_db, "min_mails": 2}})
     r = TestClient(app).post("/archivio-import/uebernehmen-einzeln",
                               data={"email": "anna@beispiel.ch"}, follow_redirects=False)
     assert r.status_code == 303
-    vorschlaege = queries.list_vorschlaege(tmp_db, status="offen")
-    assert len(vorschlaege) == 1
-    assert vorschlaege[0]["rohdaten"]["emails"][0]["email"] == "anna@beispiel.ch"
+    kontakte = _kontakte(tmp_db)
+    assert len(kontakte) == 1
+    emails = {e["email"] for e in queries.get_kontakt(tmp_db, kontakte[0]["id"])["emails"]}
+    assert "anna@beispiel.ch" in emails
 
 
 def test_ablehnen_verhindert_erneutes_erscheinen(tmp_db, archivio_db, monkeypatch):
@@ -107,9 +118,9 @@ def test_ablehnen_verhindert_erneutes_erscheinen(tmp_db, archivio_db, monkeypatc
     r = client.post("/archivio-import/ablehnen", data={"email": "anna@beispiel.ch"}, follow_redirects=False)
     assert r.status_code == 303
 
-    # abgelehnter Vorschlag existiert (Status abgelehnt), taucht aber in der
-    # offenen Review-Queue nicht auf
-    assert len(queries.list_vorschlaege(tmp_db, status="offen")) == 0
+    # Ablehnen legt keinen Kontakt an, nur einen internen "abgelehnt"-Vorschlag
+    # (Dublettenerkennung, verhindert erneutes Auftauchen)
+    assert tmp_db.execute("SELECT COUNT(*) FROM kontakte").fetchone()[0] == 0
     assert len(queries.list_vorschlaege(tmp_db, status="abgelehnt")) == 1
 
     # und erscheint bei einem erneuten Scan nicht wieder als Kandidat
@@ -194,10 +205,12 @@ def test_uebernehmen_bearbeitet_verwendet_korrigierte_werte(tmp_db, archivio_db,
         }, follow_redirects=False)
     assert r.status_code == 303
 
-    vorschlaege = queries.list_vorschlaege(tmp_db, status="offen")
-    assert len(vorschlaege) == 1
-    assert vorschlaege[0]["rohdaten"]["vorname"] == "Hanna"
-    assert vorschlaege[0]["rohdaten"]["telefonnummern"] == [{"typ": "Direkt", "nummer": "044 123 45 67"}]
+    kontakte = _kontakte(tmp_db)
+    assert len(kontakte) == 1
+    assert kontakte[0]["vorname"] == "Hanna"
+    kontakt = queries.get_kontakt(tmp_db, kontakte[0]["id"])
+    nummern = [(t["typ"], t["nummer"]) for t in kontakt["telefonnummern"]]
+    assert nummern == [("Direkt", "044 123 45 67")]
 
     conn = sqlite3.connect(archivio_db)
     status = {r[0] for r in conn.execute("SELECT status FROM signatur_quelle WHERE absender_email = 'anna@beispiel.ch'")}
@@ -212,9 +225,9 @@ def test_uebernehmen_ausgewaehlte_uebernimmt_nur_selektierte(tmp_db, archivio_db
     }, follow_redirects=False)
     assert r.status_code == 303
 
-    vorschlaege = queries.list_vorschlaege(tmp_db, status="offen")
-    assert len(vorschlaege) == 1
-    assert vorschlaege[0]["rohdaten"]["firma"] == "Beispiel AG"
+    kontakte = _kontakte(tmp_db)
+    assert len(kontakte) == 1
+    assert kontakte[0]["firma"] == "Beispiel AG"
 
 
 def test_ablehnen_ausgewaehlte_lehnt_nur_selektierte_ab(tmp_db, archivio_db, monkeypatch):
@@ -224,7 +237,7 @@ def test_ablehnen_ausgewaehlte_lehnt_nur_selektierte_ab(tmp_db, archivio_db, mon
     }, follow_redirects=False)
     assert r.status_code == 303
 
-    assert len(queries.list_vorschlaege(tmp_db, status="offen")) == 0
+    assert tmp_db.execute("SELECT COUNT(*) FROM kontakte").fetchone()[0] == 0
     assert len(queries.list_vorschlaege(tmp_db, status="abgelehnt")) == 1
 
 
@@ -279,11 +292,11 @@ def test_bulk_bearbeiten_speichert_gemeinsamen_wert_und_uebernimmt_beide(tmp_db,
     }, follow_redirects=False)
     assert r.status_code == 303
 
-    vorschlaege = queries.list_vorschlaege(tmp_db, status="offen")
-    assert len(vorschlaege) == 2
-    vornamen = {v["rohdaten"]["vorname"] for v in vorschlaege}
+    kontakte = _kontakte(tmp_db)
+    assert len(kontakte) == 2
+    vornamen = {k["vorname"] for k in kontakte}
     assert vornamen == {"Anna", "Peter"}
-    rollen = {v["rohdaten"]["rolle"] for v in vorschlaege}
+    rollen = {k["rolle"] for k in kontakte}
     assert rollen == {"Mitarbeiter"}
 
     conn = sqlite3.connect(archivio_db)
@@ -308,9 +321,10 @@ def test_bulk_bearbeiten_uebernimmt_nur_ausgewaehlte(tmp_db, archivio_db, monkey
     }, follow_redirects=False)
     assert r.status_code == 303
 
-    vorschlaege = queries.list_vorschlaege(tmp_db, status="offen")
-    assert len(vorschlaege) == 1
-    assert vorschlaege[0]["rohdaten"]["emails"][0]["email"] == "anna@beispiel.ch"
+    kontakte = _kontakte(tmp_db)
+    assert len(kontakte) == 1
+    emails = {e["email"] for e in queries.get_kontakt(tmp_db, kontakte[0]["id"])["emails"]}
+    assert "anna@beispiel.ch" in emails
 
     conn = sqlite3.connect(archivio_db)
     status = {r2[0] for r2 in conn.execute(

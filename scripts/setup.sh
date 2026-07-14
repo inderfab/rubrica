@@ -15,7 +15,7 @@ mkdir -p logs
 DATA_DIR="$HOME/Library/Application Support/Rubrica"
 mkdir -p "$DATA_DIR/logs"
 if [ ! -f "$DATA_DIR/config.yaml" ] && [ -f "config.yaml.example" ]; then
-  sed "s|__RUBRICA_USER__|$(whoami)|g" config.yaml.example > "$DATA_DIR/config.yaml"
+  cp config.yaml.example "$DATA_DIR/config.yaml"
   echo "config.yaml nach $DATA_DIR kopiert - bitte anpassen."
 fi
 

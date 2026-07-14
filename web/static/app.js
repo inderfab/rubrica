@@ -61,7 +61,7 @@ function rubricaComboboxBlur(event) {
 // Kontakt-Bearbeiten-Formular (_kontakt_bearbeiten_form.html). Bewusst hier in
 // app.js statt in einem <script>-Block innerhalb des Formular-Partials: das
 // Partial wird teils per htmx (fuehrt eingebettete <script>-Tags beim Swap aus),
-// teils per einfachem fetch()+innerHTML= geladen (Review-Queue) - Letzteres
+// teils per einfachem fetch()+innerHTML= geladen (Archivio-Import) - Letzteres
 // fuehrt eingefuegte <script>-Tags NICHT aus, wodurch "addRow" sonst undefiniert
 // waere. Als globale Funktion in der immer schon geladenen app.js ist sie in
 // beiden Faellen sofort verfuegbar.
@@ -142,8 +142,7 @@ function rubricaOrdnerAnlegen(name) {
 }
 
 // Legt einen Ordner an und fuegt ihn direkt (angehakt) einer Ordner-Checkliste
-// hinzu - genutzt vom Kontakt-/Vorschlag-Bearbeiten-Formular und der
-// Review-Queue-Bestaetigen-Checkliste.
+// hinzu - genutzt vom Kontakt-/Vorschlag-Bearbeiten-Formular.
 function rubricaOrdnerCheckelisteAnlegen(checklisteId, inputId) {
     const input = document.getElementById(inputId);
     const name = input.value.trim();

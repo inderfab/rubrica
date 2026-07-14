@@ -122,13 +122,11 @@ Feldumfang bewusst an der tatsächlichen Nutzung im bestehenden Apple-Adressbuch
   zu Apple) und ist daher voll mit dem Architekturprinzip vereinbar. Das Formular ist bewusst minimal und
   mobiltauglich. **Reibungssenker: E-Mail-Signatur einfügen** → `importer/signatur.py` parst sie und füllt
   die Felder vor (danach editierbar). Kontakte werden **direkt angelegt** (kein Freigabe-Gate — Reibung
-  würde die Erfassung verhindern), nachträglich korrigierbar; Duplikat-Bereinigung ist Admin-Aufgabe über
-  die Review-Queue (Ausbau geplant). Der bisherige Weg (Import aus Kontakte.app, 5.6) bleibt zusätzlich
-  bestehen.
+  würde die Erfassung verhindern), nachträglich korrigierbar. Der bisherige Weg (Import aus Kontakte.app,
+  5.6) bleibt zusätzlich bestehen.
 - **Feld „Funktion"** (Fachrichtung: Architekt, Bauingenieur, Geologe, div. Planer …) pro Kontakt, damit der
   Chef nach Ansprechpartner-Rolle filtern/exportieren kann. Auswahlliste + Freitext (nicht erzwungen).
   Technisch im bestehenden Feld `kategorie` gespeichert (nur UI-Label „Funktion"), keine DB-Migration.
-- Stellt die Review-Queue als UI bereit (offene Vorschläge bestätigen/ablehnen/zusammenführen).
 - **Push-Sync nach Radicale** (`sync/radicale.py`): bei jeder Kontakt-Änderung/-Löschung, Ordner-Zuordnung
   oder Vorschlag-Bestätigung schreibt die App die betroffene(n) vCard(s) per CardDAV `PUT` (Legt die
   Adressbuch-Collection bei Bedarf automatisch per `MKCOL` an). Deterministisches UID-Schema:
@@ -156,13 +154,15 @@ Feldumfang bewusst an der tatsächlichen Nutzung im bestehenden Apple-Adressbuch
 - **Wichtig:** Es gibt aktuell noch keine SQL-DB mit fertig strukturierten Adressdaten. Archivio scannt Dokumente auf dem Server sowie E-Mails im Postfach und extrahiert deren Inhalt als Rohtext in eine SQL-DB. Adressdaten sind darin also nicht als eigene Felder vorhanden, sondern höchstens innerhalb des extrahierten Fließtexts auffindbar – z. B. in einer E-Mail-Signatur.
 - Das bedeutet: Bevor eine Matching-Engine gebaut werden kann, braucht es zusätzlich eine Extraktionslogik (Erkennung von Name/Firma/Telefon/E-Mail innerhalb von Freitext, z. B. Signaturen). Das ist ein eigenständiges, nicht triviales Teilproblem.
 - Dieser Teil ist bewusst kein Bestandteil der ersten Umsetzung, sondern wird erst angegangen, wenn Phase 1–2 stehen. Der bestehende Archivio-Code liegt unter `/Users/fi/archivio` und sollte zu gegebener Zeit als Referenz für das tatsächliche SQL-Schema herangezogen werden, bevor die Extraktions- und Matching-Logik entworfen wird.
-- Grundprinzip bleibt aber von Anfang an gültig und sollte im Datenmodell (Tabelle `VORSCHLAEGE`) schon vorgesehen sein: kein Treffer → neuer Vorschlag in der Review-Queue; Treffer mit abweichenden Daten → Änderungsvorschlag, nie automatische Änderung.
+- Grundprinzip bleibt aber von Anfang an gültig und sollte im Datenmodell (Tabelle `VORSCHLAEGE`) schon
+  vorgesehen sein: kein Treffer → neuer Kontakt; Treffer mit abweichenden Daten → nie destruktive
+  Änderung, nur Ergänzung leerer Felder (siehe 11, "Review-Queue komplett entfernt").
 
 ### 5.6 Import bestehender Adressbücher — dauerhafter Eingabeweg, nicht nur Einmal-Migration
 - Export als `.vcf` aus Kontakte.app (Ablage → Exportieren → vCard exportieren) bei jedem Mitarbeiter. Sowohl Einzel-Export (ein Kontakt) als auch Batch-Export (alle/mehrere Kontakte in einer Datei) werden unterstützt; mehrere Dateien gleichzeitig hochladbar.
-- **Import bleibt *ein* Weg der Erfassung (neben der direkten Web-Neuanlage, siehe 5.1), aber der einzige aus Kontakte.app zurück.** Grund: eine echte bidirektionale CardDAV-Synchronisation (Kontakte.app ↔ App) würde das Kernprinzip "nie automatisches Überschreiben" aushebeln, weil Änderungen aus Kontakte.app dann ungeprüft durchschlagen würden. Radicale bleibt nur Ausgaberichtung (App → Apple Kontakte für Klickwahl); die Rückrichtung aus Kontakte.app bleibt bewusst Export → Import → Review-Queue. (Direktes Neuanlegen in der Web-UI umgeht Kontakte.app ganz und ist davon unberührt.)
+- **Import bleibt *ein* Weg der Erfassung (neben der direkten Web-Neuanlage, siehe 5.1), aber der einzige aus Kontakte.app zurück.** Grund: eine echte bidirektionale CardDAV-Synchronisation (Kontakte.app ↔ App) würde das Kernprinzip "nie automatisches Überschreiben" aushebeln, weil Änderungen aus Kontakte.app dann ungeprüft durchschlagen würden. Radicale bleibt nur Ausgaberichtung (App → Apple Kontakte für Klickwahl); die Rückrichtung aus Kontakte.app bleibt bewusst Export → Import → direkte Übernahme (siehe 11, "Review-Queue komplett entfernt"). (Direktes Neuanlegen in der Web-UI umgeht Kontakte.app ganz und ist davon unberührt.)
 - Import-Parser mappt vCard-Felder auf das Datenmodell: Name, Firma, Rolle, Telefonnummern, E-Mails, Postadressen (ADR), Homepage/URLs, Notizen (NOTE).
-- Da mehrere, teils überlappende Mitarbeiter-Kopien existieren: alle Exporte importieren und dieselbe Review-Queue-Logik (siehe `VORSCHLAEGE`-Tabelle) für die Dedup-/Zusammenführung nutzen – keine zweite Logik nötig, auch nicht für die spätere Archivio-Integration. Matching-Reihenfolge: exakte E-Mail → normalisierte Telefonnummer → exakter Vor-/Nachname.
+- Da mehrere, teils überlappende Mitarbeiter-Kopien existieren: alle Exporte importieren und dieselbe Dedup-/Merge-Logik (siehe `VORSCHLAEGE`-Tabelle, `queries.merge_kontakt`) nutzen – keine zweite Logik nötig, auch nicht für die Archivio-Integration. Matching-Reihenfolge: exakte E-Mail → normalisierte Telefonnummer → exakter Vor-/Nachname.
 - Bestehende lokale Gruppen aus dem Import können optional als erste Ordner übernommen werden (Apple-Gruppen-vCards mit `X-ADDRESSBOOKSERVER-KIND`/`MEMBER`, in der Praxis am bestehenden Adressbuch verifiziert: ~32 Gruppen bei 1538 Kontakten).
 
 ### 5.7 Export
@@ -309,11 +309,11 @@ Radicale-Anbindung, launchd-Plists und `.pkg`-Build (Phase 2 ff.) werden zu gege
 
 | Phase | Status |
 |---|---|
-| 0 – Import + Dedup | Grundfunktion steht (vCard-Upload, Matching, Review-Queue) |
+| 0 – Import + Dedup | Grundfunktion steht (vCard-Upload, Matching, direkte Uebernahme ohne Review-Schritt seit 2026-07-14) |
 | 1 – Zentrale DB + Web-UI | Grundfunktion steht (Kontakte/Ordner-CRUD, Live-Suche) |
-| 2 – Radicale/CardDAV | Sync-Engine steht (Push bei Kontakt-/Ordner-Änderung, echte htpasswd-Auth), end-to-end gegen echten Radicale-Server verifiziert |
+| 2 – Radicale/CardDAV | Sync-Engine steht (Push bei Kontakt-/Ordner-Änderung, echte htpasswd-Auth, fest verdrahteter Benutzer "pas" seit 2026-07-14), end-to-end gegen echten Radicale-Server verifiziert |
 | 3 – Export (Excel/PDF) | Steht: PDF-Adressliste (BKP-sortiert, Firmengruppierung, Kopf/Fusszeile, konfigurierbarer Firmenname/Logo) + CSV mit Spalten je Kategorie (Direkt/Privat/Allgemein) |
-| 4 – Archivio-Integration | Vorstufe steht (Archivio-Import-Seite: liest Signatur-Kandidaten, uebernimmt in Review-Queue). Volle Matching-Engine auf Freitext weiterhin zurückgestellt |
+| 4 – Archivio-Integration | Vorstufe steht (Archivio-Import-Seite: liest Signatur-Kandidaten, uebernimmt direkt in kontakte). Volle Matching-Engine auf Freitext weiterhin zurückgestellt |
 
 Umgesetzt und end-to-end im Browser verifiziert (2026-07-10):
 - Kontakte bearbeiten/löschen inkl. mehrerer Telefonnummern/E-Mails/Adressen/URLs, Notizen, Zuordnung zu Ordnern. Bewusst keine manuelle Neuanlage in der App (siehe 5.1) — Anlage erfolgt in Kontakte.app + Import
@@ -1270,11 +1270,66 @@ Text unter einem Hinweis, dass Benutzername/Pfad hier nicht aenderbar sind.
   bisher separate Versionsanzeige unten in der Sidebar entfernt, Version steht jetzt direkt neben "Rubrica"
   oben (`<span class="brand-version">`).
 
+- **Review-Queue komplett entfernt (2026-07-14):** Nutzer-Vorgabe: "so einfach wie moeglich" - falsche
+  Treffer lassen sich im Nachhinein direkt am Kontakt korrigieren, ein extra Bestaetigungsschritt lohnt den
+  Aufwand nicht. `web/review.py` + zugehoerige Templates (`review_queue.html`,
+  `review_bearbeiten_modal.html`, `review_bulk_bearbeiten_modal.html`) geloescht, Router-Registrierung in
+  `web/main.py` und Nav-Link in `base.html` entfernt.
+  - `importer/vcard.py::importiere()` legt jeden Kontakt jetzt **direkt** an bzw. mergt ihn in einen
+    erkannten bestehenden Kontakt (`queries.create_vorschlag` + sofortiges `queries.bestaetige_vorschlag`
+    im selben Aufruf) - gibt jetzt eine Liste betroffener `kontakt_id` zurueck statt nur eine Anzahl.
+    `web/imports.py` pusht diese direkt nach Radicale und leitet auf `/kontakte` weiter (statt `/review`).
+  - `web/archivio.py`: `_kandidat_uebernehmen()` sowie die Routen `uebernehmen`, `uebernehmen-einzeln`,
+    `uebernehmen-ausgewaehlte`, `uebernehmen-bearbeitet` und `bulk-bearbeiten` bestaetigen den erzeugten
+    Vorschlag jetzt ebenfalls sofort und pushen nach Radicale, statt ihn offen in der Review-Queue liegen
+    zu lassen. Neuer gemeinsamer Helfer `sync.radicale.push_kontakt_mit_ordnern()`.
+  - Die `vorschlaege`-Tabelle und `create_vorschlag`/`bestaetige_vorschlag`/`set_vorschlag_status` bleiben
+    bestehen (sie sind weiterhin die nie-destruktive Merge-Logik UND - fuer `quelle='archivio'` - die
+    Grundlage der Dublettenerkennung in `archivio_bridge.anbindung._BestehenderBestand`), nur der manuelle
+    Bestaetigungsschritt/das UI dafuer entfaellt. `db.queries.update_vorschlag_rohdaten` (nur von der
+    Review-Queue genutzt) entfernt.
+  - `scripts/import_from_contacts_app.py` (einmaliges Migrationsskript) an die neue `importiere()`-Signatur
+    angepasst; der bisherige "automatisch bestaetigen ausser bei Konflikt, Rest bleibt in der Review-Queue"-
+    Sonderfall ist jetzt ueberfluessig, da `importiere()` das ohnehin immer tut.
+  - Tests: `tests/test_review_web.py` geloescht; `tests/test_import.py` und `tests/test_archivio_web.py`
+    auf Pruefungen gegen die `kontakte`-Tabelle statt gegen offene Vorschlaege umgestellt.
+- **Radicale-Benutzer fest auf "pas" verdrahtet (2026-07-14):** Nutzer meldete, dass das CardDAV-Konto
+  "contact" sich zwar verbinden liess, aber nie Karten erhielt (nur "pas" bekam sie) - Ursache: der
+  Benutzername/Adressbuch-Pfad wurde bislang bei jeder Neuinstallation aus dem **macOS-Benutzernamen** der
+  jeweiligen Maschine abgeleitet (`__RUBRICA_USER__`-Platzhalter in `config.yaml.example`, ersetzt durch
+  `scripts/setup.sh`/`scripts/build-pkg.sh`/`menubar/app.py`) - je nach Maschine ein anderer Wert, und unter
+  Radicales `owner_only`-Rechtemodell muessen Benutzername und Pfad IMMER exakt zusammenpassen. Ein Konto,
+  dessen Name vom aktuell konfigurierten Wert abweicht, verbindet sich zwar (Login gelingt, falls das
+  Passwort passt), bekommt aber nur Zugriff auf seinen EIGENEN, leeren Adressbuch-Pfad - genau das
+  beobachtete Symptom. Nutzer-Entscheidung: kein Validierungs-Aufwand, stattdessen ein einziger, fest
+  verdrahteter Wert fuer alle Installationen, der diese Fehlerklasse strukturell unmoeglich macht.
+  - Neue Konstante `sync.radicale.RADICALE_BENUTZER = "pas"` - `_client()` baut `base_url`/`auth` jetzt
+    ausschliesslich daraus, `radicale.username`/`radicale.addressbook_path` werden nirgends mehr gelesen.
+  - `web/settings.py`: liest/schreibt diese beiden Felder gar nicht mehr (auch nicht mehr Teil des
+    `settings.save()`-Aufrufs); die htpasswd-Passwortaenderung schreibt jetzt immer fuer `RADICALE_BENUTZER`.
+    Bereits vorhandene `radicale.username`/`addressbook_path`-Eintraege in aelteren `config.yaml`-Dateien
+    werden dadurch einfach ignoriert (nicht geloescht, aber wirkungslos).
+  - `config.yaml.example`, `scripts/setup.sh`, `scripts/build-pkg.sh` (2 Stellen), `menubar/app.py`: der
+    `__RUBRICA_USER__`/`whoami`-Platzhaltermechanismus komplett entfernt, `config.yaml` wird jetzt einfach
+    unveraendert aus dem Beispiel kopiert. `menubar/app.py` dupliziert die Konstante lokal (bewusst, um die
+    Menubar-App weiterhin ohne Abhaengigkeit auf das `sync`-Package zu halten) - Kommentar verweist auf
+    `sync/radicale.py` als Quelle der Wahrheit. `scripts/restore-data-archive.sh`s Fallback-Benutzername
+    (falls noch kein Collection-Ordner existiert) ebenfalls auf `"pas"` fest verdrahtet.
+  - **Wichtig fuer bestehende Installationen:** Wirkt erst, sobald auf der jeweiligen Maschine einmal in
+    "Einstellungen" das Radicale-Passwort neu gespeichert wird (schreibt den htpasswd-Eintrag fuer "pas"
+    neu) - und das CardDAV-Konto in Kontakte.app muss auf Benutzername "pas" (mit diesem Passwort) gesetzt
+    sein. Ein evtl. zusaetzlich angelegtes "contact"-Konto kann entfernt werden, es wird nie Karten
+    erhalten.
+  - Neuer Test `test_client_verwendet_immer_den_fest_verdrahteten_benutzer` (verifiziert, dass ein
+    abweichender `username`/`addressbook_path` in der Konfiguration ignoriert wird); bestehende
+    Radicale-Settings-Tests entsprechend angepasst.
+
 Nächste sinnvolle Schritte: neues `.pkg` (alle bisherigen Fixes inkl. Archivio-Signatur-DB-Anbindung,
-Namenserkennung, Bearbeiten-Button, vollstaendiges Review-Queue- und Archivio-Import-Bearbeiten,
-Mehrfachauswahl + Bulk-Edit im Archivio-Import, "+ Neuer Ordner" ueberall, Radicale-Einstellungen nur noch
-anzeigend fuer Benutzer/Pfad) auf dem iMac installieren; unter „Einstellungen" den Pfad zur
-Archivio-Signatur-Datenbank (`archivio.signatur_db_path`) eintragen und Postfächer den passenden Ordnern
-zuordnen. Offen: `importer/signatur.py::parse_signatur` bleibt eine Heuristik mit gelegentlichem Rauschen
-auf sehr langen/unstrukturierten Thread-Texten (siehe Eintrag oben) - bei Bedarf gezielt nachschärfen,
-sobald sich am echten Datensatz weitere Muster zeigen.
+Namenserkennung, Bearbeiten-Button, vollstaendiges Archivio-Import-Bearbeiten, Mehrfachauswahl + Bulk-Edit
+im Archivio-Import, "+ Neuer Ordner" ueberall, entfernter Review-Queue, fest verdrahtetem Radicale-Benutzer
+"pas") auf dem iMac installieren; danach dort einmal das Radicale-Passwort in den Einstellungen neu
+speichern (schreibt den "pas"-htpasswd-Eintrag) und pruefen, dass das CardDAV-Konto "pas" weiterhin Karten
+erhaelt. Unter „Einstellungen" den Pfad zur Archivio-Signatur-Datenbank (`archivio.signatur_db_path`)
+eintragen und Postfächer den passenden Ordnern zuordnen. Offen: `importer/signatur.py::parse_signatur`
+bleibt eine Heuristik mit gelegentlichem Rauschen auf sehr langen/unstrukturierten Thread-Texten (siehe
+Eintrag oben) - bei Bedarf gezielt nachschärfen, sobald sich am echten Datensatz weitere Muster zeigen.

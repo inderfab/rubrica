@@ -1,6 +1,6 @@
 """vCard-Import (Phase 0): parst .vcf-Exporte aus Kontakte.app und mappt sie
-auf das Rubrica-Datenmodell. Erzeugt niemals direkt Kontakte - siehe web/imports.py
-und db/queries.create_vorschlag."""
+auf das Rubrica-Datenmodell. Legt erkannte Kontakte direkt an bzw. mergt sie in
+bestehende (nie destruktiv, siehe queries.merge_kontakt) - siehe web/imports.py."""
 from __future__ import annotations
 
 import re
@@ -188,16 +188,21 @@ def finde_match(conn: sqlite3.Connection, kontakt: dict) -> int | None:
     return None
 
 
-def importiere(conn: sqlite3.Connection, inhalt: str, gruppen_als_ordner: bool = True) -> int:
-    """Parst eine .vcf-Datei und legt fuer jeden Kontakt einen Vorschlag an.
-    Gibt die Anzahl erzeugter Vorschlaege zurueck. Aendert nie direkt kontakte."""
+def importiere(conn: sqlite3.Connection, inhalt: str, gruppen_als_ordner: bool = True) -> list[int]:
+    """Parst eine .vcf-Datei und legt jeden Kontakt direkt an bzw. mergt ihn in einen
+    erkannten bestehenden Kontakt (keine Review-Queue mehr, siehe docs/konzept.md
+    Eintrag 2026-07-14: Korrekturen erfolgen danach direkt am Kontakt). Der Vorschlag
+    (vorschlaege-Tabelle) wird intern weiterhin angelegt und sofort bestaetigt - die
+    bestehende, nie ueberschreibende Merge-Logik (queries.merge_kontakt) bleibt so
+    unveraendert die Quelle der Wahrheit dafuer, wie Import-Daten mit bestehenden
+    Kontakten zusammengefuehrt werden. Gibt die Liste der betroffenen kontakt_id zurueck."""
     kontakte = parse_vcf(inhalt)
-    anzahl = 0
+    kontakt_ids = []
     for kontakt in kontakte:
         gruppen = kontakt.pop("gruppen", [])
         kontakt_id = finde_match(conn, kontakt)
         if gruppen_als_ordner and gruppen:
             kontakt["gruppen_als_ordner"] = gruppen
-        queries.create_vorschlag(conn, kontakt, kontakt_id=kontakt_id, quelle="import")
-        anzahl += 1
-    return anzahl
+        vorschlag_id = queries.create_vorschlag(conn, kontakt, kontakt_id=kontakt_id, quelle="import")
+        kontakt_ids.append(queries.bestaetige_vorschlag(conn, vorschlag_id))
+    return kontakt_ids
