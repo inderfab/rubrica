@@ -48,7 +48,7 @@
                 <td>
                     <form method="post" action="/archivio-import/postfach-zuordnen" style="display:flex; gap:0.5rem;">
                         <input type="hidden" name="postfach" value="{{ p.postfach }}">
-                        <select name="projekt_id" style="flex:1">
+                        <select name="projekt_id" id="select-ordner-{{ loop.index }}" style="flex:1">
                             <option value="">– kein Ordner –</option>
                             {% for o in ordner %}
                             <option value="{{ o.id }}"
@@ -57,6 +57,7 @@
                             </option>
                             {% endfor %}
                         </select>
+                        <button type="button" class="secondary" onclick="rubricaOrdnerSelectAnlegen('select-ordner-{{ loop.index }}')">+ Neu</button>
                         <button type="submit" class="secondary">Speichern</button>
                     </form>
                 </td>
@@ -75,6 +76,7 @@
 {% if kandidaten %}
 <div id="archivio-sammel-leiste" class="sammel-leiste" style="display:none">
     <span id="archivio-sammel-anzahl"></span>
+    <button type="button" class="secondary" onclick="rubricaArchivioSammelBearbeiten()">Ausgewählte bearbeiten</button>
     <form method="post" action="/archivio-import/uebernehmen-ausgewaehlte" id="archivio-bulk-uebernehmen-form">
         {% for p in ausgewaehlte_postfaecher %}<input type="hidden" name="postfaecher" value="{{ p }}">{% endfor %}
         <button type="submit" class="secondary">Ausgewählte übernehmen</button>
@@ -190,6 +192,22 @@ function rubricaArchivioAuswahlAufheben() {
     document.querySelectorAll('.archivio-auswahl').forEach(cb => cb.checked = false);
     document.getElementById('archivio-alle-auswaehlen').checked = false;
     rubricaArchivioAuswahlGeaendert();
+}
+
+function rubricaArchivioSammelBearbeiten() {
+    const emails = rubricaArchivioAusgewaehlteEmails();
+    if (!emails.length) return;
+    const postfaecher = Array.from(
+        document.querySelectorAll("#archivio-bulk-uebernehmen-form input[name='postfaecher']")
+    ).map(el => el.value);
+    const params = emails.map(e => 'emails=' + encodeURIComponent(e)).join('&') +
+        postfaecher.map(p => '&postfaecher=' + encodeURIComponent(p)).join('');
+    fetch(`/archivio-import/bulk-bearbeiten-flyover?${params}`)
+        .then(r => r.text())
+        .then(html => {
+            document.getElementById('archivio-modal-inhalt').innerHTML = html;
+            rubricaArchivioModalOeffnen();
+        });
 }
 </script>
 {% endblock %}

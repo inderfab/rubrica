@@ -15,6 +15,7 @@ from config import settings
 from db import queries
 from db.connection import get_connection
 from web.contacts import (
+    FELDER_MEHRFACHBEARBEITUNG,
     _email_typ_optionen,
     _funktion_optionen,
     _parse_kontakt_form,
@@ -148,6 +149,69 @@ async def archivio_uebernehmen_ausgewaehlte(request: Request):
     finally:
         conn.close()
     return RedirectResponse(url="/archivio-import", status_code=303)
+
+
+@router.get("/archivio-import/bulk-bearbeiten-flyover")
+def archivio_bulk_bearbeiten_flyover(
+    request: Request, emails: List[str] = Query(...), postfaecher: List[str] = Query(default=[])
+):
+    """Sammel-Bearbeiten fuer mehrere ausgewaehlte Archivio-Kandidaten - gleiches
+    gemischt-Prinzip wie review_bulk_bearbeiten_flyover: nur Scalar-Felder, Arrays
+    (Telefon/E-Mail/Adresse) bleiben unangetastet."""
+    emails_lower = {e.lower() for e in emails}
+    conn = get_connection()
+    try:
+        alle_kandidaten, _ = _hole_kandidaten_oder_leer(conn, postfaecher)
+        funktionen = _funktion_optionen(conn)
+    finally:
+        conn.close()
+    kandidaten = [
+        k for k in alle_kandidaten if k["emails"] and k["emails"][0]["email"].lower() in emails_lower
+    ]
+
+    felder = {}
+    for feld in FELDER_MEHRFACHBEARBEITUNG:
+        werte = {k.get(feld, "") for k in kandidaten}
+        if len(werte) == 1:
+            felder[feld] = {"wert": werte.pop(), "gemischt": False}
+        else:
+            felder[feld] = {"wert": "", "gemischt": True}
+
+    return templates.TemplateResponse("archivio_bulk_bearbeiten_modal.html", {
+        "request": request, "kandidaten": kandidaten, "emails": emails, "postfaecher": postfaecher,
+        "felder": felder, "funktionen": funktionen,
+    })
+
+
+@router.post("/archivio-import/bulk-bearbeiten")
+async def archivio_bulk_bearbeiten_speichern(request: Request):
+    """Wendet die editierten Scalar-Werte auf die ausgewaehlten Kandidaten an und
+    uebernimmt sie direkt in die Review-Queue - im Gegensatz zum Sammel-Bearbeiten
+    in der Review-Queue selbst (dort bereits als Vorschlag persistiert) gibt es fuer
+    Archivio-Kandidaten keinen Zwischenzustand zum Speichern-ohne-Bestaetigen: sie
+    werden bei jeder Anfrage frisch aus der Archivio-DB berechnet."""
+    form = await request.form()
+    emails = {e.lower() for e in form.getlist("emails")}
+    postfaecher = form.getlist("postfaecher")
+
+    updates = {}
+    for feld in FELDER_MEHRFACHBEARBEITUNG:
+        war_gemischt = form.get(f"{feld}__gemischt", "") == "1"
+        wert = form.get(feld, "").strip()
+        if war_gemischt and not wert:
+            continue
+        updates[feld] = wert
+
+    conn = get_connection()
+    try:
+        kandidaten, _ = _hole_kandidaten_oder_leer(conn, postfaecher)
+        for daten in kandidaten:
+            if daten["emails"] and daten["emails"][0]["email"].lower() in emails:
+                daten.update(updates)
+                _kandidat_uebernehmen(conn, daten)
+    finally:
+        conn.close()
+    return RedirectResponse(url="/review", status_code=303)
 
 
 @router.get("/archivio-import/bearbeiten-flyover")

@@ -92,8 +92,13 @@ async def einstellungen_speichern(request: Request):
     backup_pfad = (form.get("backup_pfad") or "").strip()
     export_firmenname = (form.get("export_firmenname") or "").strip()
     radicale_base_url = (form.get("radicale_base_url") or "").strip()
-    radicale_addressbook_path = (form.get("radicale_addressbook_path") or "").strip()
-    radicale_username = (form.get("radicale_username") or "").strip()
+    # Benutzername und Adressbuch-Pfad sind bewusst NICHT mehr ueber dieses Formular
+    # aenderbar (siehe settings.html) - unter Radicales "owner_only"-Rechtemodell
+    # muessen beide immer zusammenpassen (Pfad muss mit "/{username}/" beginnen);
+    # ein Aendern von nur einem der beiden Werte fuehrte bereits zu einem stillen
+    # Sync-Ausfall. Beide bleiben daher unveraendert aus der bestehenden Konfiguration.
+    radicale_addressbook_path = settings.get("radicale.addressbook_path", "") or ""
+    radicale_username = settings.get("radicale.username", "") or ""
     radicale_password = form.get("radicale_password") or ""
 
     logo = form.get("logo")

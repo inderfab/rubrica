@@ -180,13 +180,26 @@ function rubricaOrdnerZuweisenOeffnen() {
     }
     const ordner = JSON.parse(document.getElementById('sammel-leiste').dataset.ordner || '[]');
     liste.replaceChildren();
+
     for (const o of ordner) {
         const li = document.createElement('li');
         li.textContent = o.name;
         li.addEventListener('mousedown', (e) => { e.preventDefault(); rubricaOrdnerZuweisen(o.id); });
         liste.appendChild(li);
     }
-    liste.classList.toggle('sichtbar', ordner.length > 0);
+
+    const neuLi = document.createElement('li');
+    neuLi.className = 'combobox-neu';
+    neuLi.textContent = '+ Neuer Ordner…';
+    neuLi.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        const name = window.prompt('Name des neuen Ordners:');
+        if (!name || !name.trim()) return;
+        rubricaOrdnerAnlegen(name.trim()).then(o => rubricaOrdnerZuweisen(o.id));
+    });
+    liste.appendChild(neuLi);
+
+    liste.classList.add('sichtbar');
 }
 
 function rubricaOrdnerZuweisen(ordnerId) {

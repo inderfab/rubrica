@@ -84,19 +84,19 @@ def test_einstellungen_speichern_schreibt_radicale_config(tmp_db, monkeypatch, t
     config_pfad = tmp_path / "config.yaml"
     config_pfad.write_text("database:\n  path: rubrica.db\n")
     monkeypatch.setattr(settings, "_CONFIG_PATH", config_pfad)
-    monkeypatch.setattr(settings, "_settings", {})
+    # Benutzername/Adressbuch-Pfad sind nicht mehr Teil des Formulars (siehe unten) -
+    # simuliert eine bereits bestehende Konfiguration (z.B. vom Erststart gesetzt).
+    monkeypatch.setattr(settings, "_settings", {
+        "radicale": {"username": "pas", "addressbook_path": "/pas/kontakte/"},
+    })
 
     r = TestClient(app).post("/einstellungen", data={
         "radicale_base_url": "https://127.0.0.1:8443",
-        "radicale_addressbook_path": "/pas/kontakte/",
-        "radicale_username": "pas",
         "radicale_password": "neuespasswort",
     }, follow_redirects=False)
     assert r.status_code == 303
 
     assert settings.get("radicale.base_url") == "https://127.0.0.1:8443"
-    assert settings.get("radicale.addressbook_path") == "/pas/kontakte/"
-    assert settings.get("radicale.username") == "pas"
     assert settings.get("radicale.password") == "neuespasswort"
 
     # Kernpunkt des Bugfixes: das Passwort muss auch in der htpasswd-Datei landen
@@ -106,6 +106,27 @@ def test_einstellungen_speichern_schreibt_radicale_config(tmp_db, monkeypatch, t
     login, digest = inhalt.split(":", maxsplit=1)
     assert login == "pas"
     assert bcrypt.checkpw(b"neuespasswort", digest.encode("ascii"))
+
+
+def test_einstellungen_speichern_ignoriert_versuchte_aenderung_von_username_und_pfad(tmp_db, monkeypatch, tmp_path):
+    """Benutzername und Adressbuch-Pfad muessen unter Radicales owner_only-Modell
+    immer zusammenpassen - das Formular schickt sie nicht mehr mit, aber selbst
+    wenn jemand von Hand ein POST mit diesen Feldern schickt, duerfen sie sich
+    nicht aendern (verhindert genau den Mismatch-Bug, der schon einmal auftrat)."""
+    config_pfad = tmp_path / "config.yaml"
+    config_pfad.write_text("database:\n  path: rubrica.db\n")
+    monkeypatch.setattr(settings, "_CONFIG_PATH", config_pfad)
+    monkeypatch.setattr(settings, "_settings", {
+        "radicale": {"username": "pas", "addressbook_path": "/pas/kontakte/"},
+    })
+
+    TestClient(app).post("/einstellungen", data={
+        "radicale_username": "contact",
+        "radicale_addressbook_path": "/contact/kontakte/",
+    }, follow_redirects=False)
+
+    assert settings.get("radicale.username") == "pas"
+    assert settings.get("radicale.addressbook_path") == "/pas/kontakte/"
 
 
 def test_einstellungen_speichern_zeigt_bestaetigung(tmp_db, monkeypatch, tmp_path):

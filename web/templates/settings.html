@@ -76,21 +76,21 @@
             <input type="text" name="radicale_base_url" value="{{ radicale_base_url }}"
                    placeholder="https://127.0.0.1:8443" style="width:100%">
         </div>
-        <div class="field">
-            <label>Adressbuch-Pfad</label>
-            <input type="text" name="radicale_addressbook_path" value="{{ radicale_addressbook_path }}"
-                   placeholder="/pas/kontakte/" style="width:100%">
-        </div>
         <div class="grid-2">
             <div class="field">
-                <label>Benutzername</label>
-                <input type="text" name="radicale_username" value="{{ radicale_username }}">
+                <label>Benutzer</label>
+                <p style="margin:0.3rem 0 0">{{ radicale_username or "–" }}</p>
             </div>
             <div class="field">
                 <label>Passwort</label>
                 <input type="text" name="radicale_password" value="{{ radicale_password }}">
             </div>
         </div>
+        <p class="empty" style="padding:0.3rem 0 0; font-size:0.8rem">
+            Benutzername und Adressbuch-Pfad (<code>{{ radicale_addressbook_path or "–" }}</code>) sind hier
+            bewusst nicht änderbar - beide müssen unter Radicale immer zusammenpassen, ein Ändern von nur
+            einem der beiden führte schon zu einem stillen Sync-Ausfall.
+        </p>
         {% if ca_zertifikat_vorhanden %}
         <p class="empty" style="padding:0.6rem 0 0.3rem">
             Für weitere Stationen: das CA-Zertifikat einmal herunterladen, per Doppelklick öffnen und im

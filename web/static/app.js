@@ -125,3 +125,57 @@ function addRow(containerId, kind, button) {
 
     container.appendChild(row);
 }
+
+// Legt per AJAX einen neuen Ordner an (POST /ordner/neu-ajax), ohne die aktuelle
+// Seite/das aktuelle Formular zu verlassen - genutzt an allen Stellen, wo ein
+// Ordner ausgewaehlt werden kann (Kontakt-/Vorschlag-Bearbeiten, Postfach-
+// Zuordnung, Sammel-Leiste "Ordner zuweisen"). Gibt {id, name} zurueck.
+function rubricaOrdnerAnlegen(name) {
+    return fetch('/ordner/neu-ajax', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: 'name=' + encodeURIComponent(name),
+    }).then(r => {
+        if (!r.ok) throw new Error('Ordner anlegen fehlgeschlagen');
+        return r.json();
+    });
+}
+
+// Legt einen Ordner an und fuegt ihn direkt (angehakt) einer Ordner-Checkliste
+// hinzu - genutzt vom Kontakt-/Vorschlag-Bearbeiten-Formular und der
+// Review-Queue-Bestaetigen-Checkliste.
+function rubricaOrdnerCheckelisteAnlegen(checklisteId, inputId) {
+    const input = document.getElementById(inputId);
+    const name = input.value.trim();
+    if (!name) return;
+    rubricaOrdnerAnlegen(name).then(ordner => {
+        const checkliste = document.getElementById(checklisteId);
+        const hinweis = checkliste.parentElement.querySelector('.empty');
+        if (hinweis) hinweis.remove();
+        const label = document.createElement('label');
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.name = 'ordner_ids';
+        checkbox.value = ordner.id;
+        checkbox.checked = true;
+        label.appendChild(checkbox);
+        label.appendChild(document.createTextNode(' ' + ordner.name));
+        checkliste.appendChild(label);
+        input.value = '';
+    });
+}
+
+// Legt einen Ordner an und fuegt ihn (ausgewaehlt) einem <select>-Dropdown hinzu -
+// genutzt bei der Postfach->Ordner-Zuordnung im Archivio-Import.
+function rubricaOrdnerSelectAnlegen(selectId) {
+    const name = window.prompt('Name des neuen Ordners:');
+    if (!name || !name.trim()) return;
+    rubricaOrdnerAnlegen(name.trim()).then(ordner => {
+        const select = document.getElementById(selectId);
+        const option = document.createElement('option');
+        option.value = ordner.id;
+        option.textContent = ordner.name;
+        option.selected = true;
+        select.appendChild(option);
+    });
+}

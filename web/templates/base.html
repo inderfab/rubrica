@@ -11,19 +11,18 @@
     {% set pfad = request.url.path %}
     <div class="app-shell">
         <aside class="global-sidebar">
-            <div class="brand">Rubrica</div>
+            <div class="brand">Rubrica <span class="brand-version">v{{ app_version }}</span></div>
             <nav>
                 <a href="/kontakte" class="{{ 'aktiv' if pfad.startswith('/kontakte') else '' }}">Kontakte</a>
                 <a href="/ordner" class="{{ 'aktiv' if pfad.startswith('/ordner') else '' }}">Ordner</a>
-                <a href="/review" class="{{ 'aktiv' if pfad.startswith('/review') else '' }}">Review-Queue</a>
+                <a href="/import" class="{{ 'aktiv' if pfad.startswith('/import') else '' }}">Import</a>
                 {% if archivio_konfiguriert() %}
                 <a href="/archivio-import" class="{{ 'aktiv' if pfad.startswith('/archivio-import') else '' }}">Archivio-Import</a>
                 {% endif %}
-                <a href="/import" class="{{ 'aktiv' if pfad.startswith('/import') else '' }}">Import</a>
+                <a href="/review" class="{{ 'aktiv' if pfad.startswith('/review') else '' }}">Review-Queue</a>
                 <a href="/export" class="{{ 'aktiv' if pfad.startswith('/export') else '' }}">Export</a>
                 <a href="/einstellungen" class="{{ 'aktiv' if pfad.startswith('/einstellungen') else '' }}">Einstellungen</a>
             </nav>
-            <div class="version-anzeige">Rubrica v{{ app_version }}</div>
         </aside>
         <main class="app-content">
             {% block content %}{% endblock %}
