@@ -73,14 +73,32 @@
 <p><strong>{{ kandidaten|length }}</strong> Vorschlag/Vorschläge gefunden.</p>
 
 {% if kandidaten %}
+<div id="archivio-sammel-leiste" class="sammel-leiste" style="display:none">
+    <span id="archivio-sammel-anzahl"></span>
+    <form method="post" action="/archivio-import/uebernehmen-ausgewaehlte" id="archivio-bulk-uebernehmen-form">
+        {% for p in ausgewaehlte_postfaecher %}<input type="hidden" name="postfaecher" value="{{ p }}">{% endfor %}
+        <button type="submit" class="secondary">Ausgewählte übernehmen</button>
+    </form>
+    <form method="post" action="/archivio-import/ablehnen-ausgewaehlte" id="archivio-bulk-ablehnen-form"
+          onsubmit="return confirm('Ausgewählte Vorschläge wirklich ablehnen?')">
+        {% for p in ausgewaehlte_postfaecher %}<input type="hidden" name="postfaecher" value="{{ p }}">{% endfor %}
+        <button type="submit" class="secondary">Ausgewählte ablehnen</button>
+    </form>
+    <button type="button" class="secondary" onclick="rubricaArchivioAuswahlAufheben()">Auswahl aufheben</button>
+</div>
+
 <table>
     <thead>
-        <tr><th>Name</th><th>Firma</th><th>Telefon</th><th>E-Mail</th><th>Ordner</th><th>Anzahl Mails</th><th></th></tr>
+        <tr>
+            <th><input type="checkbox" id="archivio-alle-auswaehlen" onchange="rubricaArchivioAlleAuswaehlen(this)"></th>
+            <th>Name</th><th>Firma</th><th>Telefon</th><th>E-Mail</th><th>Ordner</th><th>Anzahl Mails</th><th></th>
+        </tr>
     </thead>
     <tbody>
         {% for k in kandidaten %}
         {% set mail = k.emails[0].email %}
         <tr>
+            <td><input type="checkbox" class="archivio-auswahl" value="{{ mail }}" onchange="rubricaArchivioAuswahlGeaendert()"></td>
             <td>{{ k.vorname }} {{ k.nachname }}</td>
             <td>{{ k.firma }}</td>
             <td>{% for t in k.telefonnummern %}{{ t.nummer }}{% if not loop.last %}, {% endif %}{% endfor %}</td>
@@ -132,6 +150,46 @@ function rubricaArchivioModalOeffnen() {
 }
 function rubricaArchivioModalSchliessen() {
     document.getElementById('archivio-modal-overlay').classList.remove('sichtbar');
+}
+// Das gemeinsame Kontakt-Bearbeiten-Formular (_kontakt_bearbeiten_form.html, hier
+// ueber archivio_bearbeiten_modal.html eingebunden) ruft beim "Abbrechen"-Button
+// fest "rubricaModalSchliessen()" auf (Name aus der Kontakte-Seite) - als Alias
+// auf den hiesigen Namen, statt das gemeinsame Formular dafuer anzupassen.
+function rubricaModalSchliessen() {
+    rubricaArchivioModalSchliessen();
+}
+
+function rubricaArchivioAusgewaehlteEmails() {
+    return Array.from(document.querySelectorAll('.archivio-auswahl:checked')).map(cb => cb.value);
+}
+
+function rubricaArchivioAuswahlGeaendert() {
+    const emails = rubricaArchivioAusgewaehlteEmails();
+    document.getElementById('archivio-sammel-leiste').style.display = emails.length > 0 ? 'flex' : 'none';
+    document.getElementById('archivio-sammel-anzahl').textContent = emails.length + ' ausgewählt';
+    for (const form of [document.getElementById('archivio-bulk-uebernehmen-form'), document.getElementById('archivio-bulk-ablehnen-form')]) {
+        form.querySelectorAll("input[name='emails']").forEach(el => el.remove());
+        for (const email of emails) {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'emails';
+            input.value = email;
+            form.appendChild(input);
+        }
+    }
+    const alle = document.querySelectorAll('.archivio-auswahl');
+    document.getElementById('archivio-alle-auswaehlen').checked = alle.length > 0 && emails.length === alle.length;
+}
+
+function rubricaArchivioAlleAuswaehlen(checkbox) {
+    document.querySelectorAll('.archivio-auswahl').forEach(cb => cb.checked = checkbox.checked);
+    rubricaArchivioAuswahlGeaendert();
+}
+
+function rubricaArchivioAuswahlAufheben() {
+    document.querySelectorAll('.archivio-auswahl').forEach(cb => cb.checked = false);
+    document.getElementById('archivio-alle-auswaehlen').checked = false;
+    rubricaArchivioAuswahlGeaendert();
 }
 </script>
 {% endblock %}

@@ -1,55 +1,7 @@
-{# Bearbeiten eines Archivio-Kandidaten vor der Uebernahme in die Review-Queue.
-   Erwartet: daten (Kandidat-Dict aus hole_kandidaten), postfaecher (aktueller Filter). #}
+{# Vollstaendiges Bearbeiten eines Archivio-Kandidaten vor der Uebernahme in die
+   Review-Queue - identisches Formular wie beim Kontakt-Bearbeiten
+   (kontakt_bearbeiten_modal.html), damit sich beide Stellen exakt gleich
+   verhalten/aussehen. "kontakt" ist hier ein aus dem Kandidaten-Dict nachgebautes
+   Pseudo-Kontakt-Dict (siehe web/archivio.py). #}
 <h2 style="margin-top:0">Vorschlag bearbeiten</h2>
-<p class="empty" style="margin-top:-0.5rem">
-    {{ daten.anzahl_mails }} Mail(s) von {{ daten.absender_email }}
-</p>
-
-<form method="post" action="/archivio-import/uebernehmen-bearbeitet">
-    <input type="hidden" name="absender_email" value="{{ daten.absender_email }}">
-    {% for g in daten.gruppen_als_ordner %}<input type="hidden" name="gruppen_als_ordner" value="{{ g }}">{% endfor %}
-
-    <div class="grid-2">
-        <div class="field">
-            <label>Vorname</label>
-            <input type="text" name="vorname" value="{{ daten.vorname }}">
-        </div>
-        <div class="field">
-            <label>Nachname</label>
-            <input type="text" name="nachname" value="{{ daten.nachname }}">
-        </div>
-        <div class="field">
-            <label>Firma</label>
-            <input type="text" name="firma" value="{{ daten.firma }}">
-        </div>
-        <div class="field">
-            <label>Rolle</label>
-            <input type="text" name="rolle" value="{{ daten.rolle }}">
-        </div>
-    </div>
-
-    <div class="field">
-        <label>Telefon</label>
-        {% for t in daten.telefonnummern %}
-        <div style="display:flex; gap:0.5rem; margin-bottom:0.3rem;">
-            <input type="hidden" name="telefon_typ" value="{{ t.typ }}">
-            <input type="text" name="telefon_nummer" value="{{ t.nummer }}" style="flex:1">
-        </div>
-        {% endfor %}
-    </div>
-
-    <div class="field">
-        <label>E-Mail</label>
-        {% for e in daten.emails %}
-        <div style="display:flex; gap:0.5rem; margin-bottom:0.3rem;">
-            <input type="hidden" name="email_typ" value="{{ e.typ }}">
-            <input type="text" name="email_email" value="{{ e.email }}" style="flex:1">
-        </div>
-        {% endfor %}
-    </div>
-
-    <div class="actions">
-        <button type="submit">Übernehmen in RQ</button>
-        <button type="button" class="secondary" onclick="rubricaArchivioModalSchliessen()">Abbrechen</button>
-    </div>
-</form>
+{% include "_kontakt_bearbeiten_form.html" %}

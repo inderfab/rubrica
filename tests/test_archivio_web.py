@@ -165,24 +165,74 @@ def test_bearbeiten_flyover_unbekannte_email_ist_404(tmp_db, archivio_db, monkey
     assert r.status_code == 404
 
 
+def test_bearbeiten_flyover_zeigt_typ_combobox_und_plus_buttons_wie_bei_kontakten(tmp_db, archivio_db, monkeypatch):
+    monkeypatch.setattr(settings, "_settings", {"archivio": {"signatur_db_path": archivio_db, "min_mails": 2}})
+    r = TestClient(app).get("/archivio-import/bearbeiten-flyover", params={"email": "anna@beispiel.ch"})
+    assert r.status_code == 200
+    # Kategorie-Combobox fuer Telefon (nicht mehr ein verstecktes, nicht editierbares Feld)
+    assert 'name="telefon_typ"' in r.text
+    assert 'name="email_typ"' in r.text
+    # "+ Hinzufuegen"-Buttons wie im Kontakt-Bearbeiten-Formular
+    assert "+ Telefonnummer" in r.text
+    assert "+ E-Mail" in r.text
+    assert "+ Adresse" in r.text
+    assert "+ URL" in r.text
+    # Ordner-Checkliste ist Teil desselben gemeinsamen Formulars
+    assert "ordner-checkliste" in r.text
+
+
 def test_uebernehmen_bearbeitet_verwendet_korrigierte_werte(tmp_db, archivio_db, monkeypatch):
     monkeypatch.setattr(settings, "_settings", {"archivio": {"signatur_db_path": archivio_db, "min_mails": 2}})
-    r = TestClient(app).post("/archivio-import/uebernehmen-bearbeitet", data={
-        "absender_email": "anna@beispiel.ch",
-        "vorname": "Hanna",  # vom Nutzer korrigiert (statt "Anna")
-        "nachname": "Beispiel",
-        "firma": "Beispiel AG",
-        "rolle": "",
-        "telefon_typ": "Direkt", "telefon_nummer": "044 123 45 67",
-        "email_typ": "Direkt", "email_email": "anna@beispiel.ch",
-    }, follow_redirects=False)
+    r = TestClient(app).post(
+        "/archivio-import/uebernehmen-bearbeitet?absender_email=anna@beispiel.ch", data={
+            "vorname": "Hanna",  # vom Nutzer korrigiert (statt "Anna")
+            "nachname": "Beispiel",
+            "firma": "Beispiel AG",
+            "rolle": "", "kategorie": "", "notizen": "",
+            "telefon_typ": "Direkt", "telefon_nummer": "044 123 45 67",
+            "email_typ": "Direkt", "email_adresse": "anna@beispiel.ch",
+        }, follow_redirects=False)
     assert r.status_code == 303
 
     vorschlaege = queries.list_vorschlaege(tmp_db, status="offen")
     assert len(vorschlaege) == 1
     assert vorschlaege[0]["rohdaten"]["vorname"] == "Hanna"
+    assert vorschlaege[0]["rohdaten"]["telefonnummern"] == [{"typ": "Direkt", "nummer": "044 123 45 67"}]
 
     conn = sqlite3.connect(archivio_db)
     status = {r[0] for r in conn.execute("SELECT status FROM signatur_quelle WHERE absender_email = 'anna@beispiel.ch'")}
     conn.close()
     assert status == {"uebernommen"}
+
+
+def test_uebernehmen_ausgewaehlte_uebernimmt_nur_selektierte(tmp_db, archivio_db, monkeypatch):
+    monkeypatch.setattr(settings, "_settings", {"archivio": {"signatur_db_path": archivio_db, "min_mails": 2}})
+    r = TestClient(app).post("/archivio-import/uebernehmen-ausgewaehlte", data={
+        "emails": ["anna@beispiel.ch"],
+    }, follow_redirects=False)
+    assert r.status_code == 303
+
+    vorschlaege = queries.list_vorschlaege(tmp_db, status="offen")
+    assert len(vorschlaege) == 1
+    assert vorschlaege[0]["rohdaten"]["firma"] == "Beispiel AG"
+
+
+def test_ablehnen_ausgewaehlte_lehnt_nur_selektierte_ab(tmp_db, archivio_db, monkeypatch):
+    monkeypatch.setattr(settings, "_settings", {"archivio": {"signatur_db_path": archivio_db, "min_mails": 2}})
+    r = TestClient(app).post("/archivio-import/ablehnen-ausgewaehlte", data={
+        "emails": ["anna@beispiel.ch"],
+    }, follow_redirects=False)
+    assert r.status_code == 303
+
+    assert len(queries.list_vorschlaege(tmp_db, status="offen")) == 0
+    assert len(queries.list_vorschlaege(tmp_db, status="abgelehnt")) == 1
+
+
+def test_archivio_import_seite_zeigt_sammel_leiste_mit_checkboxen(tmp_db, archivio_db, monkeypatch):
+    monkeypatch.setattr(settings, "_settings", {"archivio": {"signatur_db_path": archivio_db, "min_mails": 2}})
+    r = TestClient(app).get("/archivio-import")
+    assert r.status_code == 200
+    assert 'class="archivio-auswahl"' in r.text
+    assert "archivio-sammel-leiste" in r.text
+    assert "/archivio-import/uebernehmen-ausgewaehlte" in r.text
+    assert "/archivio-import/ablehnen-ausgewaehlte" in r.text
