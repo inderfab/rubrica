@@ -4,8 +4,9 @@
 <h1>Bestehende Adressbücher importieren</h1>
 <p class="empty">
     Export als .vcf aus Kontakte.app (Ablage → Exportieren → vCard exportieren) bei jedem Mitarbeiter.
-    Alle Exporte können gleichzeitig hochgeladen werden — Duplikate werden in der Review-Queue
-    zusammengeführt, nichts wird automatisch überschrieben.
+    Alle Exporte können gleichzeitig hochgeladen werden — Duplikate werden automatisch mit bestehenden
+    Kontakten zusammengeführt (nichts wird überschrieben, nur Leerfelder ergänzt). Stimmt danach etwas
+    nicht, lässt sich das direkt am Kontakt anpassen.
 </p>
 
 <form method="post" action="/import" enctype="multipart/form-data">
@@ -22,7 +23,7 @@
            style="display:none" onchange="rubricaImportDateilisteAnzeigen(this.files)">
     <p class="empty" style="font-size:0.85rem">
         Enthält die vCard-Datei Apple-Gruppen (z. B. beim Export einer ganzen Gruppe statt einzelner
-        Kontakte), werden diese automatisch als Ordner-Vorschlag übernommen.
+        Kontakte), werden diese automatisch als Ordner übernommen.
     </p>
     <button type="submit">Importieren</button>
 </form>

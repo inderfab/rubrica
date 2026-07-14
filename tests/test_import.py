@@ -67,9 +67,9 @@ def test_parse_vcf_gruppenzugehoerigkeit():
 def test_importiere_uebernimmt_gruppen_standardmaessig_ohne_flag(tmp_db):
     # Frueher eine Checkbox im Import-Formular, die faktisch wirkungslos war -
     # jetzt Standardverhalten (siehe web/imports.py).
-    importiere(tmp_db, VCF_GRUPPE)
-    vorschlag = queries.list_vorschlaege(tmp_db)[0]
-    assert vorschlag["rohdaten"]["gruppen_als_ordner"] == ["Projekt X"]
+    kontakt_ids = importiere(tmp_db, VCF_GRUPPE)
+    kontakt = queries.get_kontakt(tmp_db, kontakt_ids[0])
+    assert [p["name"] for p in kontakt["projekte"]] == ["Projekt X"]
 
 
 def test_parse_vcf_mappt_englische_apple_typen_auf_direkt_privat_allgemein():
@@ -92,49 +92,41 @@ def test_parse_vcf_mappt_englische_apple_typen_auf_direkt_privat_allgemein():
     assert k["emails"][0]["typ"] == "Direkt"
 
 
-def test_import_ohne_treffer_erzeugt_neuen_vorschlag(tmp_db):
-    anzahl = importiere(tmp_db, VCF_NEU, gruppen_als_ordner=False)
-    assert anzahl == 1
+def test_import_ohne_treffer_legt_neuen_kontakt_direkt_an(tmp_db):
+    kontakt_ids = importiere(tmp_db, VCF_NEU, gruppen_als_ordner=False)
+    assert len(kontakt_ids) == 1
 
-    vorschlaege = queries.list_vorschlaege(tmp_db, status="offen")
-    assert len(vorschlaege) == 1
-    assert vorschlaege[0]["kontakt_id"] is None
-    assert vorschlaege[0]["rohdaten"]["nachname"] == "Muster"
-
-    # Kein Kontakt darf automatisch angelegt worden sein
-    assert tmp_db.execute("SELECT COUNT(*) FROM kontakte").fetchone()[0] == 0
+    kontakt = queries.get_kontakt(tmp_db, kontakt_ids[0])
+    assert kontakt["nachname"] == "Muster"
+    assert kontakt["firma"] == "Muster AG"
+    assert tmp_db.execute("SELECT COUNT(*) FROM kontakte").fetchone()[0] == 1
 
 
-def test_import_mit_treffer_referenziert_bestehenden_kontakt(tmp_db):
+def test_import_mit_treffer_mergt_direkt_in_bestehenden_kontakt(tmp_db):
     kontakt_id = queries.create_kontakt(tmp_db, {
         "vorname": "Anna", "nachname": "Muster",
         "emails": [{"typ": "arbeit", "email": "anna@example.com"}],
     })
 
-    importiere(tmp_db, VCF_NEU, gruppen_als_ordner=False)
+    kontakt_ids = importiere(tmp_db, VCF_NEU, gruppen_als_ordner=False)
+    assert kontakt_ids == [kontakt_id]
 
-    vorschlaege = queries.list_vorschlaege(tmp_db, status="offen")
-    assert len(vorschlaege) == 1
-    assert vorschlaege[0]["kontakt_id"] == kontakt_id
-
-    # Bestehender Kontakt darf durch den Import selbst nicht veraendert worden sein
-    unveraendert = queries.get_kontakt(tmp_db, kontakt_id)
-    assert unveraendert["firma"] == ""
+    # Kein zweiter Kontakt darf entstanden sein, Firma wird ergaenzt
+    assert tmp_db.execute("SELECT COUNT(*) FROM kontakte").fetchone()[0] == 1
+    kontakt = queries.get_kontakt(tmp_db, kontakt_id)
+    assert kontakt["firma"] == "Muster AG"
 
 
-def test_bestaetigter_vorschlag_mergt_statt_ueberschreibt(tmp_db):
+def test_import_mergt_statt_ueberschreibt(tmp_db):
     kontakt_id = queries.create_kontakt(tmp_db, {
         "vorname": "Anna", "nachname": "Muster",
         "telefonnummern": [{"typ": "festnetz", "nummer": "044 123 45 67"}],
         "emails": [{"typ": "arbeit", "email": "anna@example.com"}],
     })
     importiere(tmp_db, VCF_NEU, gruppen_als_ordner=False)
-    vorschlag = queries.list_vorschlaege(tmp_db, status="offen")[0]
-
-    queries.bestaetige_vorschlag(tmp_db, vorschlag["id"])
 
     kontakt = queries.get_kontakt(tmp_db, kontakt_id)
-    assert kontakt["firma"] == "Muster AG"  # aus Vorschlag uebernommen
+    assert kontakt["firma"] == "Muster AG"  # aus dem Import uebernommen
     # bestehende Festnetznummer bleibt erhalten, neue Mobilnummer wird ergaenzt
     nummern = {t["nummer"] for t in kontakt["telefonnummern"]}
     assert "044 123 45 67" in nummern
@@ -162,12 +154,10 @@ def test_parse_vcf_extrahiert_adresse_url_notizen():
     assert k["notizen"] == "Erstkontakt ueber Messe"
 
 
-def test_import_und_bestaetigung_uebernimmt_adresse_url_notizen(tmp_db):
-    importiere(tmp_db, VCF_VOLLSTAENDIG, gruppen_als_ordner=False)
-    vorschlag = queries.list_vorschlaege(tmp_db, status="offen")[0]
-    kontakt_id = queries.bestaetige_vorschlag(tmp_db, vorschlag["id"])
+def test_import_uebernimmt_adresse_url_notizen_direkt(tmp_db):
+    kontakt_ids = importiere(tmp_db, VCF_VOLLSTAENDIG, gruppen_als_ordner=False)
 
-    kontakt = queries.get_kontakt(tmp_db, kontakt_id)
+    kontakt = queries.get_kontakt(tmp_db, kontakt_ids[0])
     assert kontakt["notizen"] == "Erstkontakt ueber Messe"
     assert kontakt["adressen"][0]["ort"] == "Zuerich"
     assert kontakt["urls"][0]["url"] == "https://carla-beispiel.ch"
@@ -179,11 +169,8 @@ def test_merge_ergaenzt_adresse_und_haengt_notizen_an(tmp_db):
         "notizen": "Alte Notiz",
         "emails": [{"typ": "arbeit", "email": "carla@beispiel.ch"}],
     })
-    importiere(tmp_db, VCF_VOLLSTAENDIG, gruppen_als_ordner=False)
-    vorschlag = queries.list_vorschlaege(tmp_db, status="offen")[0]
-    assert vorschlag["kontakt_id"] == kontakt_id
-
-    queries.bestaetige_vorschlag(tmp_db, vorschlag["id"])
+    kontakt_ids = importiere(tmp_db, VCF_VOLLSTAENDIG, gruppen_als_ordner=False)
+    assert kontakt_ids == [kontakt_id]
 
     kontakt = queries.get_kontakt(tmp_db, kontakt_id)
     assert "Alte Notiz" in kontakt["notizen"]
@@ -210,15 +197,8 @@ def test_batch_import_vieler_synthetischer_kontakte(tmp_db):
         """))
     grosse_datei = "".join(vcards)
 
-    anzahl = importiere(tmp_db, grosse_datei, gruppen_als_ordner=False)
-    assert anzahl == 60
-
-    vorschlaege = queries.list_vorschlaege(tmp_db, status="offen")
-    assert len(vorschlaege) == 60
-    assert all(v["kontakt_id"] is None for v in vorschlaege)
-
-    for v in vorschlaege:
-        queries.bestaetige_vorschlag(tmp_db, v["id"])
+    kontakt_ids = importiere(tmp_db, grosse_datei, gruppen_als_ordner=False)
+    assert len(kontakt_ids) == 60
 
     assert tmp_db.execute("SELECT COUNT(*) FROM kontakte").fetchone()[0] == 60
     assert tmp_db.execute("SELECT COUNT(*) FROM adressen").fetchone()[0] == 60

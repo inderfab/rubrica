@@ -18,6 +18,16 @@ from db import queries
 
 log = logging.getLogger(__name__)
 
+# Fest verdrahtet statt konfigurierbar (frueher aus dem macOS-Benutzernamen der
+# jeweiligen Maschine abgeleitet, siehe config.yaml.example vor 2026-07-14): unter
+# Radicales "owner_only"-Rechtemodell muessen Benutzername und Adressbuch-Pfad
+# immer zusammenpassen (Pfad muss mit "/{username}/" beginnen). Ein frei
+# konfigurierbarer Wert fuehrte bereits zweimal zu einem stillen Sync-Ausfall
+# (Aendern nur eines der beiden Werte, bzw. ein Maschinen-Benutzername, der vom
+# gewuenschten CardDAV-Konto-Namen abwich) - ein einziger fester Wert fuer alle
+# Installationen macht diese Fehlerklasse strukturell unmoeglich.
+RADICALE_BENUTZER = "pas"
+
 # Text des zuletzt aufgetretenen Sync-Fehlers (z.B. "401 Unauthorized",
 # "SSLError ..."). Sync-Fehler werden sonst still verschluckt; sync_alle() gibt
 # diesen Text mit zurueck, damit die manuelle "Jetzt synchronisieren"-Aktion
@@ -128,8 +138,8 @@ def _client() -> httpx.Client | None:
     if not base_url:
         return None
     return httpx.Client(
-        base_url=base_url.rstrip("/") + settings.get("radicale.addressbook_path", "/"),
-        auth=(settings.get("radicale.username", ""), settings.get("radicale.password", "")),
+        base_url=base_url.rstrip("/") + f"/{RADICALE_BENUTZER}/kontakte/",
+        auth=(RADICALE_BENUTZER, settings.get("radicale.password", "")),
         verify=False,
         timeout=5.0,
     )
@@ -251,6 +261,18 @@ def push_projekt(conn: sqlite3.Connection, projekt_id: int,
 
 def delete_projekt(projekt_id: int) -> bool:
     return _delete(f"projekt-{projekt_id}.vcf")
+
+
+def push_kontakt_mit_ordnern(conn: sqlite3.Connection, kontakt_id: int) -> None:
+    """Pusht einen Kontakt und alle seine zugeordneten Ordner - gemeinsame Nachbereitung
+    nach jedem direkten Anlegen/Mergen (Import, Archivio-Uebernahme), da ein Kontakt
+    dabei haeufig zugleich einem (neuen oder bestehenden) Ordner zugewiesen wird."""
+    push_kontakt(conn, kontakt_id)
+    kontakt = queries.get_kontakt(conn, kontakt_id)
+    if kontakt is None:
+        return
+    for p in kontakt["projekte"]:
+        push_projekt(conn, p["id"])
 
 
 def sync_alle(conn: sqlite3.Connection) -> dict:

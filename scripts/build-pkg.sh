@@ -191,7 +191,7 @@ fi
 RUBRICA_PYTHON="$VENV/bin/python3"
 
 if [ ! -f "$DATA_DIR/config.yaml" ]; then
-  sed "s|__RUBRICA_USER__|$(whoami)|g" "$RESOURCES/config.yaml.example" > "$DATA_DIR/config.yaml"
+  cp "$RESOURCES/config.yaml.example" "$DATA_DIR/config.yaml"
 fi
 BOOTSTRAP
 
@@ -217,7 +217,7 @@ if [ -x "$EMBEDDED_PY" ]; then
   echo "$(date): Eingebettetes Python ($ARCH): $("$EMBEDDED_PY" --version 2>&1)"
   RUBRICA_PYTHON="$EMBEDDED_PY"
   if [ ! -f "$DATA_DIR/config.yaml" ]; then
-    sed "s|__RUBRICA_USER__|$(whoami)|g" "$RESOURCES/config.yaml.example" > "$DATA_DIR/config.yaml"
+    cp "$RESOURCES/config.yaml.example" "$DATA_DIR/config.yaml"
   fi
 else
   # ── 2. Fallback: System-Python + venv ──────────────────────────────────────

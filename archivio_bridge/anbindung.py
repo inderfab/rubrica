@@ -1,6 +1,6 @@
 """Phase 4: liest Archivios Signatur-DB (Tabelle `signatur_quelle`: Absender, Postfach,
-voller Mailtext, Status) und erzeugt daraus KANDIDATEN fuer die Review-Queue
-(vorschlaege, quelle='archivio').
+voller Mailtext, Status) und erzeugt daraus KANDIDATEN fuer den Archivio-Import
+(web/archivio.py), die dort direkt in kontakte uebernommen werden koennen.
 
 Anders als eine reine Nur-Lese-Anbindung schreibt dieses Modul bewusst den `status`
 zurueck in Archivios DB (pending -> uebernommen/abgelehnt) - das ist die vom Nutzer
@@ -235,7 +235,7 @@ def liste_postfaecher(signatur_db_pfad: str) -> list:
 
 def markiere_status(signatur_db_pfad: str, absender_email: str, status: str) -> None:
     """Setzt den Status aller aktuell 'pending' Mails eines Absenders (nach
-    Bestaetigen/Ablehnen in der Review-Queue) - verhindert, dass er beim naechsten
+    Uebernehmen/Ablehnen im Archivio-Import) - verhindert, dass er beim naechsten
     Scan erneut als Kandidat auftaucht."""
     conn = sqlite3.connect(signatur_db_pfad)
     try:

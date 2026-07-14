@@ -437,16 +437,3 @@ def bestaetige_vorschlag(conn: sqlite3.Connection, vorschlag_id: int,
     return kontakt_id
 
 
-def update_vorschlag_rohdaten(conn: sqlite3.Connection, vorschlag_id: int, updates: dict) -> None:
-    """Aendert einzelne Scalar-Felder in vorschlaege.rohdaten (Sammel-Bearbeiten vor Bestaetigung) -
-    Arrays (Telefon/E-Mail/Adresse/URL) und gruppen_als_ordner bleiben unangetastet."""
-    vorschlag = get_vorschlag(conn, vorschlag_id)
-    if vorschlag is None:
-        return
-    rohdaten = vorschlag["rohdaten"]
-    rohdaten.update(updates)
-    with conn:
-        conn.execute(
-            "UPDATE vorschlaege SET rohdaten = ? WHERE id = ?",
-            (json.dumps(rohdaten, ensure_ascii=False), vorschlag_id),
-        )

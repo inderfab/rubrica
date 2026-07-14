@@ -69,26 +69,25 @@ def test_einstellungen_speichern_schreibt_config(tmp_db, monkeypatch, tmp_path):
 
 
 def test_einstellungen_formular_zeigt_radicale_werte_im_klartext(tmp_db, monkeypatch):
+    # Benutzername/Adressbuch-Pfad sind fest verdrahtet (siehe sync/radicale.py) -
+    # die Seite zeigt immer "pas", unabhaengig davon, was (noch) in config.yaml steht
+    # (z.B. Reste einer alten Installation).
     monkeypatch.setattr(settings, "_settings", {"radicale": {
-        "base_url": "https://127.0.0.1:8443", "addressbook_path": "/pas/kontakte/",
-        "username": "pas", "password": "geheim123",
+        "base_url": "https://127.0.0.1:8443", "username": "contact", "password": "geheim123",
     }})
     r = TestClient(app).get("/einstellungen")
     assert r.status_code == 200
     assert "https://127.0.0.1:8443" in r.text
     assert "/pas/kontakte/" in r.text
     assert "geheim123" in r.text
+    assert "contact" not in r.text
 
 
 def test_einstellungen_speichern_schreibt_radicale_config(tmp_db, monkeypatch, tmp_path):
     config_pfad = tmp_path / "config.yaml"
     config_pfad.write_text("database:\n  path: rubrica.db\n")
     monkeypatch.setattr(settings, "_CONFIG_PATH", config_pfad)
-    # Benutzername/Adressbuch-Pfad sind nicht mehr Teil des Formulars (siehe unten) -
-    # simuliert eine bereits bestehende Konfiguration (z.B. vom Erststart gesetzt).
-    monkeypatch.setattr(settings, "_settings", {
-        "radicale": {"username": "pas", "addressbook_path": "/pas/kontakte/"},
-    })
+    monkeypatch.setattr(settings, "_settings", {})
 
     r = TestClient(app).post("/einstellungen", data={
         "radicale_base_url": "https://127.0.0.1:8443",
@@ -101,32 +100,35 @@ def test_einstellungen_speichern_schreibt_radicale_config(tmp_db, monkeypatch, t
 
     # Kernpunkt des Bugfixes: das Passwort muss auch in der htpasswd-Datei landen
     # (Server-Auth), nicht nur in config.yaml (Client-Push) - sonst schlaegt der
-    # Login von Kontakte.app fehl.
+    # Login von Kontakte.app fehl. Der Benutzername ist dabei immer "pas" (fest
+    # verdrahtet), unabhaengig vom macOS-Konto der jeweiligen Maschine.
     inhalt = htpasswd.htpasswd_pfad().read_text(encoding="utf-8").strip()
     login, digest = inhalt.split(":", maxsplit=1)
     assert login == "pas"
     assert bcrypt.checkpw(b"neuespasswort", digest.encode("ascii"))
 
 
-def test_einstellungen_speichern_ignoriert_versuchte_aenderung_von_username_und_pfad(tmp_db, monkeypatch, tmp_path):
-    """Benutzername und Adressbuch-Pfad muessen unter Radicales owner_only-Modell
-    immer zusammenpassen - das Formular schickt sie nicht mehr mit, aber selbst
-    wenn jemand von Hand ein POST mit diesen Feldern schickt, duerfen sie sich
-    nicht aendern (verhindert genau den Mismatch-Bug, der schon einmal auftrat)."""
+def test_einstellungen_speichern_ignoriert_versuchte_aenderung_von_benutzername(tmp_db, monkeypatch, tmp_path):
+    """radicale_username/radicale_addressbook_path werden vom Formular gar nicht
+    mehr gelesen (siehe web/settings.py) - selbst ein von Hand geschicktes POST mit
+    diesen Feldern darf keine Wirkung haben. Verhindert den bereits aufgetretenen
+    owner_only-Mismatch-Bug strukturell, nicht nur per UI-Einschraenkung."""
     config_pfad = tmp_path / "config.yaml"
     config_pfad.write_text("database:\n  path: rubrica.db\n")
     monkeypatch.setattr(settings, "_CONFIG_PATH", config_pfad)
-    monkeypatch.setattr(settings, "_settings", {
-        "radicale": {"username": "pas", "addressbook_path": "/pas/kontakte/"},
-    })
+    monkeypatch.setattr(settings, "_settings", {})
 
     TestClient(app).post("/einstellungen", data={
         "radicale_username": "contact",
         "radicale_addressbook_path": "/contact/kontakte/",
+        "radicale_password": "neuespasswort",
     }, follow_redirects=False)
 
-    assert settings.get("radicale.username") == "pas"
-    assert settings.get("radicale.addressbook_path") == "/pas/kontakte/"
+    assert settings.get("radicale.username") is None
+    assert settings.get("radicale.addressbook_path") is None
+    inhalt = htpasswd.htpasswd_pfad().read_text(encoding="utf-8").strip()
+    login, _ = inhalt.split(":", maxsplit=1)
+    assert login == "pas"
 
 
 def test_einstellungen_speichern_zeigt_bestaetigung(tmp_db, monkeypatch, tmp_path):

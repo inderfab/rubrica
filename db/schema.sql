@@ -66,10 +66,12 @@ CREATE TABLE IF NOT EXISTS kontakte_projekte (
     PRIMARY KEY (kontakt_id, projekt_id)
 );
 
--- Vorschlaege: Review-Queue fuer Import- und (spaeter) Archivio-Treffer.
+-- Vorschlaege: interner Zwischenschritt fuer Import- und Archivio-Treffer, wird sofort
+-- bestaetigt (keine Review-Queue mehr, siehe docs/konzept.md 2026-07-14) - dient danach
+-- nur noch der Nachvollziehbarkeit und der Dublettenerkennung (Archivio).
 -- kontakt_id gesetzt = moeglicher Duplikat-Treffer auf bestehenden Kontakt, sonst NULL = komplett neuer Kontakt.
 -- status getrennt von kontakte.status: offen | bestaetigt | abgelehnt.
--- Kein Vorschlag darf kontakte je automatisch veraendern - nur nach manueller Bestaetigung.
+-- Kein Vorschlag darf kontakte je destruktiv veraendern - queries.merge_kontakt ergaenzt nur.
 CREATE TABLE IF NOT EXISTS vorschlaege (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     kontakt_id INTEGER REFERENCES kontakte(id) ON DELETE CASCADE,
@@ -81,7 +83,7 @@ CREATE TABLE IF NOT EXISTS vorschlaege (
 
 -- Postfach -> Ordner-Zuordnung fuer die Archivio-Signatur-Anbindung: markiert gefundene
 -- Kontakte aus Mails eines bestimmten Postfachs automatisch mit dem zugeordneten Ordner vor
--- (wird trotzdem erst beim Bestaetigen in der Review-Queue tatsaechlich gesetzt).
+-- (wird beim direkten Uebernehmen im Archivio-Import gesetzt).
 CREATE TABLE IF NOT EXISTS postfach_zuordnung (
     postfach   TEXT    PRIMARY KEY,
     projekt_id INTEGER REFERENCES projekte(id) ON DELETE SET NULL

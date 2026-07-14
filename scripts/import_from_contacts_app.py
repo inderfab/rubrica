@@ -14,7 +14,6 @@ import re
 import subprocess
 
 from db.connection import get_connection, init_schema
-from db import queries
 from importer.vcard import importiere
 
 # Steuerzeichen statt NUL-Byte als Trenner - argv/subprocess erlauben keine
@@ -148,25 +147,17 @@ def main():
         # soll nicht den gesamten Import abbrechen.
         for vc in vcf_teile:
             try:
-                anzahl += importiere(conn, vc + "\n" + gruppen_block, gruppen_als_ordner=True)
+                # importiere() legt jeden Kontakt direkt an bzw. mergt ihn in einen
+                # erkannten bestehenden Kontakt (nie destruktiv, siehe
+                # queries.merge_kontakt) - kein separater Bestaetigungsschritt mehr noetig.
+                anzahl += len(importiere(conn, vc + "\n" + gruppen_block, gruppen_als_ordner=True))
             except Exception as exc:
                 # Nur der Fehlertyp wird geloggt, nie die Meldung selbst - manche
                 # vobject-Fehlermeldungen enthalten Fragmente der Adressdaten.
                 fehler += 1
                 print(f"  Uebersprungen (Parse-Fehler: {type(exc).__name__})")
-        print(f"{anzahl} Vorschlaege erzeugt, {fehler} Eintraege uebersprungen.")
-
-        vorschlaege = queries.list_vorschlaege(conn, status="offen")
-        auto_bestaetigt = 0
-        konflikte = 0
-        for v in vorschlaege:
-            if v["kontakt_id"] is None:
-                queries.bestaetige_vorschlag(conn, v["id"])
-                auto_bestaetigt += 1
-            else:
-                konflikte += 1
-        print(f"{auto_bestaetigt} Vorschlaege automatisch bestaetigt (keine Konflikte gefunden).")
-        print(f"{konflikte} Vorschlaege mit moeglichem Konflikt verbleiben in der Review-Queue.")
+        print(f"{anzahl} Kontakte importiert (direkt angelegt oder mit bestehendem Kontakt "
+              f"zusammengefuehrt), {fehler} Eintraege uebersprungen.")
 
         anzahl_kontakte = conn.execute("SELECT COUNT(*) FROM kontakte").fetchone()[0]
         anzahl_ordner = conn.execute("SELECT COUNT(*) FROM projekte").fetchone()[0]

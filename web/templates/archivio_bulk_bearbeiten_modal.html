@@ -1,9 +1,9 @@
 {# Sammel-Bearbeiten fuer mehrere ausgewaehlte Archivio-Kandidaten. Erwartet:
    kandidaten (list von Kandidat-Dicts), emails, postfaecher, felder (dict pro
-   Scalar-Feld: {wert, gemischt}), funktionen. Gleiches gemischt-Prinzip wie bei
-   review_bulk_bearbeiten_modal.html - Arrays (Telefon/E-Mail/Adresse) werden hier
-   bewusst nicht bearbeitet. Im Gegensatz zur Review-Queue gibt es keinen
-   Zwischenzustand: Speichern uebernimmt die Kandidaten direkt in die Review-Queue. #}
+   Scalar-Feld: {wert, gemischt}), funktionen. Gleiches gemischt-Prinzip wie beim
+   Sammel-Bearbeiten der Kontaktliste - Arrays (Telefon/E-Mail/Adresse) werden hier
+   bewusst nicht bearbeitet. Kein Zwischenzustand: Speichern uebernimmt die
+   Kandidaten direkt in kontakte. #}
 <h2 style="margin-top:0">{{ kandidaten|length }} Vorschläge bearbeiten</h2>
 <p class="empty" style="margin-top:-0.5rem">
     {% for k in kandidaten %}{{ (k.vorname ~ ' ' ~ k.nachname)|trim }}{% if not loop.last %}, {% endif %}{% endfor %}
@@ -64,7 +64,7 @@
     </div>
 
     <div class="actions">
-        <button type="submit">Übernehmen in Review-Queue</button>
+        <button type="submit">Übernehmen in Kontakte</button>
         <button type="button" class="secondary" onclick="rubricaArchivioModalSchliessen()">Abbrechen</button>
     </div>
 </form>
