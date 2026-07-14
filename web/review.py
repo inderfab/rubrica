@@ -2,13 +2,19 @@ from __future__ import annotations
 
 from typing import List
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Query, Request, Response
 from fastapi.responses import RedirectResponse
 
 from db import queries
 from db.connection import get_connection
 from sync import radicale
-from web.contacts import FELDER_MEHRFACHBEARBEITUNG, _funktion_optionen
+from web.contacts import (
+    FELDER_MEHRFACHBEARBEITUNG,
+    _email_typ_optionen,
+    _funktion_optionen,
+    _parse_kontakt_form,
+    _telefon_typ_optionen,
+)
 from web.shared import templates
 
 router = APIRouter()
@@ -51,6 +57,61 @@ def review_ablehnen(vorschlag_id: int):
     conn = get_connection()
     try:
         queries.set_vorschlag_status(conn, vorschlag_id, "abgelehnt")
+    finally:
+        conn.close()
+    return RedirectResponse(url="/review", status_code=303)
+
+
+@router.get("/review/{vorschlag_id}/bearbeiten-flyover")
+def review_bearbeiten_flyover(request: Request, vorschlag_id: int):
+    """Vollstaendiges Bearbeiten EINES Vorschlags vor der Bestaetigung - bewusst
+    dasselbe Formular/Template wie beim Kontakt-Bearbeiten (_kontakt_bearbeiten_form.html),
+    inklusive Telefon-/E-Mail-/Adress-/URL-Arrays (im Gegensatz zum Sammel-Bearbeiten
+    mehrerer Vorschlaege, das aus denselben Gruenden wie bei Kontakten nur Scalar-Felder
+    unterstuetzt)."""
+    conn = get_connection()
+    try:
+        vorschlag = queries.get_vorschlag(conn, vorschlag_id)
+        ordner = queries.list_projekte(conn)
+        funktionen = _funktion_optionen(conn)
+        telefon_typen = _telefon_typ_optionen(conn)
+        email_typen = _email_typ_optionen(conn)
+    finally:
+        conn.close()
+    if vorschlag is None:
+        return Response(status_code=404)
+
+    rohdaten = vorschlag["rohdaten"]
+    gruppen_namen = set(rohdaten.get("gruppen_als_ordner", []))
+    # _kontakt_bearbeiten_form.html erwartet "kontakt.projekte" (Liste von Dicts mit
+    # "id") fuer die Ordner-Checkliste - rohdaten hat stattdessen NAMEN in
+    # gruppen_als_ordner (aus Apple-Gruppen-Erkennung). Gleiche Form wie bei einem
+    # echten Kontakt nachbauen, damit das Template unveraendert wiederverwendbar ist.
+    pseudo_kontakt = dict(rohdaten)
+    pseudo_kontakt["projekte"] = [{"id": o["id"]} for o in ordner if o["name"] in gruppen_namen]
+
+    return templates.TemplateResponse("review_bearbeiten_modal.html", {
+        "request": request, "kontakt": pseudo_kontakt, "ordner": ordner, "funktionen": funktionen,
+        "telefon_typen": telefon_typen, "email_typen": email_typen,
+        "action": f"/review/{vorschlag_id}/bearbeiten-vollstaendig", "modal": True,
+        "zurueck_ordner_id": "",
+    })
+
+
+@router.post("/review/{vorschlag_id}/bearbeiten-vollstaendig")
+async def review_bearbeiten_speichern_vollstaendig(request: Request, vorschlag_id: int):
+    """Speichert die vollstaendig editierten Werte (inkl. Telefon/E-Mail/Adresse/URL)
+    direkt ins rohdaten-JSON zurueck - der Vorschlag bleibt bis zur Bestaetigung
+    unangetastet in der Review-Queue."""
+    form = await request.form()
+    daten = _parse_kontakt_form(form)
+    ordner_ids = {int(o) for o in form.getlist("ordner_ids")}
+
+    conn = get_connection()
+    try:
+        ordner = queries.list_projekte(conn)
+        daten["gruppen_als_ordner"] = [o["name"] for o in ordner if o["id"] in ordner_ids]
+        queries.update_vorschlag_rohdaten(conn, vorschlag_id, daten)
     finally:
         conn.close()
     return RedirectResponse(url="/review", status_code=303)

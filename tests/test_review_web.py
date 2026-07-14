@@ -89,6 +89,81 @@ def test_bulk_ablehnen_setzt_status_fuer_ausgewaehlte(tmp_db):
     assert abgelehnt == {v1}
 
 
+def test_bearbeiten_flyover_zeigt_alle_felder_wie_bei_kontakten(tmp_db):
+    v1 = queries.create_vorschlag(tmp_db, {
+        "vorname": "Anna", "nachname": "Muster", "firma": "Muster AG", "rolle": "Chefin",
+        "kategorie": "291 Architekt/in", "notizen": "Testnotiz",
+        "telefonnummern": [{"typ": "Direkt", "nummer": "044 123 45 67"}],
+        "emails": [{"typ": "Direkt", "email": "anna@muster.ch"}],
+        "adressen": [{"typ": "arbeit", "strasse": "Teststrasse 1", "plz": "8000",
+                      "ort": "Zuerich", "region": "ZH", "land": "Schweiz"}],
+        "urls": [{"typ": "homepage", "url": "https://muster.ch"}],
+        "gruppen_als_ordner": [],
+    })
+
+    r = client().get(f"/review/{v1}/bearbeiten-flyover")
+    assert r.status_code == 200
+    assert 'action="/review/%d/bearbeiten-vollstaendig"' % v1 in r.text
+    assert 'value="Anna"' in r.text
+    assert 'value="Chefin"' in r.text
+    assert 'value="044 123 45 67"' in r.text
+    assert 'value="anna@muster.ch"' in r.text
+    assert 'value="Teststrasse 1"' in r.text
+    assert 'value="https://muster.ch"' in r.text
+    assert "Testnotiz" in r.text
+
+
+def test_bearbeiten_flyover_unbekannter_vorschlag_ist_404(tmp_db):
+    r = client().get("/review/999999/bearbeiten-flyover")
+    assert r.status_code == 404
+
+
+def test_bearbeiten_flyover_checkt_ordner_aus_gruppen_als_ordner(tmp_db):
+    ordner_id = queries.get_or_create_projekt(tmp_db, "Team A")
+    v1 = queries.create_vorschlag(tmp_db, _rohdaten(vorname="Anna", gruppen_als_ordner=["Team A"]))
+
+    r = client().get(f"/review/{v1}/bearbeiten-flyover")
+    assert r.status_code == 200
+    import re
+    m = re.search(r'value="%d"[^>]*' % ordner_id, r.text)
+    assert m is not None and "checked" in m.group(0)
+
+
+def test_bearbeiten_vollstaendig_speichert_arrays_und_scalar_felder(tmp_db):
+    v1 = queries.create_vorschlag(tmp_db, _rohdaten(vorname="Anna", nachname="Muster"))
+
+    r = client().post(f"/review/{v1}/bearbeiten-vollstaendig", data={
+        "vorname": "Hanna", "nachname": "Muster", "firma": "Neue AG", "rolle": "",
+        "kategorie": "", "notizen": "",
+        "telefon_typ": ["Direkt"], "telefon_nummer": ["044 999 88 77"],
+        "email_typ": ["Direkt"], "email_adresse": ["hanna@neu.ch"],
+        "adresse_typ": [], "adresse_strasse": [], "adresse_plz": [], "adresse_ort": [],
+        "adresse_region": [], "adresse_land": [],
+        "url_typ": [], "url_adresse": [],
+        "ordner_ids": [],
+    }, follow_redirects=False)
+    assert r.status_code == 303
+
+    rohdaten = queries.get_vorschlag(tmp_db, v1)["rohdaten"]
+    assert rohdaten["vorname"] == "Hanna"
+    assert rohdaten["firma"] == "Neue AG"
+    assert rohdaten["telefonnummern"] == [{"typ": "Direkt", "nummer": "044 999 88 77"}]
+    assert rohdaten["emails"] == [{"typ": "Direkt", "email": "hanna@neu.ch"}]
+
+
+def test_bearbeiten_vollstaendig_setzt_gruppen_als_ordner_aus_checkliste(tmp_db):
+    ordner_id = queries.get_or_create_projekt(tmp_db, "Team B")
+    v1 = queries.create_vorschlag(tmp_db, _rohdaten(vorname="Anna"))
+
+    client().post(f"/review/{v1}/bearbeiten-vollstaendig", data={
+        "vorname": "Anna", "nachname": "", "firma": "", "rolle": "", "kategorie": "", "notizen": "",
+        "ordner_ids": [str(ordner_id)],
+    }, follow_redirects=False)
+
+    rohdaten = queries.get_vorschlag(tmp_db, v1)["rohdaten"]
+    assert rohdaten["gruppen_als_ordner"] == ["Team B"]
+
+
 def test_bulk_bearbeiten_flyover_markiert_unterschiedliche_werte_als_gemischt(tmp_db):
     v1 = queries.create_vorschlag(tmp_db, _rohdaten(vorname="Jonas", firma="Muster AG"))
     v2 = queries.create_vorschlag(tmp_db, _rohdaten(vorname="Kim", firma="Andere AG"))
