@@ -152,6 +152,40 @@ def kategorie_umstellen(conn: sqlite3.Connection, feld: str, kontakt_id: int, vo
         conn.execute(f"UPDATE {tabelle} SET typ = ? WHERE kontakt_id = ? AND typ = ?", (nach, kontakt_id, von))
 
 
+_FELD_SPALTEN = {"kategorie": "kategorie", "rolle": "rolle"}
+
+
+def feld_werte_uebersicht(conn: sqlite3.Connection, feld: str) -> list[dict]:
+    """Listet alle in `kontakte` verwendeten Werte eines Scalar-Felds (Funktion/Rolle)
+    mit Anzahl betroffener Kontakte - Grundlage fuer die Verwaltungsseite (Tippfehler
+    korrigieren, global umbenennen, loeschen+neu zuweisen)."""
+    spalte = _FELD_SPALTEN.get(feld)
+    if not spalte:
+        return []
+    rows = conn.execute(
+        f"SELECT {spalte} AS wert, COUNT(*) AS anzahl FROM kontakte "
+        f"WHERE {spalte} != '' GROUP BY {spalte} ORDER BY {spalte} COLLATE NOCASE"
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def feld_wert_umbenennen(conn: sqlite3.Connection, feld: str, alter_wert: str, neuer_wert: str) -> list[int]:
+    """Aendert einen Funktion-/Rolle-Wert bei ALLEN betroffenen Kontakten auf einmal.
+    Ein leerer `neuer_wert` entfernt die Zuweisung (Feld wird geleert). Ein bereits
+    bestehender `neuer_wert` fuehrt die Kontakte effektiv zusammen (z.B. beim Loeschen
+    eines doppelten/falsch geschriebenen Werts). Gibt die betroffenen kontakt_ids
+    zurueck, damit der Aufrufer sie erneut zu Radicale pushen kann."""
+    spalte = _FELD_SPALTEN.get(feld)
+    if not spalte or not alter_wert or alter_wert == neuer_wert:
+        return []
+    betroffene = [r["id"] for r in conn.execute(f"SELECT id FROM kontakte WHERE {spalte} = ?", (alter_wert,))]
+    if not betroffene:
+        return []
+    with conn:
+        conn.execute(f"UPDATE kontakte SET {spalte} = ? WHERE {spalte} = ?", (neuer_wert, alter_wert))
+    return betroffene
+
+
 def merge_kontakt(conn: sqlite3.Connection, kontakt_id: int, daten: dict) -> None:
     """Wie update_kontakt, aber fuer Vorschlaege: leere Felder ueberschreiben nichts,
     Telefonnummern/E-Mails/Adressen/URLs werden ergaenzt statt ersetzt (kein Datenverlust bei Dedup).

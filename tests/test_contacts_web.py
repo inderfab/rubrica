@@ -225,6 +225,72 @@ def test_kategorie_umstellen_nur_passende_eintraege(tmp_db):
     assert typen["052 222 22 22"] == "Direkt"
 
 
+def test_feld_werte_uebersicht_zaehlt_kontakte_pro_wert(tmp_db):
+    queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "A", "kategorie": "Architekt/in"})
+    queries.create_kontakt(tmp_db, {"vorname": "Bea", "nachname": "B", "kategorie": "Architekt/in"})
+    queries.create_kontakt(tmp_db, {"vorname": "Chris", "nachname": "C", "kategorie": "Bauleiter/in"})
+    queries.create_kontakt(tmp_db, {"vorname": "Dora", "nachname": "D", "kategorie": ""})
+
+    werte = {w["wert"]: w["anzahl"] for w in queries.feld_werte_uebersicht(tmp_db, "kategorie")}
+    assert werte == {"Architekt/in": 2, "Bauleiter/in": 1}
+
+
+def test_feld_wert_umbenennen_aendert_alle_betroffenen_kontakte(tmp_db):
+    k1 = queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "A", "kategorie": "Architeckt/in"})
+    k2 = queries.create_kontakt(tmp_db, {"vorname": "Bea", "nachname": "B", "kategorie": "Architeckt/in"})
+    k3 = queries.create_kontakt(tmp_db, {"vorname": "Chris", "nachname": "C", "kategorie": "Bauleiter/in"})
+
+    betroffene = queries.feld_wert_umbenennen(tmp_db, "kategorie", "Architeckt/in", "Architekt/in")
+
+    assert set(betroffene) == {k1, k2}
+    assert queries.get_kontakt(tmp_db, k1)["kategorie"] == "Architekt/in"
+    assert queries.get_kontakt(tmp_db, k2)["kategorie"] == "Architekt/in"
+    assert queries.get_kontakt(tmp_db, k3)["kategorie"] == "Bauleiter/in"  # unberuehrt
+
+
+def test_feld_wert_umbenennen_mit_leerem_neuen_wert_entfernt_zuweisung(tmp_db):
+    k1 = queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "A", "rolle": "Praktikant"})
+    queries.feld_wert_umbenennen(tmp_db, "rolle", "Praktikant", "")
+    assert queries.get_kontakt(tmp_db, k1)["rolle"] == ""
+
+
+def test_feld_wert_umbenennen_kann_zusammenfuehren(tmp_db):
+    k1 = queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "A", "rolle": "Chef"})
+    k2 = queries.create_kontakt(tmp_db, {"vorname": "Bea", "nachname": "B", "rolle": "Geschaeftsleitung"})
+    queries.feld_wert_umbenennen(tmp_db, "rolle", "Chef", "Geschaeftsleitung")
+    assert queries.get_kontakt(tmp_db, k1)["rolle"] == "Geschaeftsleitung"
+    assert queries.get_kontakt(tmp_db, k2)["rolle"] == "Geschaeftsleitung"
+
+
+def test_feld_wert_umbenennen_ignoriert_unbekanntes_feld(tmp_db):
+    k1 = queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "A", "rolle": "Chef"})
+    betroffene = queries.feld_wert_umbenennen(tmp_db, "firma", "Chef", "Andere")
+    assert betroffene == []
+    assert queries.get_kontakt(tmp_db, k1)["rolle"] == "Chef"
+
+
+def test_funktionen_rollen_uebersicht_seite_zeigt_werte_und_anzahl(tmp_db):
+    queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "A", "kategorie": "Architekt/in"})
+    queries.create_kontakt(tmp_db, {"vorname": "Bea", "nachname": "B", "rolle": "Chefin"})
+
+    r = _client(tmp_db).get("/einstellungen/funktionen-rollen")
+    assert r.status_code == 200
+    assert "Architekt/in" in r.text
+    assert "Chefin" in r.text
+
+
+def test_funktionen_rollen_umbenennen_route_aendert_kontakte(tmp_db):
+    k1 = queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "A", "kategorie": "Architeckt/in"})
+    client = _client(tmp_db)
+
+    r = client.post("/einstellungen/funktionen-rollen/umbenennen", data={
+        "feld": "kategorie", "alter_wert": "Architeckt/in", "neuer_wert": "Architekt/in",
+    }, follow_redirects=False)
+
+    assert r.status_code == 303
+    assert queries.get_kontakt(tmp_db, k1)["kategorie"] == "Architekt/in"
+
+
 def test_bulk_bearbeiten_speichern_laesst_gleiche_felder_unveraendert_wenn_nicht_editiert(tmp_db):
     k1 = queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster", "rolle": "Chefin"})
     k2 = queries.create_kontakt(tmp_db, {"vorname": "Bob", "nachname": "Beispiel", "rolle": "Chefin"})

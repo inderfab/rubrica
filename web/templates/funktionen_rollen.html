@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Funktion & Rolle verwalten – Rubrica{% endblock %}
+{% block content %}
+<h1>Funktion &amp; Rolle verwalten</h1>
+<p class="empty">
+    Übersicht aller aktuell verwendeten Werte über alle Kontakte hinweg. Wert ändern und speichern, um einen
+    Tippfehler zu korrigieren oder den Wert global umzubenennen. Feld leeren und speichern, um die Zuweisung
+    bei allen betroffenen Kontakten zu entfernen. Einen bestehenden anderen Wert eintragen, um die Kontakte
+    dort zusammenzuführen (z. B. um einen doppelt erfassten Wert zu bereinigen).
+</p>
+
+<fieldset>
+    <legend>Funktion</legend>
+    {% if funktionen %}
+    <table>
+        <thead><tr><th>Wert</th><th>Kontakte</th><th>Neuer Wert</th></tr></thead>
+        <tbody>
+            {% for f in funktionen %}
+            <tr>
+                <td>{{ f.wert }}</td>
+                <td>{{ f.anzahl }}</td>
+                <td>
+                    <form method="post" action="/einstellungen/funktionen-rollen/umbenennen"
+                          onsubmit="return confirm('Bei {{ f.anzahl }} Kontakten ändern?')"
+                          style="display:flex; gap:0.5rem; align-items:flex-start;">
+                        <input type="hidden" name="feld" value="kategorie">
+                        <input type="hidden" name="alter_wert" value="{{ f.wert }}">
+                        <div class="combobox" style="flex:1;" data-optionen='{{ funktion_optionen|tojson }}'>
+                            <input type="text" class="combobox-input" name="neuer_wert" autocomplete="off"
+                                   value="{{ f.wert }}"
+                                   oninput="rubricaComboboxInput(event)" onfocus="rubricaComboboxInput(event)"
+                                   onblur="rubricaComboboxBlur(event)">
+                            <ul class="combobox-liste"></ul>
+                        </div>
+                        <button type="submit" class="secondary">Speichern</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="empty">Noch keine Funktion vergeben.</p>
+    {% endif %}
+</fieldset>
+
+<fieldset>
+    <legend>Rolle</legend>
+    {% if rollen %}
+    <table>
+        <thead><tr><th>Wert</th><th>Kontakte</th><th>Neuer Wert</th></tr></thead>
+        <tbody>
+            {% for r in rollen %}
+            <tr>
+                <td>{{ r.wert }}</td>
+                <td>{{ r.anzahl }}</td>
+                <td>
+                    <form method="post" action="/einstellungen/funktionen-rollen/umbenennen"
+                          onsubmit="return confirm('Bei {{ r.anzahl }} Kontakten ändern?')"
+                          style="display:flex; gap:0.5rem;">
+                        <input type="hidden" name="feld" value="rolle">
+                        <input type="hidden" name="alter_wert" value="{{ r.wert }}">
+                        <input type="text" name="neuer_wert" value="{{ r.wert }}" style="flex:1">
+                        <button type="submit" class="secondary">Speichern</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="empty">Noch keine Rolle vergeben.</p>
+    {% endif %}
+</fieldset>
+{% endblock %}

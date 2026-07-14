@@ -635,11 +635,38 @@ erzeugt wie bisher Vorschlaege in die Review-Queue. Umsetzungsplan Rubrica-seiti
     In der Postfach-Liste je Postfach ein "-> Ordner"-Dropdown; zugeordnete Postfaecher taggen jeden daraus
     gewonnenen Kontakt automatisch mit dem Ordner vor - fliesst als `gruppen_als_ordner`-Vorschlag in die
     Review-Queue, wird erst beim Bestaetigen gesetzt (nie automatisch ohne Bestaetigung, gemaess Prinzip).
-  - **Angenommene Entscheidungen** (vom Nutzer noch final zu bestaetigen): 1 Postfach -> 1 Ordner; die neue
-    Signatur-DB ersetzt die alte Anbindung; Absender in mehreren gewaehlten Postfaechern = 1 Vorschlag mit
-    Vereinigung der zugeordneten Ordner.
+  - **Vom Nutzer bestaetigt (2026-07-13):** 1 Postfach -> 1 Ordner; die neue Signatur-DB ersetzt die alte
+    Anbindung vollstaendig (Ziel: nur noch EIN Pfad in den Einstellungen einzutragen, nicht zwei parallele
+    Archivio-Config-Felder); Absender in mehreren gewaehlten Postfaechern = 1 Vorschlag mit Vereinigung der
+    zugeordneten Ordner. Die Postfach->Ordner-Zuordnung lohnt sich laut Nutzer bereits ab dem zweiten Import
+    desselben Postfachs (spart das manuelle Neu-Zuordnen bei jedem Scan).
+  - **Kontext zur Postfach-Struktur (Nutzer-Erklaerung 2026-07-13):** Strut nutzt ein gemeinsames Mailkonto
+    `projekte@strut.ch` mit je einem Postfach/Unterordner pro Projekt (z.B. "200 Keller Diamant") - alle
+    Mails darin gehoeren eindeutig zu diesem einen Projekt. Mitarbeiter verschieben projektbezogene Mails aus
+    ihrem persoenlichen Postfach (z.B. `fi@strut.ch`) dorthin, sobald ein Projekt zugewiesen ist. Postfach- und
+    Rubrica-Ordnernamen duerften daher sehr aehnlich sein und liessen sich vermutlich ueber die Projektnummer
+    (z.B. "200") mappen - wird nochmals konkret angeschaut, sobald die Postfachnamen in der neuen Archivio-DB
+    sichtbar sind.
 
-**ALS NAECHSTES GEPLANT (2026-07-13): CA-Zertifikat-Download in den Einstellungen (Rollout-Hilfe).**
+- **Funktion & Rolle verwalten (2026-07-13):** Nutzer wollte eine zentrale Uebersicht ueber alle aktuell
+  verwendeten Funktion-/Rolle-Werte quer ueber alle Kontakte, um Tippfehler zu korrigieren, einen Wert global
+  umzubenennen oder ihn zu loeschen und die betroffenen Kontakte einem anderen Wert zuzuweisen - ohne jeden
+  betroffenen Kontakt einzeln oeffnen zu muessen. Alle drei Faelle (Tippfehler-Fix / Umbenennen / Loeschen+
+  Neuzuweisen) sind technisch dieselbe Operation (ein Wert wird bei allen passenden Kontakten durch einen
+  anderen ersetzt) - deshalb bewusst EINE Aktion statt drei getrennter Buttons: ein editierbares Textfeld pro
+  Zeile, vorausgefuellt mit dem aktuellen Wert. Leer speichern = Zuweisung entfernen; bestehenden anderen
+  Wert eintragen = Zusammenfuehren (Duplikat-Bereinigung); neue Schreibweise eintragen = reine Umbenennung.
+  - Neue Seite `/einstellungen/funktionen-rollen` (`funktionen_rollen.html`), verlinkt von der
+    Einstellungen-Seite. Zwei Tabellen (Funktion/`kategorie`, Rolle/`rolle`), je Zeile Wert + Anzahl
+    betroffener Kontakte + Formular mit dem editierbaren Feld (Funktion nutzt die bestehende Funktion-
+    Combobox, Rolle reines Textfeld, da dafuer keine vordefinierte Liste existiert). Bestaetigungsdialog
+    zeigt die Anzahl betroffener Kontakte, bevor eine Bulk-Aenderung ausgefuehrt wird.
+  - Neue `db.queries.feld_werte_uebersicht(conn, feld)` (Werte + Anzahl, GROUP BY) und
+    `feld_wert_umbenennen(conn, feld, alter_wert, neuer_wert)` (Bulk-UPDATE ueber eine Spalten-Whitelist
+    `{"kategorie", "rolle"}` - kein direktes Interpolieren von Nutzereingaben in den Spaltennamen; gibt die
+    betroffenen kontakt_ids zurueck, damit die Route sie erneut zu Radicale pushen kann, da sich damit auch
+    das CATEGORIES/TITLE-Feld der vCard aendert).
+  - 8 neue Tests (DB-Ebene + Web-Routen).
 Fuer den Rollout auf mehrere Stationen: der reine "Zertifikat vertrauen"-Dialog beim Account-Einrichten
 reicht nicht zuverlaessig (Hintergrund-Sync-Dienst contactsd/dataaccessd honoriert per-Account-Ausnahmen
 nicht immer -> stiller Sync-Fehler, genau das Muster der Sync-Bugs). Zuverlaessig: die lokale CA
