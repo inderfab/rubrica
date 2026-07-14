@@ -430,3 +430,39 @@ async def kontakte_bulk_kategorie_umstellen(request: Request):
         finally:
             conn.close()
     return RedirectResponse(url=_liste_url(zurueck_ordner_id), status_code=303)
+
+
+@router.get("/einstellungen/funktionen-rollen")
+def funktionen_rollen_uebersicht(request: Request):
+    """Verwaltungsseite fuer die Funktion-/Rolle-Werte quer ueber alle Kontakte -
+    Tippfehler korrigieren, global umbenennen oder loeschen+zusammenfuehren, ohne
+    jeden betroffenen Kontakt einzeln oeffnen zu muessen."""
+    conn = get_connection()
+    try:
+        funktionen = queries.feld_werte_uebersicht(conn, "kategorie")
+        rollen = queries.feld_werte_uebersicht(conn, "rolle")
+        funktion_optionen = _funktion_optionen(conn)
+    finally:
+        conn.close()
+    return templates.TemplateResponse("funktionen_rollen.html", {
+        "request": request, "funktionen": funktionen, "rollen": rollen,
+        "funktion_optionen": funktion_optionen,
+    })
+
+
+@router.post("/einstellungen/funktionen-rollen/umbenennen")
+async def funktionen_rollen_umbenennen(request: Request):
+    form = await request.form()
+    feld = form.get("feld", "").strip()
+    alter_wert = form.get("alter_wert", "").strip()
+    neuer_wert = form.get("neuer_wert", "").strip()
+
+    if feld in ("kategorie", "rolle") and alter_wert:
+        conn = get_connection()
+        try:
+            betroffene = queries.feld_wert_umbenennen(conn, feld, alter_wert, neuer_wert)
+            for kontakt_id in betroffene:
+                radicale.push_kontakt(conn, kontakt_id)
+        finally:
+            conn.close()
+    return RedirectResponse(url="/einstellungen/funktionen-rollen", status_code=303)
