@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 from config import settings
 from db import queries
 from sync import radicale
-from web import setup as setup_modul
+from web import import_status, setup as setup_modul
 from web.main import app
 
 
@@ -121,34 +121,42 @@ def test_carddav_test_legt_adressbuch_bei_404_an_und_meldet_erfolg(tmp_db, monke
     assert aufrufe == ["PROPFIND", "MKCOL", "PROPFIND"]
 
 
-def test_import_contacts_app_meldet_erfolg(tmp_db, monkeypatch):
+def test_import_contacts_app_startet_hintergrund_job(tmp_db, monkeypatch):
     _lokal_bypass(monkeypatch)
-    monkeypatch.setattr(setup_modul, "importiere_kontakte_app_und_synchronisiere", lambda conn: {
-        "gefunden": 3, "gruppen_gefunden": 1, "importiert": 3, "fehler": 0,
-        "ohne_uid": 0, "kontakte_gesamt": 3, "ordner_gesamt": 1,
+    monkeypatch.setattr(import_status, "starten", lambda: True)
+
+    r = TestClient(app).post("/setup/import-contacts-app")
+    assert r.status_code == 200
+    assert r.json() == {"gestartet": True}
+
+
+def test_import_contacts_app_status_meldet_laufenden_fortschritt(tmp_db, monkeypatch):
+    _lokal_bypass(monkeypatch)
+    monkeypatch.setattr(import_status, "status", lambda: {
+        "laeuft": True, "phase": "importiere", "verarbeitet": 5, "gesamt": 10,
+        "fertig": False, "ergebnis": None, "fehler_meldung": None,
     })
 
-    r = TestClient(app).post("/setup/import-contacts-app")
+    r = TestClient(app).get("/setup/import-contacts-app/status")
     assert r.status_code == 200
     daten = r.json()
-    assert daten["ok"] is True
-    assert daten["importiert"] == 3
-    assert daten["kontakte_gesamt"] == 3
+    assert daten["laeuft"] is True
+    assert daten["verarbeitet"] == 5
+    assert daten["gesamt"] == 10
 
 
-def test_import_contacts_app_meldet_fehler_bei_verweigertem_zugriff(tmp_db, monkeypatch):
+def test_import_contacts_app_status_meldet_fehler(tmp_db, monkeypatch):
     _lokal_bypass(monkeypatch)
+    monkeypatch.setattr(import_status, "status", lambda: {
+        "laeuft": False, "phase": "", "verarbeitet": 0, "gesamt": 0,
+        "fertig": True, "ergebnis": None, "fehler_meldung": "RuntimeError: Zugriff auf Kontakte verweigert",
+    })
 
-    def _wirft(conn):
-        raise RuntimeError("Zugriff auf Kontakte verweigert")
-
-    monkeypatch.setattr(setup_modul, "importiere_kontakte_app_und_synchronisiere", _wirft)
-
-    r = TestClient(app).post("/setup/import-contacts-app")
+    r = TestClient(app).get("/setup/import-contacts-app/status")
     assert r.status_code == 200
     daten = r.json()
-    assert daten["ok"] is False
-    assert "Zugriff auf Kontakte verweigert" in daten["detail"]
+    assert daten["fertig"] is True
+    assert "Zugriff auf Kontakte verweigert" in daten["fehler_meldung"]
 
 
 def test_setup_schritt5_speichert_archivio_und_eigene_domains(tmp_db, monkeypatch, tmp_path):

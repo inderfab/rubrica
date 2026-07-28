@@ -1,6 +1,6 @@
 from fastapi.testclient import TestClient
 
-from web import imports as imports_modul
+from web import import_status, imports as imports_modul
 from web.main import app
 
 
@@ -20,18 +20,34 @@ def test_import_kontakte_app_blockiert_nicht_lokale_anfragen(tmp_db):
     # TestClient simuliert Host "testclient", kein echter localhost-Request.
     r = TestClient(app).post("/import/kontakte-app")
     assert r.status_code == 200
-    assert r.json()["ok"] is False
+    assert r.json()["gestartet"] is False
 
 
-def test_import_kontakte_app_meldet_erfolg(tmp_db, monkeypatch):
+def test_import_kontakte_app_startet_hintergrund_job(tmp_db, monkeypatch):
     monkeypatch.setattr(imports_modul, "_ist_lokal", lambda request: True)
-    monkeypatch.setattr(imports_modul, "importiere_kontakte_app_und_synchronisiere", lambda conn: {
-        "gefunden": 2, "gruppen_gefunden": 0, "importiert": 2, "fehler": 0,
-        "ohne_uid": 0, "kontakte_gesamt": 2, "ordner_gesamt": 0,
-    })
+    monkeypatch.setattr(import_status, "starten", lambda: True)
 
     r = TestClient(app).post("/import/kontakte-app")
     assert r.status_code == 200
+    assert r.json() == {"gestartet": True}
+
+
+def test_import_kontakte_app_status_meldet_fortschritt(tmp_db, monkeypatch):
+    monkeypatch.setattr(imports_modul, "_ist_lokal", lambda request: True)
+    monkeypatch.setattr(import_status, "status", lambda: {
+        "laeuft": True, "phase": "synchronisiere", "verarbeitet": 2, "gesamt": 2,
+        "fertig": False, "ergebnis": None, "fehler_meldung": None,
+    })
+
+    r = TestClient(app).get("/import/kontakte-app/status")
+    assert r.status_code == 200
     daten = r.json()
-    assert daten["ok"] is True
-    assert daten["importiert"] == 2
+    assert daten["laeuft"] is True
+    assert daten["phase"] == "synchronisiere"
+
+
+def test_import_kontakte_app_status_ueber_lan_meldet_nicht_laufend(tmp_db, monkeypatch):
+    monkeypatch.setattr(imports_modul, "_ist_lokal", lambda request: False)
+    r = TestClient(app).get("/import/kontakte-app/status")
+    assert r.status_code == 200
+    assert r.json()["laeuft"] is False

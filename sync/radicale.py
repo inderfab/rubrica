@@ -266,16 +266,30 @@ def delete_projekt(projekt_id: int) -> bool:
     return _delete(f"projekt-{projekt_id}.vcf")
 
 
-def push_kontakt_mit_ordnern(conn: sqlite3.Connection, kontakt_id: int) -> None:
+def push_kontakt_mit_ordnern(conn: sqlite3.Connection, kontakt_id: int,
+                              client: "httpx.Client | None" = None) -> None:
     """Pusht einen Kontakt und alle seine zugeordneten Ordner - gemeinsame Nachbereitung
     nach jedem direkten Anlegen/Mergen (Import, Archivio-Uebernahme), da ein Kontakt
-    dabei haeufig zugleich einem (neuen oder bestehenden) Ordner zugewiesen wird."""
-    push_kontakt(conn, kontakt_id)
-    kontakt = queries.get_kontakt(conn, kontakt_id)
-    if kontakt is None:
+    dabei haeufig zugleich einem (neuen oder bestehenden) Ordner zugewiesen wird.
+    `client`: optionaler, wiederverwendeter Client fuer Batch-Aufrufe (siehe
+    web/shared.py, web/imports.py) - ohne das baut jeder einzelne Aufruf eine eigene
+    TLS-Verbindung auf, was bei grossen Imports (1000+ Kontakte) den Grossteil der
+    Laufzeit ausmachte (derselbe Grund wie in sync_alle() weiter unten dokumentiert)."""
+    eigener = client is None
+    if eigener:
+        client = _client()
+    if client is None:
         return
-    for p in kontakt["projekte"]:
-        push_projekt(conn, p["id"])
+    try:
+        push_kontakt(conn, kontakt_id, client=client)
+        kontakt = queries.get_kontakt(conn, kontakt_id)
+        if kontakt is None:
+            return
+        for p in kontakt["projekte"]:
+            push_projekt(conn, p["id"], client=client)
+    finally:
+        if eigener:
+            client.close()
 
 
 def sync_alle(conn: sqlite3.Connection) -> dict:

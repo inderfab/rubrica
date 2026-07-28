@@ -17,8 +17,9 @@ from fastapi.responses import RedirectResponse, Response
 from config import settings
 from db.connection import get_connection
 from sync import radicale
+from web import import_status
 from web.settings import LOGO_ERLAUBTE_ENDUNGEN, _logo_entfernen
-from web.shared import _hostname_local, importiere_kontakte_app_und_synchronisiere, templates
+from web.shared import _hostname_local, templates
 
 router = APIRouter()
 
@@ -123,14 +124,14 @@ def setup_schritt4(request: Request):
 def setup_import_contacts_app(request: Request):
     if (r := _nur_lokal(request)) is not None:
         return r
-    conn = get_connection()
-    try:
-        ergebnis = importiere_kontakte_app_und_synchronisiere(conn)
-        return {"ok": True, **ergebnis}
-    except Exception as exc:
-        return {"ok": False, "detail": f"{type(exc).__name__}: {exc}"}
-    finally:
-        conn.close()
+    return {"gestartet": import_status.starten()}
+
+
+@router.get("/setup/import-contacts-app/status")
+def setup_import_contacts_app_status(request: Request):
+    if (r := _nur_lokal(request)) is not None:
+        return r
+    return import_status.status()
 
 
 def _archivio_pruefen(pfad: str) -> dict:

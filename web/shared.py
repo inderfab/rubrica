@@ -29,18 +29,41 @@ def _hostname_local() -> str:
     return f"{name or socket.gethostname()}.local"
 
 
-def importiere_kontakte_app_und_synchronisiere(conn) -> dict:
+def importiere_kontakte_app_und_synchronisiere(conn, fortschritt_callback=None) -> dict:
     """Importiert aus Kontakte.app und pusht die betroffenen Kontakte anschliessend
     nach Radicale - gemeinsam genutzt von web/setup.py (Einrichtungsassistent) und
     web/imports.py (regulaerer Import), damit beide Aufrufer nicht getrennt daran
     denken muessen (importer/contacts_app.py selbst pusht bewusst nicht, siehe
-    dessen Docstring - Push ist Aufgabe der Web-Schicht, analog zu importer/vcard.py)."""
+    dessen Docstring - Push ist Aufgabe der Web-Schicht, analog zu importer/vcard.py).
+
+    fortschritt_callback(phase, verarbeitet, gesamt) wird waehrend beider Phasen
+    aufgerufen ("importiere" bzw. "synchronisiere"), phase="lese" einmalig davor
+    (die AppleScript-Abfrage selbst laesst sich nicht granular verfolgen)."""
     from importer.contacts_app import importiere_aus_kontakte_app
     from sync import radicale
-    ergebnis = importiere_aus_kontakte_app(conn)
+
+    def _import_fortschritt(verarbeitet, gesamt):
+        if fortschritt_callback is not None:
+            fortschritt_callback("importiere", verarbeitet, gesamt)
+
+    if fortschritt_callback is not None:
+        fortschritt_callback("lese", 0, 0)
+    ergebnis = importiere_aus_kontakte_app(conn, fortschritt_callback=_import_fortschritt)
     kontakt_ids = ergebnis.pop("kontakt_ids", [])
-    for kontakt_id in kontakt_ids:
-        radicale.push_kontakt_mit_ordnern(conn, kontakt_id)
+
+    # Eine Verbindung fuer den ganzen Push-Batch wiederverwenden statt pro Kontakt
+    # eine eigene TLS-Verbindung aufzubauen - bei 1000+ Kontakten war genau das
+    # bisher der groesste Teil der Laufzeit (siehe sync.radicale.sync_alle, wo
+    # dieselbe Optimierung schon fuer den Voll-Sync dokumentiert ist).
+    client = radicale._client()
+    try:
+        for i, kontakt_id in enumerate(kontakt_ids):
+            radicale.push_kontakt_mit_ordnern(conn, kontakt_id, client=client)
+            if fortschritt_callback is not None:
+                fortschritt_callback("synchronisiere", i + 1, len(kontakt_ids))
+    finally:
+        if client is not None:
+            client.close()
     return ergebnis
 
 

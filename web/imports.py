@@ -6,7 +6,8 @@ from fastapi.responses import RedirectResponse
 from db.connection import get_connection
 from importer.vcard import importiere
 from sync import radicale
-from web.shared import importiere_kontakte_app_und_synchronisiere, templates
+from web import import_status
+from web.shared import templates
 
 router = APIRouter()
 
@@ -31,15 +32,15 @@ def import_form(request: Request):
 @router.post("/import/kontakte-app")
 def import_kontakte_app(request: Request):
     if not _ist_lokal(request):
-        return {"ok": False, "detail": "Nur direkt auf diesem Rechner möglich."}
-    conn = get_connection()
-    try:
-        ergebnis = importiere_kontakte_app_und_synchronisiere(conn)
-        return {"ok": True, **ergebnis}
-    except Exception as exc:
-        return {"ok": False, "detail": f"{type(exc).__name__}: {exc}"}
-    finally:
-        conn.close()
+        return {"gestartet": False, "detail": "Nur direkt auf diesem Rechner möglich."}
+    return {"gestartet": import_status.starten()}
+
+
+@router.get("/import/kontakte-app/status")
+def import_kontakte_app_status(request: Request):
+    if not _ist_lokal(request):
+        return {"laeuft": False}
+    return import_status.status()
 
 
 @router.post("/import")
@@ -56,8 +57,15 @@ async def import_hochladen(dateien: list[UploadFile]):
         for datei in dateien:
             inhalt = (await datei.read()).decode("utf-8", errors="replace")
             kontakt_ids.extend(importiere(conn, inhalt))
-        for kontakt_id in set(kontakt_ids):
-            radicale.push_kontakt_mit_ordnern(conn, kontakt_id)
+        # Eine Verbindung fuer den ganzen Batch wiederverwenden statt pro Kontakt
+        # eine eigene TLS-Verbindung aufzubauen (siehe sync.radicale.sync_alle).
+        client = radicale._client()
+        try:
+            for kontakt_id in set(kontakt_ids):
+                radicale.push_kontakt_mit_ordnern(conn, kontakt_id, client=client)
+        finally:
+            if client is not None:
+                client.close()
     finally:
         conn.close()
 

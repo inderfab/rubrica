@@ -13,6 +13,7 @@ from __future__ import annotations
 import re
 import sqlite3
 import subprocess
+from typing import Callable
 
 from importer.vcard import importiere
 
@@ -112,11 +113,19 @@ def _gruppen_vcard(name: str, mitglieder_uids: list) -> str:
     return "\r\n".join(zeilen) + "\r\n"
 
 
-def importiere_aus_kontakte_app(conn: sqlite3.Connection) -> dict:
+def importiere_aus_kontakte_app(
+    conn: sqlite3.Connection,
+    fortschritt_callback: Callable[[int, int], None] | None = None,
+) -> dict:
     """Liest den kompletten Bestand aus Kontakte.app und importiert ihn nach
     Rubrica (nie destruktiv, siehe importer.vcard.importiere / queries.merge_kontakt).
     Gibt eine Zusammenfassung zurueck, wirft bei AppleScript-Fehlern (z.B. Zugriff
-    auf Kontakte.app verweigert) die zugrundeliegende Exception weiter."""
+    auf Kontakte.app verweigert) die zugrundeliegende Exception weiter.
+
+    fortschritt_callback(verarbeitet, gesamt) wird nach jeder einzelnen vCard
+    aufgerufen - der eigentliche Import (dieser Teil hier) dauert bei grossen
+    Adressbuechern durchaus zehn Minuten und laenger, ohne Zwischenstand liesse
+    sich das von einem haengengebliebenen Request nicht unterscheiden."""
     vcards, gruppen = _hole_daten()
 
     vcf_teile = []
@@ -142,14 +151,18 @@ def importiere_aus_kontakte_app(conn: sqlite3.Connection) -> dict:
 
     kontakt_ids: set = set()
     fehler = 0
+    fehler_typen: dict = {}
     # Jede vCard einzeln importieren statt als ein grosser Block: eine einzelne
     # fehlerhafte/legacy-kodierte vCard (z.B. alte Quoted-Printable-Kodierung)
     # soll nicht den gesamten Import abbrechen.
-    for vc in vcf_teile:
+    for i, vc in enumerate(vcf_teile):
         try:
             kontakt_ids.update(importiere(conn, vc + "\n" + gruppen_block, gruppen_als_ordner=True))
-        except Exception:
+        except Exception as exc:
             fehler += 1
+            fehler_typen[type(exc).__name__] = fehler_typen.get(type(exc).__name__, 0) + 1
+        if fortschritt_callback is not None:
+            fortschritt_callback(i + 1, len(vcf_teile))
 
     anzahl_kontakte = conn.execute("SELECT COUNT(*) FROM kontakte").fetchone()[0]
     anzahl_ordner = conn.execute("SELECT COUNT(*) FROM projekte").fetchone()[0]
@@ -159,6 +172,9 @@ def importiere_aus_kontakte_app(conn: sqlite3.Connection) -> dict:
         "gruppen_gefunden": len(gruppen),
         "importiert": len(kontakt_ids),
         "fehler": fehler,
+        # Zaehlt nur Ausnahmetypen (z.B. "ParserError": 3), nie den eigentlichen
+        # Kontaktinhalt - siehe Datenschutz-Hinweis oben im Modul-Docstring.
+        "fehler_typen": fehler_typen,
         "ohne_uid": ohne_uid,
         "kontakte_gesamt": anzahl_kontakte,
         "ordner_gesamt": anzahl_ordner,

@@ -236,3 +236,83 @@ document.addEventListener('DOMContentLoaded', rubricaSpaltenGroessenInitialisier
 // (stiller Fehler: DOMContentLoaded lief noch, aber kein Reapply nach htmx-Swaps).
 // "document" existiert dagegen bereits waehrend des Head-Parsings.
 document.addEventListener('htmx:afterSettle', rubricaSpaltenGroessenInitialisieren);
+
+// Kontakte.app-Import (Setup-Assistent + Import-Seite): der eigentliche Import
+// laeuft im Hintergrund (siehe web/import_status.py), da er bei grossen
+// Adressbuechern zehn Minuten und mehr dauert - ein einzelner synchroner Request
+// liess sich sonst nicht von einem haengengebliebenen Request unterscheiden
+// (genau das war das Feedback aus dem Praxistest). Start-Endpoint gibt sofort
+// zurueck, hier wird der Fortschritt per Polling abgefragt.
+const RUBRICA_IMPORT_PHASEN_TEXT = {
+    lese: 'Lese Kontakte aus Kontakte.app… (kann bei großen Adressbüchern einige Minuten dauern)',
+    importiere: 'Importiere',
+    synchronisiere: 'Synchronisiere mit Radicale',
+};
+
+function rubricaKontakteAppImportStarten(startUrl, statusUrl, knopfId, ergebnisId, navGuardSetter) {
+    const knopf = document.getElementById(knopfId);
+    const ergebnis = document.getElementById(ergebnisId);
+    knopf.disabled = true;
+    knopf.textContent = 'Importiere…';
+    ergebnis.style.display = 'block';
+    ergebnis.style.background = 'var(--bg-hell, #f2f2f2)';
+    ergebnis.style.color = '';
+    ergebnis.style.fontWeight = 'normal';
+    ergebnis.textContent = 'Starte…';
+    if (navGuardSetter) navGuardSetter(true);
+
+    fetch(startUrl, { method: 'POST' })
+        .then(r => r.json())
+        .then(daten => {
+            if (!daten.gestartet) {
+                ergebnis.textContent = 'Es läuft bereits ein Import (evtl. aus einem anderen Tab) – warte auf Ergebnis…';
+            }
+            rubricaKontakteAppImportPollen(statusUrl, knopf, ergebnis, navGuardSetter);
+        })
+        .catch(() => {
+            knopf.disabled = false;
+            knopf.textContent = 'Aus Kontakte.app importieren';
+            if (navGuardSetter) navGuardSetter(false);
+            ergebnis.style.fontWeight = 'bold';
+            ergebnis.style.background = '#fdecea';
+            ergebnis.style.color = '#eb5757';
+            ergebnis.textContent = '✗ Start fehlgeschlagen (Netzwerkfehler)';
+        });
+}
+
+function rubricaKontakteAppImportPollen(statusUrl, knopf, ergebnis, navGuardSetter) {
+    fetch(statusUrl)
+        .then(r => r.json())
+        .then(daten => {
+            if (daten.laeuft) {
+                let text = RUBRICA_IMPORT_PHASEN_TEXT[daten.phase] || 'Importiere…';
+                if (daten.gesamt) text += `: ${daten.verarbeitet} von ${daten.gesamt}`;
+                ergebnis.textContent = text;
+                setTimeout(() => rubricaKontakteAppImportPollen(statusUrl, knopf, ergebnis, navGuardSetter), 1000);
+                return;
+            }
+            knopf.disabled = false;
+            knopf.textContent = 'Aus Kontakte.app importieren';
+            if (navGuardSetter) navGuardSetter(false);
+            ergebnis.style.fontWeight = 'bold';
+            if (daten.fehler_meldung) {
+                ergebnis.textContent = '✗ Import fehlgeschlagen (' + daten.fehler_meldung + ')';
+                ergebnis.style.background = '#fdecea';
+                ergebnis.style.color = '#eb5757';
+                return;
+            }
+            const e = daten.ergebnis || {};
+            const typen = e.fehler_typen && Object.keys(e.fehler_typen).length
+                ? ' (' + Object.entries(e.fehler_typen).map(([t, n]) => `${n}x ${t}`).join(', ') + ')'
+                : '';
+            let text = `✓ Import abgeschlossen: ${e.importiert} von ${e.gefunden} Kontakten übernommen, ${e.gruppen_gefunden} Gruppen als Ordner.`;
+            if (e.fehler) text += ` ${e.fehler} Einträge übersprungen${typen}.`;
+            text += ` Rubrica enthält jetzt insgesamt ${e.kontakte_gesamt} Kontakte.`;
+            ergebnis.textContent = text;
+            ergebnis.style.background = '#e6f4ea';
+            ergebnis.style.color = '#1a7f37';
+        })
+        .catch(() => {
+            setTimeout(() => rubricaKontakteAppImportPollen(statusUrl, knopf, ergebnis, navGuardSetter), 2000);
+        });
+}

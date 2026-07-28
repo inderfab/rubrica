@@ -11,9 +11,12 @@
         beim ersten Mal nach Zugriff auf Kontakte – bitte erlauben. Doppelte Kontakte werden automatisch
         erkannt und zusammengeführt, nichts wird überschrieben. Bei sehr großen Adressbüchern
         (mehrere Tausend Kontakte) kann dieser Schritt einige Minuten dauern – die Seite bitte offen lassen,
-        bis unten ein Ergebnis erscheint (auch wenn der Knopf so lange ausgegraut bleibt).
+        der Fortschritt wird laufend unten angezeigt.
     </p>
-    <button type="button" id="setup-import-knopf" class="secondary" onclick="rubricaSetupKontakteAppImport()">Aus Kontakte.app importieren</button>
+    <button type="button" id="setup-import-knopf" class="secondary"
+            onclick="rubricaKontakteAppImportStarten('/setup/import-contacts-app', '/setup/import-contacts-app/status', 'setup-import-knopf', 'setup-import-ergebnis', (laeuft) => { rubricaImportLaeuft = laeuft; })">
+        Aus Kontakte.app importieren
+    </button>
     <p id="setup-import-ergebnis" style="padding:0.6rem 0.8rem; margin-top:0.7rem; border-radius:6px; display:none"></p>
 </fieldset>
 
@@ -40,46 +43,6 @@ function rubricaSetupNavGuard(event) {
         return false;
     }
     return true;
-}
-
-function rubricaSetupKontakteAppImport() {
-    rubricaImportLaeuft = true;
-    const knopf = document.getElementById('setup-import-knopf');
-    const ergebnis = document.getElementById('setup-import-ergebnis');
-    knopf.disabled = true;
-    knopf.textContent = 'Importiere…';
-    ergebnis.style.display = 'block';
-    ergebnis.style.background = 'var(--bg-hell, #f2f2f2)';
-    ergebnis.style.color = '';
-    ergebnis.style.fontWeight = 'normal';
-    ergebnis.textContent = 'Importiere… (kann bei vielen Kontakten mehrere Minuten dauern, bitte warten)';
-
-    fetch('/setup/import-contacts-app', { method: 'POST' })
-        .then(r => r.json())
-        .then(daten => {
-            rubricaImportLaeuft = false;
-            knopf.disabled = false;
-            knopf.textContent = 'Aus Kontakte.app importieren';
-            ergebnis.style.fontWeight = 'bold';
-            if (daten.ok) {
-                ergebnis.textContent = `✓ Import abgeschlossen: ${daten.importiert} von ${daten.gefunden} Kontakten übernommen, ${daten.gruppen_gefunden} Gruppen als Ordner. Rubrica enthält jetzt insgesamt ${daten.kontakte_gesamt} Kontakte.`;
-                ergebnis.style.background = '#e6f4ea';
-                ergebnis.style.color = '#1a7f37';
-            } else {
-                ergebnis.textContent = '✗ Import fehlgeschlagen (' + daten.detail + ')';
-                ergebnis.style.background = '#fdecea';
-                ergebnis.style.color = '#eb5757';
-            }
-        })
-        .catch(() => {
-            rubricaImportLaeuft = false;
-            knopf.disabled = false;
-            knopf.textContent = 'Aus Kontakte.app importieren';
-            ergebnis.style.fontWeight = 'bold';
-            ergebnis.style.background = '#fdecea';
-            ergebnis.style.color = '#eb5757';
-            ergebnis.textContent = '✗ Import fehlgeschlagen (Netzwerkfehler)';
-        });
 }
 </script>
 {% endblock %}
