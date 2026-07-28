@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 from urllib.parse import quote_plus
 from fastapi.templating import Jinja2Templates
+from packaging.version import Version
 
 from config import settings
 from db.connection import get_connection
@@ -61,6 +62,27 @@ try:
 except Exception:
     APP_VERSION = "0.0.0"
 templates.env.globals["app_version"] = APP_VERSION
+
+
+def _update_verfuegbar() -> str:
+    """Liest die zuletzt vom Update-Checker (menubar/updater.py, separater Prozess)
+    gefundene Version aus update_state.json - gemeinsames Dateisystem ist die
+    Schnittstelle zwischen Menubar- und Web-Prozess. Gibt die neue Versionsnummer
+    zurueck (fuer den Sidebar-Hinweis), oder "" falls kein Update bekannt ist oder
+    die laufende Version bereits aktuell/neuer ist (z.B. nach einem erfolgten
+    Update - kein explizites Aufraeumen der Datei noetig)."""
+    pfad = settings.daten_verzeichnis() / "update_state.json"
+    try:
+        daten = json.loads(pfad.read_text(encoding="utf-8"))
+        verfuegbare_version = daten.get("gemeldete_version", "")
+        if verfuegbare_version and Version(verfuegbare_version) > Version(APP_VERSION):
+            return verfuegbare_version
+    except Exception:
+        pass
+    return ""
+
+
+templates.env.globals["update_verfuegbar"] = _update_verfuegbar
 
 # Fuer JSON-Daten in HTML-Attributen (z.B. Combobox-Optionen): Jinjas normales
 # Autoescaping wandelt die enthaltenen Anfuehrungszeichen in &quot; um, der

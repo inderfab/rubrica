@@ -55,6 +55,19 @@ body {
 .global-sidebar nav a:hover { background: var(--flaeche-hover); }
 .global-sidebar nav a.aktiv { background: var(--rand); font-weight: 600; }
 
+.update-hinweis {
+    margin-top: auto;
+    display: block;
+    padding: 0.5rem 0.6rem;
+    border-radius: 6px;
+    background: #fff8e6;
+    border: 1px solid #f0dca0;
+    color: #8a6d1a;
+    font-size: 0.8rem;
+    text-decoration: none;
+}
+.update-hinweis:hover { background: #fdf0cc; }
+
 .app-content { flex: 1; min-width: 0; padding: 2rem 2.5rem; }
 
 h1 { font-size: 1.6rem; font-weight: 700; margin-top: 0; color: var(--text); }

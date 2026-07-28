@@ -6,6 +6,7 @@ kein Statusdisplay und "Beenden" haette wegen KeepAlive=true nur zum sofortigen
 Neustart durch launchd gefuehrt (siehe docs/konzept.md Abschnitt 11)."""
 from __future__ import annotations
 
+import json
 import logging
 import os
 import secrets
@@ -18,6 +19,14 @@ from pathlib import Path
 
 import httpx
 import rumps
+
+# Flacher Sibling-Import (kein "from menubar import updater"): im gepackten .app-
+# Bundle liegt dieses Skript flach in Contents/Resources (als rubrica_menubar.py
+# kopiert, siehe scripts/build-pkg.sh), updater.py wird als flache Geschwisterdatei
+# mitkopiert - Pythons sys.path[0] ist beim direkten Skriptaufruf immer das
+# Verzeichnis des laufenden Skripts, das funktioniert daher in Dev und Produktion
+# identisch, ohne dass "menubar" ein echtes installiertes Package sein muesste.
+import updater
 
 # RADICALE_PORT bleibt bewusst fest (kein bekannter Konfliktfall, vermeidet
 # Config-Drift zwischen diesem Wert und radicale.base_url in config.yaml).
@@ -62,6 +71,24 @@ def _local_version() -> str:
         return (_HERE / "VERSION").read_text().strip()
     except Exception:
         return "0.0.0"
+
+
+_UPDATE_STATE_PFAD = _DATA_DIR / "update_state.json"
+_UPDATE_PRUEF_INTERVALL = 24 * 60 * 60  # 24h
+
+
+def _update_state_lesen() -> dict:
+    try:
+        return json.loads(_UPDATE_STATE_PFAD.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def _update_state_schreiben(daten: dict) -> None:
+    try:
+        _UPDATE_STATE_PFAD.write_text(json.dumps(daten), encoding="utf-8")
+    except Exception as exc:
+        log.warning("Konnte update_state.json nicht schreiben: %s", exc)
 
 
 def _hostname_local() -> str:
@@ -221,6 +248,7 @@ class RubricaApp(rumps.App):
         self._version_item = rumps.MenuItem(f"Version {_local_version()}")
         self._server_item = rumps.MenuItem("⬤  Web-Server …")
         self._radicale_item = rumps.MenuItem("⬤  CardDAV (Radicale) …")
+        self._update_item = None  # erst eingefuegt, sobald ein Update gefunden wurde
 
         self.menu = [
             self._version_item,
@@ -230,6 +258,7 @@ class RubricaApp(rumps.App):
             rumps.separator,
             rumps.MenuItem("Rubrica öffnen", callback=self.oeffnen),
             rumps.MenuItem("Datenordner öffnen", callback=self.datenordner_oeffnen),
+            rumps.MenuItem("Nach Updates suchen…", callback=self.update_jetzt_pruefen),
             rumps.separator,
             rumps.MenuItem("Beenden", callback=self.beenden),
         ]
@@ -252,6 +281,7 @@ class RubricaApp(rumps.App):
         self._status_aktualisieren()
 
         threading.Thread(target=self._ueberwachung, daemon=True).start()
+        threading.Thread(target=self._update_ueberwachung, daemon=True).start()
 
     def _ueberwachung(self):
         while True:
@@ -263,6 +293,56 @@ class RubricaApp(rumps.App):
                 log.warning("Radicale nicht aktiv - Neustart")
                 self.radicale.start()
             self._status_aktualisieren()
+
+    def _update_ueberwachung(self):
+        """Erste Pruefung 60s nach dem Start, danach alle 24h - matcht das gleiche
+        Hintergrund-Thread-Muster wie _ueberwachung()."""
+        time.sleep(60)
+        while True:
+            self._update_pruefen(manuell=False)
+            time.sleep(_UPDATE_PRUEF_INTERVALL)
+
+    def _update_pruefen(self, manuell: bool):
+        info = updater.pruefe_update(_local_version(), log=log)
+        if info is None:
+            if manuell:
+                rumps.notification("Rubrica", "", "Sie verwenden bereits die neueste Version.")
+            return
+
+        if self._update_item is None:
+            self._update_item = rumps.MenuItem(
+                f"Update auf v{info.version} verfügbar", callback=self.update_anwenden
+            )
+            self.menu.insert_before(self._version_item.title, self._update_item)
+        else:
+            self._update_item.title = f"Update auf v{info.version} verfügbar"
+        self._update_info = info
+
+        state = _update_state_lesen()
+        bereits_gemeldet = state.get("gemeldete_version") == info.version
+        if manuell or not bereits_gemeldet:
+            rumps.notification(
+                "Rubrica-Update verfügbar", f"Version {info.version}",
+                "Im Menü auf \"Update auf v%s verfügbar\" klicken, um es zu installieren." % info.version,
+            )
+            _update_state_schreiben({"gemeldete_version": info.version})
+
+    def update_jetzt_pruefen(self, _):
+        threading.Thread(target=self._update_pruefen, args=(True,), daemon=True).start()
+
+    def update_anwenden(self, _):
+        threading.Thread(target=self._update_herunterladen_und_installieren, daemon=True).start()
+
+    def _update_herunterladen_und_installieren(self):
+        info = getattr(self, "_update_info", None)
+        if info is None:
+            return
+        rumps.notification("Rubrica", "", f"Lade Update {info.version} herunter…")
+        pkg = updater.lade_und_pruefe(info, log=log)
+        if pkg is None:
+            rumps.notification("Rubrica", "", "Update konnte nicht verifiziert werden - Installation abgebrochen.")
+            return
+        updater.installiere(pkg)
 
     def _status_aktualisieren(self):
         server_ok = _server_antwortet()

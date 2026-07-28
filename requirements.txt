@@ -20,3 +20,4 @@ reportlab==5.0.0        # PDF-Erzeugung
 
 # Menubar-App (nur im gepackten .pkg genutzt, macOS-only)
 rumps==0.4.0
+packaging==24.2      # Versionsvergleich fuer den Updater (menubar/updater.py)
