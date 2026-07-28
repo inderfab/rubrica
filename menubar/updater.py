@@ -16,10 +16,9 @@ from packaging.version import InvalidVersion, Version
 GITHUB_REPO = "inderfab/rubrica"
 ASSET_SUFFIX = ".pkg"
 ASSET_NAME_HINT = "rubrica-server"
-# Wird gesetzt, sobald Kapitel 1 (Signierung) mit echten Developer-ID-Zertifikaten
-# abgeschlossen ist - bis dahin liefert _verify_pkg() immer False zurueck (siehe
-# oben), das Modul ist aber bereits voll funktionsfaehig und getestet.
-EXPECTED_TEAM_ID = ""
+# Gleiche Team-ID wie die Schwester-App Archivio (dasselbe Apple-Developer-Konto
+# signiert beide, siehe docs/CHANGELOG-INTERN.md Kapitel 1).
+EXPECTED_TEAM_ID = "2USYCLVGTM"
 
 _DOWNLOAD_DIR = Path.home() / "Library" / "Caches" / "Rubrica" / "updates"
 
