@@ -70,15 +70,15 @@ def test_einstellungen_speichern_schreibt_config(tmp_db, monkeypatch, tmp_path):
 
 def test_einstellungen_formular_zeigt_radicale_werte_im_klartext(tmp_db, monkeypatch):
     # Benutzername/Adressbuch-Pfad sind fest verdrahtet (siehe sync/radicale.py) -
-    # die Seite zeigt immer "pas", unabhaengig davon, was (noch) in config.yaml steht
-    # (z.B. Reste einer alten Installation).
+    # die Seite zeigt immer "rubrica", unabhaengig davon, was (noch) in config.yaml
+    # steht (z.B. Reste einer alten Installation).
     monkeypatch.setattr(settings, "_settings", {"radicale": {
         "base_url": "https://127.0.0.1:8443", "username": "contact", "password": "geheim123",
     }})
     r = TestClient(app).get("/einstellungen")
     assert r.status_code == 200
     assert "https://127.0.0.1:8443" in r.text
-    assert "/pas/kontakte/" in r.text
+    assert "/rubrica/kontakte/" in r.text
     assert "geheim123" in r.text
     assert "contact" not in r.text
 
@@ -100,11 +100,11 @@ def test_einstellungen_speichern_schreibt_radicale_config(tmp_db, monkeypatch, t
 
     # Kernpunkt des Bugfixes: das Passwort muss auch in der htpasswd-Datei landen
     # (Server-Auth), nicht nur in config.yaml (Client-Push) - sonst schlaegt der
-    # Login von Kontakte.app fehl. Der Benutzername ist dabei immer "pas" (fest
+    # Login von Kontakte.app fehl. Der Benutzername ist dabei immer "rubrica" (fest
     # verdrahtet), unabhaengig vom macOS-Konto der jeweiligen Maschine.
     inhalt = htpasswd.htpasswd_pfad().read_text(encoding="utf-8").strip()
     login, digest = inhalt.split(":", maxsplit=1)
-    assert login == "pas"
+    assert login == "rubrica"
     assert bcrypt.checkpw(b"neuespasswort", digest.encode("ascii"))
 
 
@@ -128,7 +128,7 @@ def test_einstellungen_speichern_ignoriert_versuchte_aenderung_von_benutzername(
     assert settings.get("radicale.addressbook_path") is None
     inhalt = htpasswd.htpasswd_pfad().read_text(encoding="utf-8").strip()
     login, _ = inhalt.split(":", maxsplit=1)
-    assert login == "pas"
+    assert login == "rubrica"
 
 
 def test_einstellungen_speichern_zeigt_bestaetigung(tmp_db, monkeypatch, tmp_path):

@@ -1333,3 +1333,23 @@ erhaelt. Unter „Einstellungen" den Pfad zur Archivio-Signatur-Datenbank (`arch
 eintragen und Postfächer den passenden Ordnern zuordnen. Offen: `importer/signatur.py::parse_signatur`
 bleibt eine Heuristik mit gelegentlichem Rauschen auf sehr langen/unstrukturierten Thread-Texten (siehe
 Eintrag oben) - bei Bedarf gezielt nachschärfen, sobald sich am echten Datensatz weitere Muster zeigen.
+
+## 12. Distributionsfähigkeit für fremde Büros (ab 2026-07-28)
+
+Arbeitsauftrag: Rubrica von einem einzigen (Muster Architektur AG) auf beliebige Büros umstellen. Sechs
+Kapitel, Reihenfolge per Nutzer-Vorgabe: 3 (Radicale-Benutzer) → 4 (übrige büro­spezifische Werte) → 6
+(Repo-Hygiene) → 5 (Setup-Assistent) → 2 (Updater) → 1 (Signierung, zuletzt).
+
+- **Kapitel 3 — Radicale-Benutzer entkoppelt (2026-07-28):** `RADICALE_BENUTZER` war zuletzt fest auf
+  `"pas"` verdrahtet (der macOS-Benutzername eines bestimmten iMacs) - für andere Büros bedeutungslos. Neu:
+  `"rubrica"`, produktbezogen, identisch auf jeder Installation (`sync/radicale.py`, `menubar/app.py`
+  dupliziert die Konstante weiterhin bewusst). Neue `sync/htpasswd.py::remove_password()` (entfernt gezielt
+  einen Benutzer-Eintrag, ohne andere anzutasten - `set_password()` kann das nicht, da es nur denselben
+  Benutzernamen ersetzt). Neues Skript-Paar `scripts/migrate-radicale-user.sh` +
+  `scripts/radicale_migrate_user.py` für bereits laufende Installationen: stoppt die Menubar-App, benennt
+  den Radicale-Collection-Ordner um, migriert den htpasswd-Eintrag (bestehendes Passwort bleibt erhalten),
+  waermt das Adressbuch einmal per PROPFIND auf (wichtig bei grossen Bestaenden, siehe Abschnitt 9), startet
+  neu und gibt eine klare Anleitung aus, das CardDAV-Konto in Kontakte.app als "rubrica" neu anzulegen
+  (Konten lassen sich nicht zuverlaessig umbenennen). Beide Skripte werden ins `.pkg` mitgeliefert
+  (`Contents/Resources/`). `scripts/restore-data-archive.sh` im selben Aufwasch von den laengst veralteten
+  Zwei-Agent-Referenzen bereinigt.

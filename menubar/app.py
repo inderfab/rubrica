@@ -23,7 +23,7 @@ WEB_PORT = 8001
 RADICALE_PORT = 8443
 # Muss mit sync.radicale.RADICALE_BENUTZER uebereinstimmen (hier dupliziert statt
 # importiert, damit die Menubar-App ihre bewusst minimalen Abhaengigkeiten behaelt).
-RADICALE_BENUTZER = "pas"
+RADICALE_BENUTZER = "rubrica"
 
 _HERE = Path(__file__).resolve().parent  # Contents/Resources im gepackten Bundle
 _ICON = str(_HERE / "icon.png")

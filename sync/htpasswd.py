@@ -48,3 +48,21 @@ def set_password(benutzer: str, passwort: str) -> None:
     pfad.parent.mkdir(parents=True, exist_ok=True)
     pfad.write_text("\n".join(zeilen) + "\n", encoding="utf-8")
     pfad.chmod(0o600)
+
+
+def remove_password(benutzer: str) -> None:
+    """Entfernt den Eintrag fuer `benutzer` aus der htpasswd-Datei, falls vorhanden -
+    genutzt beim Migrieren auf einen neuen Benutzernamen (siehe
+    scripts/migrate-radicale-user.sh), da set_password() nur den eigenen Eintrag
+    ersetzt, nie einen fremden entfernt."""
+    if not benutzer:
+        return
+    pfad = htpasswd_pfad()
+    if not pfad.exists():
+        return
+    zeilen = [
+        z for z in pfad.read_text(encoding="utf-8").splitlines()
+        if z and not z.startswith(f"{benutzer}:")
+    ]
+    pfad.write_text("\n".join(zeilen) + ("\n" if zeilen else ""), encoding="utf-8")
+    pfad.chmod(0o600)
