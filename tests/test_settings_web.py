@@ -72,6 +72,8 @@ def test_einstellungen_formular_zeigt_radicale_werte_im_klartext(tmp_db, monkeyp
     # Benutzername/Adressbuch-Pfad sind fest verdrahtet (siehe sync/radicale.py) -
     # die Seite zeigt immer "rubrica", unabhaengig davon, was (noch) in config.yaml
     # steht (z.B. Reste einer alten Installation).
+    from web import settings as settings_modul
+    monkeypatch.setattr(settings_modul, "_hostname_local", lambda: "windows.local")
     monkeypatch.setattr(settings, "_settings", {"radicale": {
         "base_url": "https://127.0.0.1:8443", "username": "contact", "password": "geheim123",
     }})
@@ -81,6 +83,10 @@ def test_einstellungen_formular_zeigt_radicale_werte_im_klartext(tmp_db, monkeyp
     assert "/rubrica/kontakte/" in r.text
     assert "geheim123" in r.text
     assert "contact" not in r.text
+    # Regression: die fuer Kontakte.app relevante Adresse (Rechnername) soll
+    # sichtbar sein, nicht nur die interne Loopback-Adresse (siehe Nutzer-Feedback:
+    # "die Serveradresse die intern verwendet wird interessiert ja niemanden").
+    assert "windows.local" in r.text
 
 
 def test_einstellungen_speichern_schreibt_radicale_config(tmp_db, monkeypatch, tmp_path):

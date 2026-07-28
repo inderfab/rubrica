@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import json
+import socket
+import subprocess
 from pathlib import Path
 from urllib.parse import quote_plus
 from fastapi.templating import Jinja2Templates
@@ -13,6 +15,18 @@ from db.connection import get_connection
 templates = Jinja2Templates(
     directory=str(Path(__file__).resolve().parent / "templates")
 )
+
+
+def _hostname_local() -> str:
+    """Der Rechnername, den man in Kontakte.app als CardDAV-Server eintraegt -
+    gemeinsam genutzt vom Setup-Assistenten (web/setup.py) und den Einstellungen
+    (web/settings.py, zeigt denselben Wert nochmal an, siehe dortiger Kommentar)."""
+    try:
+        out = subprocess.run(["scutil", "--get", "LocalHostName"], capture_output=True, text=True, timeout=5)
+        name = out.stdout.strip()
+    except Exception:
+        name = ""
+    return f"{name or socket.gethostname()}.local"
 
 
 def importiere_kontakte_app_und_synchronisiere(conn) -> dict:

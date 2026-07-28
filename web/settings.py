@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse, RedirectResponse, Response
 from config import settings
 from db.connection import get_connection
 from sync import htpasswd, radicale
-from web.shared import templates
+from web.shared import _hostname_local, templates
 
 router = APIRouter()
 
@@ -48,6 +48,7 @@ def einstellungen_form(request: Request, gespeichert: str = "", sync: str = ""):
         "radicale_addressbook_path": f"/{radicale.RADICALE_BENUTZER}/kontakte/",
         "radicale_username": radicale.RADICALE_BENUTZER,
         "radicale_password": settings.get("radicale.password", "") or "",
+        "radicale_hostname": _hostname_local(),
         "ca_zertifikat_vorhanden": _ca_zertifikat_pfad().is_file(),
     })
 

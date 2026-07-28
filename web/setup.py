@@ -8,9 +8,7 @@ schrittweise abgefragt. Bestehende Installationen mit bereits vorhandenen Kontak
 sehen diesen Assistenten nie (siehe web.shared._setup_erforderlich)."""
 from __future__ import annotations
 
-import socket
 import sqlite3
-import subprocess
 from pathlib import Path
 
 from fastapi import APIRouter, Request
@@ -20,7 +18,7 @@ from config import settings
 from db.connection import get_connection
 from sync import radicale
 from web.settings import LOGO_ERLAUBTE_ENDUNGEN, _logo_entfernen
-from web.shared import importiere_kontakte_app_und_synchronisiere, templates
+from web.shared import _hostname_local, importiere_kontakte_app_und_synchronisiere, templates
 
 router = APIRouter()
 
@@ -33,15 +31,6 @@ def _nur_lokal(request: Request) -> Response | None:
     if host not in ("127.0.0.1", "::1", "localhost"):
         return Response(status_code=403, content="Setup nur lokal auf diesem Rechner möglich.")
     return None
-
-
-def _hostname_local() -> str:
-    try:
-        out = subprocess.run(["scutil", "--get", "LocalHostName"], capture_output=True, text=True, timeout=5)
-        name = out.stdout.strip()
-    except Exception:
-        name = ""
-    return f"{name or socket.gethostname()}.local"
 
 
 def _eigene_domains_parsen(roh: str) -> list:

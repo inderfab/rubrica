@@ -312,6 +312,14 @@ xattr -cr "/Applications/Rubrica Server.app" 2>/dev/null || true
 # Kontakte-Sync-Daemon von macOS die Verbindung still ab (siehe docs/konzept.md 9).
 APP_RES="/Applications/Rubrica Server.app/Contents/Resources"
 DATA_DIR="/Users/$CURRENT_USER/Library/Application Support/Rubrica"
+
+# Muss VOR dem ersten App-Start erfasst werden (der legt config.yaml aus dem
+# Beispiel an, sobald der launchd-Dienst unten hochfaehrt) - sonst liesse sich
+# hinterher nicht mehr unterscheiden, ob dies eine frische Installation war
+# oder ein Update einer bereits eingerichteten.
+FRISCHE_INSTALLATION=0
+[ -f "$DATA_DIR/config.yaml" ] || FRISCHE_INSTALLATION=1
+
 TLS_DIR="$DATA_DIR/radicale-tls"
 HOSTNAME_LOCAL="$(sudo -u "$CURRENT_USER" scutil --get LocalHostName 2>/dev/null || hostname).local"
 if [ ! -f "$TLS_DIR/cert.pem" ]; then
@@ -374,6 +382,20 @@ for ALTES_LABEL in ch.rubrica.server ch.rubrica.radicale; do
     rm -f "$ALTE_PLIST"
   fi
 done
+
+# ── Bei einer frischen Installation den Einrichtungsassistenten oeffnen ───────
+# Ohne das faende ein Erstnutzer die Web-UI gar nicht selbst (kein Dock-/
+# Schreibtisch-Icon, nur ein Menubar-Symbol). Bei einem Update einer bereits
+# eingerichteten Installation NICHT oeffnen - das waere bei jedem Update ein
+# ungefragt aufpoppender Browser-Tab.
+if [ "$FRISCHE_INSTALLATION" = "1" ]; then
+  WEB_PORT=8001
+  for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+    curl -s -o /dev/null "http://127.0.0.1:$WEB_PORT/" && break
+    sleep 1
+  done
+  sudo -u "$CURRENT_USER" open "http://127.0.0.1:$WEB_PORT/" 2>/dev/null || true
+fi
 
 exit 0
 POSTINSTALL
