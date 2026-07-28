@@ -100,6 +100,36 @@ def test_carddav_test_meldet_erfolg_bei_207(tmp_db, monkeypatch):
     assert "207" in daten["detail"]
 
 
+def test_import_contacts_app_meldet_erfolg(tmp_db, monkeypatch):
+    _lokal_bypass(monkeypatch)
+    monkeypatch.setattr(setup_modul, "importiere_aus_kontakte_app", lambda conn: {
+        "gefunden": 3, "gruppen_gefunden": 1, "importiert": 3, "fehler": 0,
+        "ohne_uid": 0, "kontakte_gesamt": 3, "ordner_gesamt": 1,
+    })
+
+    r = TestClient(app).post("/setup/import-contacts-app")
+    assert r.status_code == 200
+    daten = r.json()
+    assert daten["ok"] is True
+    assert daten["importiert"] == 3
+    assert daten["kontakte_gesamt"] == 3
+
+
+def test_import_contacts_app_meldet_fehler_bei_verweigertem_zugriff(tmp_db, monkeypatch):
+    _lokal_bypass(monkeypatch)
+
+    def _wirft(conn):
+        raise RuntimeError("Zugriff auf Kontakte verweigert")
+
+    monkeypatch.setattr(setup_modul, "importiere_aus_kontakte_app", _wirft)
+
+    r = TestClient(app).post("/setup/import-contacts-app")
+    assert r.status_code == 200
+    daten = r.json()
+    assert daten["ok"] is False
+    assert "Zugriff auf Kontakte verweigert" in daten["detail"]
+
+
 def test_setup_schritt6_speichert_und_zeigt_fehlende_datei(tmp_db, monkeypatch, tmp_path):
     _lokal_bypass(monkeypatch)
     config_pfad = tmp_path / "config.yaml"
