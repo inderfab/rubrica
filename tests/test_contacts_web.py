@@ -66,11 +66,11 @@ def test_kontakt_anlegen_speichert_und_leitet_um(tmp_db):
 
 
 def test_kontakt_anlegen_warnt_bei_vermutlichem_duplikat(tmp_db):
-    queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster"})
+    queries.create_kontakt(tmp_db, {"vorname": "Bruno", "nachname": "Beispiel"})
     client = _client(tmp_db)
 
     r = client.post("/kontakte/neu", data={
-        "vorname": "Anna", "nachname": "Muster", "firma": "", "kategorie": "", "rolle": "",
+        "vorname": "Bruno", "nachname": "Beispiel", "firma": "", "kategorie": "", "rolle": "",
     }, follow_redirects=False)
 
     assert r.status_code == 200  # kein Redirect - Formular wird mit Warnung erneut gezeigt
@@ -80,11 +80,11 @@ def test_kontakt_anlegen_warnt_bei_vermutlichem_duplikat(tmp_db):
 
 
 def test_kontakt_anlegen_trotz_duplikat_erzwingt_neuanlage(tmp_db):
-    queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster"})
+    queries.create_kontakt(tmp_db, {"vorname": "Bruno", "nachname": "Beispiel"})
     client = _client(tmp_db)
 
     r = client.post("/kontakte/neu", data={
-        "vorname": "Anna", "nachname": "Muster", "firma": "", "kategorie": "", "rolle": "",
+        "vorname": "Bruno", "nachname": "Beispiel", "firma": "", "kategorie": "", "rolle": "",
         "dublette_bestaetigt": "1",
     }, follow_redirects=False)
 
@@ -93,13 +93,13 @@ def test_kontakt_anlegen_trotz_duplikat_erzwingt_neuanlage(tmp_db):
 
 
 def test_suche_findet_kontakt_ueber_vor_und_nachname_in_beliebiger_reihenfolge(tmp_db):
-    queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster"})
+    queries.create_kontakt(tmp_db, {"vorname": "Bruno", "nachname": "Beispiel"})
     queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster"})
     client = _client(tmp_db)
 
-    for suche in ("Anna Muster", "Muster Anna", "anna", "muster"):
+    for suche in ("Bruno Beispiel", "Beispiel Bruno", "bruno", "beispiel"):
         r = client.get("/kontakte", params={"suche": suche})
-        assert "Anna" in r.text and "Muster" in r.text
+        assert "Bruno" in r.text and "Beispiel" in r.text
         assert "Anna" not in r.text
 
 
