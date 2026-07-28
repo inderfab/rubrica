@@ -108,14 +108,6 @@ def _env() -> dict:
     return env
 
 
-def _osascript_alert(titel: str, nachricht: str):
-    nachricht = nachricht.replace("\\", "\\\\").replace('"', '\\"')
-    try:
-        subprocess.run(["osascript", "-e", f'display alert "{titel}" message "{nachricht}"'], timeout=30)
-    except Exception as exc:
-        log.warning("osascript-Dialog fehlgeschlagen: %s", exc)
-
-
 def _bereite_datenverzeichnis_vor():
     _DATA_DIR.mkdir(parents=True, exist_ok=True)
     _LOG_DIR.mkdir(exist_ok=True)
@@ -172,13 +164,9 @@ def _bereite_radicale_vor():
             f"Pfad:     /{RADICALE_BENUTZER}/kontakte/\n"
         )
         zugangsdaten.chmod(0o600)
-        _osascript_alert(
-            "Rubrica CardDAV eingerichtet",
-            f"Server: {hostname}\nPort: {RADICALE_PORT}\n"
-            f"Benutzer: {RADICALE_BENUTZER}\nPasswort: {passwort}\n"
-            f"Pfad: /{RADICALE_BENUTZER}/kontakte/\n\n"
-            f"Auch gespeichert in:\n{zugangsdaten}",
-        )
+        # Kein osascript-Dialog mehr: der Setup-Assistent (Schritt "CardDAV
+        # einrichten") zeigt Benutzer/Passwort bereits an, ein zusaetzlicher
+        # Dialog beim Start war redundant und verdeckte den Assistenten.
         log.info("Radicale-Passwort erzeugt, Zugangsdaten gespeichert")
 
     conf = _DATA_DIR / "radicale.conf"

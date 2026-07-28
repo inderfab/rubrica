@@ -6,6 +6,7 @@ from fastapi.responses import RedirectResponse
 from db import queries
 from db.connection import get_connection
 from importer.signatur import parse_signatur
+from importer.vcard import finde_match
 from sync import radicale
 from web.shared import templates
 
@@ -257,6 +258,16 @@ async def kontakt_neu_speichern(request: Request):
     ordner_ids = [int(o) for o in form.getlist("ordner_ids")]
     conn = get_connection()
     try:
+        if not form.get("dublette_bestaetigt"):
+            dublette_id = finde_match(conn, daten)
+            if dublette_id is not None:
+                return templates.TemplateResponse("contact_new.html", {
+                    "request": request, "ordner": queries.list_projekte(conn),
+                    "funktionen": _funktion_optionen(conn),
+                    "telefon_typen": _telefon_typ_optionen(conn), "email_typen": _email_typ_optionen(conn),
+                    "kontakt": daten, "ausgewaehlte_ordner": ordner_ids,
+                    "dublette": queries.get_kontakt(conn, dublette_id),
+                })
         kontakt_id = queries.create_kontakt(conn, daten)
         queries.set_kontakt_projekte(conn, kontakt_id, ordner_ids)
         radicale.push_kontakt(conn, kontakt_id)

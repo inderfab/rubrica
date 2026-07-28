@@ -14,6 +14,22 @@ templates = Jinja2Templates(
     directory=str(Path(__file__).resolve().parent / "templates")
 )
 
+
+def importiere_kontakte_app_und_synchronisiere(conn) -> dict:
+    """Importiert aus Kontakte.app und pusht die betroffenen Kontakte anschliessend
+    nach Radicale - gemeinsam genutzt von web/setup.py (Einrichtungsassistent) und
+    web/imports.py (regulaerer Import), damit beide Aufrufer nicht getrennt daran
+    denken muessen (importer/contacts_app.py selbst pusht bewusst nicht, siehe
+    dessen Docstring - Push ist Aufgabe der Web-Schicht, analog zu importer/vcard.py)."""
+    from importer.contacts_app import importiere_aus_kontakte_app
+    from sync import radicale
+    ergebnis = importiere_aus_kontakte_app(conn)
+    kontakt_ids = ergebnis.pop("kontakt_ids", [])
+    for kontakt_id in kontakt_ids:
+        radicale.push_kontakt_mit_ordnern(conn, kontakt_id)
+    return ergebnis
+
+
 def _setup_erforderlich() -> bool:
     """Zeigt den Setup-Assistenten nur bei einer wirklich frischen Installation.
     Bestehende Installationen mit bereits vorhandenen Kontakten setzen den Marker

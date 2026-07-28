@@ -3,6 +3,22 @@
 {% block content %}
 <h1>Neuer Kontakt</h1>
 
+{% if dublette %}
+<div style="background:#fff4e5; border:1px solid #f0b429; border-radius:6px; padding:0.8rem 1rem; margin-bottom:1rem">
+    <p style="margin:0 0 0.6rem">
+        Es gibt bereits einen ähnlichen Kontakt:
+        <strong>{{ dublette.vorname }} {{ dublette.nachname }}</strong>{% if dublette.firma %} ({{ dublette.firma }}){% endif %}.
+        Die eingegebenen Daten wurden unten übernommen, nichts ist verloren.
+    </p>
+    <div class="actions" style="margin:0">
+        <a href="/kontakte/{{ dublette.id }}/bearbeiten" class="btn secondary">Bestehenden Kontakt bearbeiten</a>
+        <button type="submit" form="kontakt-neu-form" name="dublette_bestaetigt" value="1" class="secondary">
+            Trotzdem als neuen Kontakt anlegen
+        </button>
+    </div>
+</div>
+{% endif %}
+
 <fieldset>
     <legend>Aus E-Mail-Signatur übernehmen <span style="color:#86868b; font-weight:normal">(optional)</span></legend>
     <p class="empty" style="padding:0 0 0.5rem">
@@ -22,7 +38,7 @@
     </div>
 </fieldset>
 
-<form method="post" action="/kontakte/neu">
+<form id="kontakt-neu-form" method="post" action="/kontakte/neu">
     <div id="kontakt-felder">
         {% include "_kontakt_felder.html" %}
     </div>

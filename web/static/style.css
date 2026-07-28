@@ -78,6 +78,12 @@ th { font-weight: 600; color: var(--text-hell); border-bottom: 1px solid var(--r
 tbody tr:hover { background: #fafafa; }
 tr:last-child td { border-bottom: none; }
 
+.kontakte-tabelle th { position: relative; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.kontakte-tabelle .col-resize-griff {
+    position: absolute; right: 0; top: 0; bottom: 0; width: 6px; cursor: col-resize; user-select: none;
+}
+.kontakte-tabelle .col-resize-griff:hover, .kontakte-tabelle .col-resize-griff.aktiv { background: var(--akzent, #0a84ff); opacity: 0.5; }
+
 form.filter { display: flex; gap: 0.75rem; margin-bottom: 1rem; flex-wrap: wrap; }
 
 input, select, textarea {

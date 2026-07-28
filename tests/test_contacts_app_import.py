@@ -35,6 +35,7 @@ def test_importiert_kontakte_und_gruppe_als_ordner(tmp_db, monkeypatch):
     assert ergebnis["ohne_uid"] == 1
     assert ergebnis["kontakte_gesamt"] == 2
     assert ergebnis["ordner_gesamt"] == 1
+    assert len(ergebnis["kontakt_ids"]) == 2
 
     ordner = tmp_db.execute("SELECT name FROM projekte").fetchall()
     assert [o["name"] for o in ordner] == ["Projekt X"]

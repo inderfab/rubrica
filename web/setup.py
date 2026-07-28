@@ -1,10 +1,11 @@
 """Setup-Assistent fuer eine frische Installation (Kapitel 5 der
 Distributionsfaehigkeit-Arbeit, siehe docs/CHANGELOG-INTERN.md). Fuehrt einmalig
-durch Firmenangaben, Archivio-Domain(s), CardDAV-Einrichtung und optionale
-Archivio-Anbindung - danach identisches Formular wie in den Einstellungen
-(siehe web/settings.py), nur schrittweise abgefragt. Bestehende Installationen
-mit bereits vorhandenen Kontakten sehen diesen Assistenten nie (siehe
-web.shared._setup_erforderlich)."""
+durch Firmenangaben, CardDAV-Einrichtung, Kontakte-Import und optionale
+Archivio-Anbindung (inkl. eigener Domain(s), die nur fuer Archivio-Vorschlaege
+relevant sind - daher in denselben Schritt integriert statt als eigener Schritt) -
+danach identisches Formular wie in den Einstellungen (siehe web/settings.py), nur
+schrittweise abgefragt. Bestehende Installationen mit bereits vorhandenen Kontakten
+sehen diesen Assistenten nie (siehe web.shared._setup_erforderlich)."""
 from __future__ import annotations
 
 import socket
@@ -17,10 +18,9 @@ from fastapi.responses import RedirectResponse, Response
 
 from config import settings
 from db.connection import get_connection
-from importer.contacts_app import importiere_aus_kontakte_app
 from sync import radicale
 from web.settings import LOGO_ERLAUBTE_ENDUNGEN, _logo_entfernen
-from web.shared import templates
+from web.shared import importiere_kontakte_app_und_synchronisiere, templates
 
 router = APIRouter()
 
@@ -86,30 +86,10 @@ async def setup_schritt2_speichern(request: Request):
 
 
 @router.get("/setup/3")
-def setup_schritt3_form(request: Request):
+def setup_schritt3(request: Request):
     if (r := _nur_lokal(request)) is not None:
         return r
-    return templates.TemplateResponse("setup_3_domain.html", {
-        "request": request,
-        "archivio_eigene_domains": ", ".join(settings.get("archivio.eigene_domains", []) or []),
-    })
-
-
-@router.post("/setup/3")
-async def setup_schritt3_speichern(request: Request):
-    if (r := _nur_lokal(request)) is not None:
-        return r
-    form = await request.form()
-    eigene_domains = _eigene_domains_parsen(form.get("archivio_eigene_domains") or "")
-    settings.save({"archivio": {"eigene_domains": eigene_domains}})
-    return RedirectResponse(url="/setup/4", status_code=303)
-
-
-@router.get("/setup/4")
-def setup_schritt4(request: Request):
-    if (r := _nur_lokal(request)) is not None:
-        return r
-    return templates.TemplateResponse("setup_4_carddav.html", {
+    return templates.TemplateResponse("setup_3_carddav.html", {
         "request": request,
         "hostname": _hostname_local(),
         "radicale_username": radicale.RADICALE_BENUTZER,
@@ -126,6 +106,15 @@ def setup_carddav_test(request: Request):
         return {"ok": False, "detail": "Radicale ist nicht konfiguriert (radicale.base_url fehlt)."}
     try:
         antwort = client.request("PROPFIND", "", headers={"Depth": "0"})
+        if antwort.status_code == 404:
+            # Adressbuch-Collection existiert noch nicht - bei einer frischen
+            # Installation wurde bisher noch nie etwas dorthin gepusht (das legt
+            # sie sonst erst beim ersten PUT an, siehe sync.radicale._put). Ohne
+            # dieses Nachholen meldet der Test hier faelschlich "fehlgeschlagen",
+            # obwohl Verbindung und Zugangsdaten in Wirklichkeit stimmen.
+            client.request("MKCOL", "", content=radicale._MKCOL_BODY,
+                            headers={"Content-Type": "application/xml"})
+            antwort = client.request("PROPFIND", "", headers={"Depth": "0"})
         ok = antwort.status_code in (200, 207)
         return {"ok": ok, "detail": f"HTTP {antwort.status_code}"}
     except Exception as exc:
@@ -134,11 +123,11 @@ def setup_carddav_test(request: Request):
         client.close()
 
 
-@router.get("/setup/5")
-def setup_schritt5(request: Request):
+@router.get("/setup/4")
+def setup_schritt4(request: Request):
     if (r := _nur_lokal(request)) is not None:
         return r
-    return templates.TemplateResponse("setup_5_import.html", {"request": request})
+    return templates.TemplateResponse("setup_4_import.html", {"request": request})
 
 
 @router.post("/setup/import-contacts-app")
@@ -147,7 +136,7 @@ def setup_import_contacts_app(request: Request):
         return r
     conn = get_connection()
     try:
-        ergebnis = importiere_aus_kontakte_app(conn)
+        ergebnis = importiere_kontakte_app_und_synchronisiere(conn)
         return {"ok": True, **ergebnis}
     except Exception as exc:
         return {"ok": False, "detail": f"{type(exc).__name__}: {exc}"}
@@ -167,22 +156,23 @@ def _archivio_pruefen(pfad: str) -> dict:
         return {"gefunden": True, "anzahl": 0}
 
 
-@router.get("/setup/6")
-def setup_schritt6_form(request: Request, gespeichert: str = ""):
+@router.get("/setup/5")
+def setup_schritt5_form(request: Request, gespeichert: str = ""):
     if (r := _nur_lokal(request)) is not None:
         return r
     pfad = settings.get("archivio.signatur_db_path", "") or ""
-    return templates.TemplateResponse("setup_6_archivio.html", {
+    return templates.TemplateResponse("setup_5_archivio.html", {
         "request": request,
         "gespeichert": bool(gespeichert),
         "archivio_signatur_db_path": pfad,
         "archivio_min_mails": settings.get("archivio.min_mails", 2),
+        "archivio_eigene_domains": ", ".join(settings.get("archivio.eigene_domains", []) or []),
         "pruefung": _archivio_pruefen(pfad),
     })
 
 
-@router.post("/setup/6")
-async def setup_schritt6_speichern(request: Request):
+@router.post("/setup/5")
+async def setup_schritt5_speichern(request: Request):
     if (r := _nur_lokal(request)) is not None:
         return r
     form = await request.form()
@@ -191,19 +181,22 @@ async def setup_schritt6_speichern(request: Request):
         min_mails = int(form.get("archivio_min_mails") or 2)
     except ValueError:
         min_mails = 2
-    settings.save({"archivio": {"signatur_db_path": signatur_db_path, "min_mails": min_mails}})
-    return RedirectResponse(url="/setup/6?gespeichert=1", status_code=303)
+    eigene_domains = _eigene_domains_parsen(form.get("archivio_eigene_domains") or "")
+    settings.save({"archivio": {
+        "signatur_db_path": signatur_db_path, "min_mails": min_mails, "eigene_domains": eigene_domains,
+    }})
+    return RedirectResponse(url="/setup/5?gespeichert=1", status_code=303)
 
 
-@router.get("/setup/7")
-def setup_schritt7(request: Request):
+@router.get("/setup/6")
+def setup_schritt6(request: Request):
     if (r := _nur_lokal(request)) is not None:
         return r
-    return templates.TemplateResponse("setup_7_fertig.html", {"request": request})
+    return templates.TemplateResponse("setup_6_fertig.html", {"request": request})
 
 
-@router.post("/setup/7")
-def setup_schritt7_abschliessen(request: Request):
+@router.post("/setup/6")
+def setup_schritt6_abschliessen(request: Request):
     if (r := _nur_lokal(request)) is not None:
         return r
     settings.save({"setup": {"completed": True}})

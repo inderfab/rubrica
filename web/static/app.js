@@ -178,3 +178,61 @@ function rubricaOrdnerSelectAnlegen(selectId) {
         select.appendChild(option);
     });
 }
+
+// Spaltenbreiten in der "Alle Kontakte"-Tabelle per Ziehgriff anpassbar, Breiten
+// pro Spalte in localStorage gemerkt. Muss nach jedem htmx-Swap (Suche/Filter
+// ersetzt #kontakte-ergebnis komplett) erneut angewendet werden, da das DOM dabei
+// neu aufgebaut wird.
+const RUBRICA_SPALTENBREITEN_KEY = 'rubrica-kontakte-spaltenbreiten';
+
+function rubricaSpaltenGroessenInitialisieren() {
+    const tabelle = document.querySelector('table.kontakte-tabelle');
+    if (!tabelle) return;
+
+    let gespeichert = {};
+    try { gespeichert = JSON.parse(localStorage.getItem(RUBRICA_SPALTENBREITEN_KEY) || '{}'); } catch (e) {}
+
+    tabelle.querySelectorAll('thead th').forEach((th, index) => {
+        if (gespeichert[index]) {
+            th.style.width = gespeichert[index] + 'px';
+        }
+        if (th.querySelector('.col-resize-griff')) return; // schon initialisiert
+        const griff = document.createElement('span');
+        griff.className = 'col-resize-griff';
+        griff.addEventListener('mousedown', (event) => rubricaSpaltenResizeStart(event, th, index));
+        th.appendChild(griff);
+    });
+}
+
+function rubricaSpaltenResizeStart(event, th, index) {
+    event.preventDefault();
+    const griff = event.currentTarget; // event.currentTarget ist nach dem Dispatch
+                                        // wieder null - deshalb hier zwischenspeichern,
+                                        // sonst wirft onUp() unten und das Speichern
+                                        // in localStorage wird nie erreicht.
+    const startX = event.clientX;
+    const startBreite = th.offsetWidth;
+    griff.classList.add('aktiv');
+
+    function onMove(e) {
+        th.style.width = Math.max(40, startBreite + (e.clientX - startX)) + 'px';
+    }
+    function onUp() {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        griff.classList.remove('aktiv');
+        let gespeichert = {};
+        try { gespeichert = JSON.parse(localStorage.getItem(RUBRICA_SPALTENBREITEN_KEY) || '{}'); } catch (e) {}
+        gespeichert[index] = th.offsetWidth;
+        localStorage.setItem(RUBRICA_SPALTENBREITEN_KEY, JSON.stringify(gespeichert));
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+}
+
+document.addEventListener('DOMContentLoaded', rubricaSpaltenGroessenInitialisieren);
+// app.js wird im <head> geladen, bevor <body> existiert - "document.body...."
+// wuerde hier sofort mit TypeError abbrechen und den Listener nie registrieren
+// (stiller Fehler: DOMContentLoaded lief noch, aber kein Reapply nach htmx-Swaps).
+// "document" existiert dagegen bereits waehrend des Head-Parsings.
+document.addEventListener('htmx:afterSettle', rubricaSpaltenGroessenInitialisieren);

@@ -2,6 +2,21 @@
 {% block title %}Import – Rubrica{% endblock %}
 {% block content %}
 <h1>Bestehende Adressbücher importieren</h1>
+
+{% if kontakte_app_lokal %}
+<fieldset>
+    <legend>Direkt aus Kontakte.app übernehmen</legend>
+    <p class="empty" style="padding:0 0 0.5rem">
+        Übernimmt alle Kontakte und Gruppen (als Ordner) aus der Kontakte.app auf diesem Rechner. Doppelte
+        Kontakte werden automatisch erkannt und zusammengeführt, nichts wird überschrieben. Bei sehr großen
+        Adressbüchern kann das einige Minuten dauern.
+    </p>
+    <button type="button" id="import-kontakte-app-knopf" class="secondary" onclick="rubricaKontakteAppImport()">Aus Kontakte.app importieren</button>
+    <p id="import-kontakte-app-ergebnis" style="padding:0.6rem 0.8rem; margin-top:0.7rem; border-radius:6px; display:none"></p>
+</fieldset>
+<p class="empty" style="margin:0.5rem 0 1.5rem">Alternativ, oder für Exporte von anderen Rechnern:</p>
+{% endif %}
+
 <p class="empty">
     Export als .vcf aus Kontakte.app (Ablage → Exportieren → vCard exportieren) bei jedem Mitarbeiter.
     Alle Exporte können gleichzeitig hochgeladen werden — Duplikate werden automatisch mit bestehenden
@@ -38,6 +53,43 @@
 function rubricaImportDateilisteAnzeigen(dateien) {
     const liste = document.getElementById('import-dateiliste');
     liste.textContent = dateien.length ? Array.from(dateien).map(d => d.name).join(', ') : '';
+}
+
+function rubricaKontakteAppImport() {
+    const knopf = document.getElementById('import-kontakte-app-knopf');
+    const ergebnis = document.getElementById('import-kontakte-app-ergebnis');
+    knopf.disabled = true;
+    knopf.textContent = 'Importiere…';
+    ergebnis.style.display = 'block';
+    ergebnis.style.background = 'var(--bg-hell, #f2f2f2)';
+    ergebnis.style.color = '';
+    ergebnis.style.fontWeight = 'normal';
+    ergebnis.textContent = 'Importiere… (kann bei vielen Kontakten mehrere Minuten dauern, bitte warten)';
+
+    fetch('/import/kontakte-app', { method: 'POST' })
+        .then(r => r.json())
+        .then(daten => {
+            knopf.disabled = false;
+            knopf.textContent = 'Aus Kontakte.app importieren';
+            ergebnis.style.fontWeight = 'bold';
+            if (daten.ok) {
+                ergebnis.textContent = `✓ Import abgeschlossen: ${daten.importiert} von ${daten.gefunden} Kontakten übernommen, ${daten.gruppen_gefunden} Gruppen als Ordner. Rubrica enthält jetzt insgesamt ${daten.kontakte_gesamt} Kontakte.`;
+                ergebnis.style.background = '#e6f4ea';
+                ergebnis.style.color = '#1a7f37';
+            } else {
+                ergebnis.textContent = '✗ Import fehlgeschlagen (' + daten.detail + ')';
+                ergebnis.style.background = '#fdecea';
+                ergebnis.style.color = '#eb5757';
+            }
+        })
+        .catch(() => {
+            knopf.disabled = false;
+            knopf.textContent = 'Aus Kontakte.app importieren';
+            ergebnis.style.fontWeight = 'bold';
+            ergebnis.style.background = '#fdecea';
+            ergebnis.style.color = '#eb5757';
+            ergebnis.textContent = '✗ Import fehlgeschlagen (Netzwerkfehler)';
+        });
 }
 
 function rubricaImportDrop(event) {

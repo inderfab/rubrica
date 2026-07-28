@@ -1,18 +1,19 @@
 {% extends "setup_base.html" %}
 {% block title %}Archivio-Anbindung – Rubrica-Einrichtung{% endblock %}
-{% block schritt_anzeige %}<span class="setup-schritt">Schritt 6 von 7</span>{% endblock %}
+{% block schritt_anzeige %}<span class="setup-schritt">Schritt 5 von 6</span>{% endblock %}
 {% block content %}
 <h1>Archivio-Anbindung <span style="color:var(--text-hell); font-weight:normal">(optional)</span></h1>
 <p class="empty" style="padding-top:0">
-    Nur relevant, falls in diesem Büro auch Archivio läuft. Liest die von Archivio gepflegte
-    Signatur-Datenbank und schlägt daraus neue Kontakte vor. Leer lassen, um diesen Schritt zu überspringen.
+    Rubrica kann selbstständig neue Kontakte vorschlagen, sobald es mit Archivio verbunden ist – dafür liest
+    es die von Archivio gepflegte Signatur-Datenbank. Nur relevant, falls in diesem Büro auch Archivio läuft;
+    beide Felder leer lassen, um diesen Schritt zu überspringen.
 </p>
 
 {% if gespeichert %}
 <p style="color:#1a7f37; padding:0.5rem 0">Gespeichert.</p>
 {% endif %}
 
-<form method="post" action="/setup/6">
+<form method="post" action="/setup/5">
     <div class="field">
         <label>Pfad zur Archivio-Signatur-Datenbank</label>
         <input type="text" name="archivio_signatur_db_path" value="{{ archivio_signatur_db_path }}"
@@ -21,6 +22,15 @@
     <div class="field">
         <label>Mindestanzahl E-Mails pro Absender</label>
         <input type="number" name="archivio_min_mails" value="{{ archivio_min_mails }}" min="1" style="width:6rem">
+    </div>
+    <div class="field">
+        <label>Eigene E-Mail-Domain(s)</label>
+        <input type="text" name="archivio_eigene_domains" value="{{ archivio_eigene_domains }}"
+               placeholder="z. B. muster.ch" style="width:100%">
+        <p class="empty" style="padding:0.3rem 0 0">
+            Eigene Mitarbeitende werden so aus den Vorschlägen herausgefiltert, da sie bereits erfasst sind –
+            mehrere Domains kommagetrennt möglich, ohne führendes „@".
+        </p>
     </div>
     <button type="submit" class="secondary">Speichern &amp; prüfen</button>
 </form>
@@ -36,7 +46,7 @@
 {% endif %}
 
 <div class="actions" style="justify-content:space-between; margin-top:1.5rem">
-    <a class="btn secondary" href="/setup/7">Überspringen</a>
-    <a class="btn" href="/setup/7">Weiter</a>
+    <a class="btn secondary" href="/setup/6">Überspringen</a>
+    <a class="btn" href="/setup/6">Weiter</a>
 </div>
 {% endblock %}

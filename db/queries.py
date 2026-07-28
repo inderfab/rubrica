@@ -56,9 +56,14 @@ def list_kontakte(conn: sqlite3.Connection, suche: str = "", projekt_id: int | N
         params.append(projekt_id)
 
     if suche:
-        where.append("(k.vorname LIKE ? OR k.nachname LIKE ? OR k.firma LIKE ?)")
-        like = f"%{suche}%"
-        params.extend([like, like, like])
+        # Pro Wort eine eigene, UND-verknuepfte Klausel statt eines einzelnen LIKE
+        # ueber den ganzen Suchstring - sonst faende "Anna Muster" nie etwas,
+        # da Vor- und Nachname in getrennten Spalten stehen (Wortreihenfolge ist
+        # dadurch auch egal, "Muster Anna" findet denselben Kontakt).
+        for wort in suche.split():
+            where.append("(k.vorname LIKE ? OR k.nachname LIKE ? OR k.firma LIKE ?)")
+            like = f"%{wort}%"
+            params.extend([like, like, like])
 
     if kategorie:
         where.append("k.kategorie = ?")

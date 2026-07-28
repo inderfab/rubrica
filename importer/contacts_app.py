@@ -140,14 +140,14 @@ def importiere_aus_kontakte_app(conn: sqlite3.Connection) -> dict:
         _gruppen_vcard(name, mitglieder) for name, mitglieder in gruppen.items() if mitglieder
     )
 
-    anzahl = 0
+    kontakt_ids: set = set()
     fehler = 0
     # Jede vCard einzeln importieren statt als ein grosser Block: eine einzelne
     # fehlerhafte/legacy-kodierte vCard (z.B. alte Quoted-Printable-Kodierung)
     # soll nicht den gesamten Import abbrechen.
     for vc in vcf_teile:
         try:
-            anzahl += len(importiere(conn, vc + "\n" + gruppen_block, gruppen_als_ordner=True))
+            kontakt_ids.update(importiere(conn, vc + "\n" + gruppen_block, gruppen_als_ordner=True))
         except Exception:
             fehler += 1
 
@@ -157,9 +157,13 @@ def importiere_aus_kontakte_app(conn: sqlite3.Connection) -> dict:
     return {
         "gefunden": len(vcards),
         "gruppen_gefunden": len(gruppen),
-        "importiert": anzahl,
+        "importiert": len(kontakt_ids),
         "fehler": fehler,
         "ohne_uid": ohne_uid,
         "kontakte_gesamt": anzahl_kontakte,
         "ordner_gesamt": anzahl_ordner,
+        # Nur fuer die Aufrufer bestimmt (Radicale-Push nach dem Import, siehe
+        # web/setup.py und scripts/import_from_contacts_app.py) - kein Teil der
+        # oeffentlichen Zusammenfassung, wird von beiden Aufrufern herausgenommen.
+        "kontakt_ids": sorted(kontakt_ids),
     }

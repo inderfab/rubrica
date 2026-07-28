@@ -44,25 +44,11 @@ def test_setup_schritt2_speichert_firmenname_und_leitet_weiter(tmp_db, monkeypat
     assert settings.get("export.firmenname") == "Muster Architektur AG"
 
 
-def test_setup_schritt3_speichert_eigene_domains(tmp_db, monkeypatch, tmp_path):
-    _lokal_bypass(monkeypatch)
-    config_pfad = tmp_path / "config.yaml"
-    config_pfad.write_text("database:\n  path: rubrica.db\n")
-    monkeypatch.setattr(settings, "_CONFIG_PATH", config_pfad)
-    monkeypatch.setattr(settings, "_settings", {})
-
-    r = TestClient(app).post("/setup/3", data={"archivio_eigene_domains": "@Muster.ch, Andere.CH"},
-                              follow_redirects=False)
-    assert r.status_code == 303
-    assert r.headers["location"] == "/setup/4"
-    assert settings.get("archivio.eigene_domains") == ["muster.ch", "andere.ch"]
-
-
-def test_setup_schritt4_zeigt_carddav_zugangsdaten(tmp_db, monkeypatch):
+def test_setup_schritt3_zeigt_carddav_zugangsdaten(tmp_db, monkeypatch):
     _lokal_bypass(monkeypatch)
     monkeypatch.setattr(settings, "_settings", {"radicale": {"password": "geheim123"}})
 
-    r = TestClient(app).get("/setup/4")
+    r = TestClient(app).get("/setup/3")
     assert r.status_code == 200
     assert radicale.RADICALE_BENUTZER in r.text
     assert "geheim123" in r.text
@@ -100,9 +86,44 @@ def test_carddav_test_meldet_erfolg_bei_207(tmp_db, monkeypatch):
     assert "207" in daten["detail"]
 
 
+def test_carddav_test_legt_adressbuch_bei_404_an_und_meldet_erfolg(tmp_db, monkeypatch):
+    """Bei einer frischen Installation wurde noch nie etwas nach Radicale gepusht -
+    die Adressbuch-Collection existiert dann noch nicht, ein PROPFIND liefert 404.
+    Der Test soll das nicht faelschlich als Fehlschlag melden, sondern die Collection
+    per MKCOL anlegen und erneut pruefen (siehe scripts/build-pkg.sh-unabhaengiger
+    Bugfix in web/setup.py)."""
+    _lokal_bypass(monkeypatch)
+
+    aufrufe = []
+
+    class _FakeResponse:
+        def __init__(self, status_code):
+            self.status_code = status_code
+
+    class _FakeClient:
+        def request(self, methode, pfad, headers=None, content=None):
+            aufrufe.append(methode)
+            if methode == "PROPFIND" and aufrufe.count("PROPFIND") == 1:
+                return _FakeResponse(404)
+            if methode == "MKCOL":
+                return _FakeResponse(201)
+            return _FakeResponse(207)
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(radicale, "_client", lambda: _FakeClient())
+
+    r = TestClient(app).post("/setup/carddav-test")
+    assert r.status_code == 200
+    daten = r.json()
+    assert daten["ok"] is True
+    assert aufrufe == ["PROPFIND", "MKCOL", "PROPFIND"]
+
+
 def test_import_contacts_app_meldet_erfolg(tmp_db, monkeypatch):
     _lokal_bypass(monkeypatch)
-    monkeypatch.setattr(setup_modul, "importiere_aus_kontakte_app", lambda conn: {
+    monkeypatch.setattr(setup_modul, "importiere_kontakte_app_und_synchronisiere", lambda conn: {
         "gefunden": 3, "gruppen_gefunden": 1, "importiert": 3, "fehler": 0,
         "ohne_uid": 0, "kontakte_gesamt": 3, "ordner_gesamt": 1,
     })
@@ -121,7 +142,7 @@ def test_import_contacts_app_meldet_fehler_bei_verweigertem_zugriff(tmp_db, monk
     def _wirft(conn):
         raise RuntimeError("Zugriff auf Kontakte verweigert")
 
-    monkeypatch.setattr(setup_modul, "importiere_aus_kontakte_app", _wirft)
+    monkeypatch.setattr(setup_modul, "importiere_kontakte_app_und_synchronisiere", _wirft)
 
     r = TestClient(app).post("/setup/import-contacts-app")
     assert r.status_code == 200
@@ -130,25 +151,28 @@ def test_import_contacts_app_meldet_fehler_bei_verweigertem_zugriff(tmp_db, monk
     assert "Zugriff auf Kontakte verweigert" in daten["detail"]
 
 
-def test_setup_schritt6_speichert_und_zeigt_fehlende_datei(tmp_db, monkeypatch, tmp_path):
+def test_setup_schritt5_speichert_archivio_und_eigene_domains(tmp_db, monkeypatch, tmp_path):
     _lokal_bypass(monkeypatch)
     config_pfad = tmp_path / "config.yaml"
     config_pfad.write_text("database:\n  path: rubrica.db\n")
     monkeypatch.setattr(settings, "_CONFIG_PATH", config_pfad)
     monkeypatch.setattr(settings, "_settings", {})
 
-    r = TestClient(app).post("/setup/6", data={
+    r = TestClient(app).post("/setup/5", data={
         "archivio_signatur_db_path": "/pfad/existiert/nicht.db", "archivio_min_mails": "3",
+        "archivio_eigene_domains": "@Muster.ch, Andere.CH",
     }, follow_redirects=False)
     assert r.status_code == 303
+    assert r.headers["location"] == "/setup/5?gespeichert=1"
     assert settings.get("archivio.signatur_db_path") == "/pfad/existiert/nicht.db"
     assert settings.get("archivio.min_mails") == 3
+    assert settings.get("archivio.eigene_domains") == ["muster.ch", "andere.ch"]
 
-    r2 = TestClient(app).get("/setup/6?gespeichert=1")
+    r2 = TestClient(app).get("/setup/5?gespeichert=1")
     assert "Keine Datei" in r2.text
 
 
-def test_setup_schritt6_zeigt_anzahl_bei_vorhandener_datei(tmp_db, monkeypatch, tmp_path):
+def test_setup_schritt5_zeigt_anzahl_bei_vorhandener_datei(tmp_db, monkeypatch, tmp_path):
     _lokal_bypass(monkeypatch)
     signatur_db = tmp_path / "archivio.db"
     conn = sqlite3.connect(signatur_db)
@@ -160,19 +184,19 @@ def test_setup_schritt6_zeigt_anzahl_bei_vorhandener_datei(tmp_db, monkeypatch, 
 
     monkeypatch.setattr(settings, "_settings", {"archivio": {"signatur_db_path": str(signatur_db)}})
 
-    r = TestClient(app).get("/setup/6")
+    r = TestClient(app).get("/setup/5")
     assert r.status_code == 200
     assert "2 Einträge" in r.text
 
 
-def test_setup_schritt7_setzt_completed_und_leitet_zu_kontakte(tmp_db, monkeypatch, tmp_path):
+def test_setup_schritt6_setzt_completed_und_leitet_zu_kontakte(tmp_db, monkeypatch, tmp_path):
     _lokal_bypass(monkeypatch)
     config_pfad = tmp_path / "config.yaml"
     config_pfad.write_text("database:\n  path: rubrica.db\n")
     monkeypatch.setattr(settings, "_CONFIG_PATH", config_pfad)
     monkeypatch.setattr(settings, "_settings", {})
 
-    r = TestClient(app).post("/setup/7", follow_redirects=False)
+    r = TestClient(app).post("/setup/6", follow_redirects=False)
     assert r.status_code == 303
     assert r.headers["location"] == "/kontakte"
     assert settings.get("setup.completed") is True

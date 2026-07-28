@@ -65,6 +65,44 @@ def test_kontakt_anlegen_speichert_und_leitet_um(tmp_db):
     assert k["projekte"][0]["name"] == "Testprojekt"
 
 
+def test_kontakt_anlegen_warnt_bei_vermutlichem_duplikat(tmp_db):
+    queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster"})
+    client = _client(tmp_db)
+
+    r = client.post("/kontakte/neu", data={
+        "vorname": "Anna", "nachname": "Muster", "firma": "", "kategorie": "", "rolle": "",
+    }, follow_redirects=False)
+
+    assert r.status_code == 200  # kein Redirect - Formular wird mit Warnung erneut gezeigt
+    assert "ähnlichen Kontakt" in r.text
+    assert "Trotzdem als neuen Kontakt anlegen" in r.text
+    assert len(queries.list_kontakte(tmp_db)) == 1  # kein zweiter Kontakt angelegt
+
+
+def test_kontakt_anlegen_trotz_duplikat_erzwingt_neuanlage(tmp_db):
+    queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster"})
+    client = _client(tmp_db)
+
+    r = client.post("/kontakte/neu", data={
+        "vorname": "Anna", "nachname": "Muster", "firma": "", "kategorie": "", "rolle": "",
+        "dublette_bestaetigt": "1",
+    }, follow_redirects=False)
+
+    assert r.status_code == 303
+    assert len(queries.list_kontakte(tmp_db)) == 2
+
+
+def test_suche_findet_kontakt_ueber_vor_und_nachname_in_beliebiger_reihenfolge(tmp_db):
+    queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster"})
+    queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster"})
+    client = _client(tmp_db)
+
+    for suche in ("Anna Muster", "Muster Anna", "anna", "muster"):
+        r = client.get("/kontakte", params={"suche": suche})
+        assert "Anna" in r.text and "Muster" in r.text
+        assert "Anna" not in r.text
+
+
 def test_ordner_drag_drop_fuegt_hinzu_ohne_bestehende_zu_entfernen(tmp_db):
     kontakt_id = queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster"})
     ordner_a = queries.get_or_create_projekt(tmp_db, "Ordner A")
@@ -108,7 +146,7 @@ def test_sammel_leiste_erscheint_vor_der_tabelle_mit_ordner_button(tmp_db):
     r = _client(tmp_db).get("/kontakte")
     assert r.status_code == 200
     sammel_pos = r.text.index('id="sammel-leiste"')
-    tabelle_pos = r.text.index("<table>")
+    tabelle_pos = r.text.index('<table class="kontakte-tabelle">')
     assert sammel_pos < tabelle_pos  # Leiste steht vor der Tabelle, nicht danach
     assert "Ordner zuweisen" in r.text
     assert "Testordner" in r.text.split('data-ordner=')[1][:200]

@@ -1,0 +1,85 @@
+{% extends "setup_base.html" %}
+{% block title %}Kontakte importieren – Rubrica-Einrichtung{% endblock %}
+{% block schritt_anzeige %}<span class="setup-schritt">Schritt 4 von 6</span>{% endblock %}
+{% block content %}
+<h1>Bestehende Kontakte importieren</h1>
+
+<fieldset>
+    <legend>Direkt aus Kontakte.app übernehmen</legend>
+    <p class="empty" style="padding:0 0 0.5rem">
+        Übernimmt alle Kontakte und Gruppen (als Ordner) aus der Kontakte.app auf diesem Rechner. macOS fragt
+        beim ersten Mal nach Zugriff auf Kontakte – bitte erlauben. Doppelte Kontakte werden automatisch
+        erkannt und zusammengeführt, nichts wird überschrieben. Bei sehr großen Adressbüchern
+        (mehrere Tausend Kontakte) kann dieser Schritt einige Minuten dauern – die Seite bitte offen lassen,
+        bis unten ein Ergebnis erscheint (auch wenn der Knopf so lange ausgegraut bleibt).
+    </p>
+    <button type="button" id="setup-import-knopf" class="secondary" onclick="rubricaSetupKontakteAppImport()">Aus Kontakte.app importieren</button>
+    <p id="setup-import-ergebnis" style="padding:0.6rem 0.8rem; margin-top:0.7rem; border-radius:6px; display:none"></p>
+</fieldset>
+
+<p class="empty">
+    Alternativ: in Kontakte.app über Ablage → Exportieren → vCard exportieren eine oder mehrere `.vcf`-Dateien
+    erzeugen und später über <a href="/import">Import</a> hochladen (auch dort per Knopf direkt aus
+    Kontakte.app möglich).
+</p>
+<p class="empty">
+    Dieser Schritt kann jederzeit später nachgeholt werden.
+</p>
+<div class="actions" style="justify-content:space-between; margin-top:1.5rem">
+    <a class="btn secondary" id="setup-import-skip" href="/setup/5" onclick="return rubricaSetupNavGuard(event)">Überspringen</a>
+    <a class="btn" id="setup-import-weiter" href="/setup/5" onclick="return rubricaSetupNavGuard(event)">Weiter</a>
+</div>
+
+<script>
+let rubricaImportLaeuft = false;
+
+function rubricaSetupNavGuard(event) {
+    if (rubricaImportLaeuft) {
+        event.preventDefault();
+        alert('Der Import läuft noch – bitte warten, bis unten ein Ergebnis erscheint.');
+        return false;
+    }
+    return true;
+}
+
+function rubricaSetupKontakteAppImport() {
+    rubricaImportLaeuft = true;
+    const knopf = document.getElementById('setup-import-knopf');
+    const ergebnis = document.getElementById('setup-import-ergebnis');
+    knopf.disabled = true;
+    knopf.textContent = 'Importiere…';
+    ergebnis.style.display = 'block';
+    ergebnis.style.background = 'var(--bg-hell, #f2f2f2)';
+    ergebnis.style.color = '';
+    ergebnis.style.fontWeight = 'normal';
+    ergebnis.textContent = 'Importiere… (kann bei vielen Kontakten mehrere Minuten dauern, bitte warten)';
+
+    fetch('/setup/import-contacts-app', { method: 'POST' })
+        .then(r => r.json())
+        .then(daten => {
+            rubricaImportLaeuft = false;
+            knopf.disabled = false;
+            knopf.textContent = 'Aus Kontakte.app importieren';
+            ergebnis.style.fontWeight = 'bold';
+            if (daten.ok) {
+                ergebnis.textContent = `✓ Import abgeschlossen: ${daten.importiert} von ${daten.gefunden} Kontakten übernommen, ${daten.gruppen_gefunden} Gruppen als Ordner. Rubrica enthält jetzt insgesamt ${daten.kontakte_gesamt} Kontakte.`;
+                ergebnis.style.background = '#e6f4ea';
+                ergebnis.style.color = '#1a7f37';
+            } else {
+                ergebnis.textContent = '✗ Import fehlgeschlagen (' + daten.detail + ')';
+                ergebnis.style.background = '#fdecea';
+                ergebnis.style.color = '#eb5757';
+            }
+        })
+        .catch(() => {
+            rubricaImportLaeuft = false;
+            knopf.disabled = false;
+            knopf.textContent = 'Aus Kontakte.app importieren';
+            ergebnis.style.fontWeight = 'bold';
+            ergebnis.style.background = '#fdecea';
+            ergebnis.style.color = '#eb5757';
+            ergebnis.textContent = '✗ Import fehlgeschlagen (Netzwerkfehler)';
+        });
+}
+</script>
+{% endblock %}
