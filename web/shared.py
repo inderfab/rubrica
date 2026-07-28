@@ -7,10 +7,35 @@ from urllib.parse import quote_plus
 from fastapi.templating import Jinja2Templates
 
 from config import settings
+from db.connection import get_connection
 
 templates = Jinja2Templates(
     directory=str(Path(__file__).resolve().parent / "templates")
 )
+
+def _setup_erforderlich() -> bool:
+    """Zeigt den Setup-Assistenten nur bei einer wirklich frischen Installation.
+    Bestehende Installationen mit bereits vorhandenen Kontakten setzen den Marker
+    hier automatisch (kein Assistent fuer bestehende Nutzer, siehe Kapitel 5 der
+    Distributionsfaehigkeit-Arbeit, docs/CHANGELOG-INTERN.md)."""
+    if settings.get("setup.completed", False):
+        return False
+    conn = get_connection()
+    try:
+        anzahl = conn.execute("SELECT COUNT(*) FROM kontakte").fetchone()[0]
+    finally:
+        conn.close()
+    if anzahl > 0:
+        settings.save({"setup": {"completed": True}})
+        return False
+    return True
+
+
+# Aufrufbares Jinja-Global (gleiches Prinzip wie archivio_konfiguriert): der
+# Zustand kann sich waehrend der Anfrage-Bearbeitung aendern (Setup abgeschlossen),
+# ein einmalig berechneter Wert waere sofort veraltet.
+templates.env.globals["setup_erforderlich"] = _setup_erforderlich
+
 
 def _archivio_konfiguriert() -> bool:
     """Prueft nicht nur, ob ein Pfad eingetragen ist, sondern ob dort tatsaechlich eine

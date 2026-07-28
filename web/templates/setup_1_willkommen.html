@@ -1,0 +1,17 @@
+{% extends "setup_base.html" %}
+{% block title %}Willkommen – Rubrica-Einrichtung{% endblock %}
+{% block schritt_anzeige %}<span class="setup-schritt">Schritt 1 von 7</span>{% endblock %}
+{% block content %}
+<h1>Willkommen bei Rubrica</h1>
+<p class="empty" style="padding-top:0">
+    Rubrica ist die zentrale Adressverwaltung für Ihr Büro. Kontakte werden hier einmal erfasst und
+    automatisch an Apple Kontakte auf allen Stationen weitergegeben.
+</p>
+<p class="empty">
+    Diese kurze Einrichtung dauert wenige Minuten und läuft nur einmal: Firmenangaben, CardDAV-Verbindung
+    (für die Synchronisation zu Apple Kontakte) und optional die Anbindung an Archivio.
+</p>
+<div class="actions" style="justify-content:flex-end; margin-top:1.5rem">
+    <a class="btn" href="/setup/2">Los geht's</a>
+</div>
+{% endblock %}

@@ -1,0 +1,22 @@
+{% extends "setup_base.html" %}
+{% block title %}Eigene Domain – Rubrica-Einrichtung{% endblock %}
+{% block schritt_anzeige %}<span class="setup-schritt">Schritt 3 von 7</span>{% endblock %}
+{% block content %}
+<h1>Eigene E-Mail-Domain(s)</h1>
+<p class="empty" style="padding-top:0">
+    Falls Rubrica später an Archivio angebunden wird (Schritt 6): Mitarbeitende dieser Domain(s) werden nie
+    als Kontaktvorschlag angezeigt, da sie bereits erfasst sind. Mehrere Domains kommagetrennt möglich.
+    Ohne Archivio-Anbindung kann dieser Schritt übersprungen werden.
+</p>
+<form method="post" action="/setup/3">
+    <div class="field">
+        <label>Domain(s), ohne "@"</label>
+        <input type="text" name="archivio_eigene_domains" value="{{ archivio_eigene_domains }}"
+               placeholder="z. B. musterfirma.ch" style="width:100%">
+    </div>
+    <div class="actions" style="justify-content:space-between; margin-top:1.5rem">
+        <a class="btn secondary" href="/setup/4">Überspringen</a>
+        <button type="submit">Weiter</button>
+    </div>
+</form>
+{% endblock %}

@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <title>{% block title %}Einrichtung – Rubrica{% endblock %}</title>
+    <link rel="stylesheet" href="/static/style.css?v={{ app_version }}">
+</head>
+<body>
+    <div class="setup-wrapper">
+        <div class="setup-card">
+            <div class="setup-kopf">
+                <span class="brand">Rubrica</span>
+                {% block schritt_anzeige %}{% endblock %}
+            </div>
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+</body>
+</html>

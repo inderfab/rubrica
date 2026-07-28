@@ -1,0 +1,18 @@
+{% extends "setup_base.html" %}
+{% block title %}Kontakte importieren – Rubrica-Einrichtung{% endblock %}
+{% block schritt_anzeige %}<span class="setup-schritt">Schritt 5 von 7</span>{% endblock %}
+{% block content %}
+<h1>Bestehende Kontakte importieren</h1>
+<p class="empty" style="padding-top:0">
+    Falls bereits ein Adressbuch existiert: in Kontakte.app über Ablage → Exportieren → vCard exportieren
+    eine oder mehrere `.vcf`-Dateien erzeugen und später über <a href="/import">Import</a> hochladen.
+    Doppelte Kontakte werden automatisch erkannt und zusammengeführt, nichts wird überschrieben.
+</p>
+<p class="empty">
+    Dieser Schritt kann jederzeit später nachgeholt werden.
+</p>
+<div class="actions" style="justify-content:space-between; margin-top:1.5rem">
+    <a class="btn secondary" href="/setup/6">Überspringen</a>
+    <a class="btn" href="/setup/6">Weiter</a>
+</div>
+{% endblock %}

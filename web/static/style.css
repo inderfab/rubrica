@@ -94,6 +94,14 @@ button.secondary:hover, .btn.secondary:hover { background: var(--flaeche-hover);
 button.danger, .btn.danger { background: #fff; color: var(--gefahr); border-color: var(--rand); }
 button.danger:hover, .btn.danger:hover { background: #fdf1f1; border-color: var(--gefahr); }
 
+/* Setup-Assistent: eigenes, schlichtes Layout ohne Sidebar (kein sinnvoller Nav-
+   Kontext, solange noch keine Kontakte/Ordner existieren). */
+.setup-wrapper { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: var(--flaeche-sidebar); padding: 2rem; }
+.setup-card { width: 100%; max-width: 32rem; background: #fff; border: 1px solid var(--rand); border-radius: 12px; padding: 2rem 2.5rem; }
+.setup-kopf { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 1.5rem; }
+.setup-kopf .brand { font-weight: 700; font-size: 1.1rem; }
+.setup-kopf .setup-schritt { font-size: 0.85rem; color: var(--text-hell); }
+
 .tel-row, .mail-row { display: flex; gap: 0.5rem; margin-bottom: 0.4rem; }
 fieldset { border: 1px solid var(--rand); border-radius: 8px; margin-bottom: 1rem; padding: 1rem; }
 legend { font-weight: 600; padding: 0 0.4rem; color: var(--text); }

@@ -15,6 +15,8 @@ from web.imports import router as imports_router
 from web.export import router as export_router
 from web.archivio import router as archivio_router
 from web.settings import router as settings_router
+from web.setup import router as setup_router
+from web.shared import _setup_erforderlich
 
 
 @asynccontextmanager
@@ -31,6 +33,7 @@ app.include_router(imports_router)
 app.include_router(export_router)
 app.include_router(archivio_router)
 app.include_router(settings_router)
+app.include_router(setup_router)
 
 
 @app.middleware("http")
@@ -47,4 +50,6 @@ async def backup_nach_aenderung(request: Request, call_next):
 
 @app.get("/")
 def root():
+    if _setup_erforderlich():
+        return RedirectResponse(url="/setup/1")
     return RedirectResponse(url="/kontakte")

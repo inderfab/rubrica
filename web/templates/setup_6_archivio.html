@@ -1,0 +1,42 @@
+{% extends "setup_base.html" %}
+{% block title %}Archivio-Anbindung – Rubrica-Einrichtung{% endblock %}
+{% block schritt_anzeige %}<span class="setup-schritt">Schritt 6 von 7</span>{% endblock %}
+{% block content %}
+<h1>Archivio-Anbindung <span style="color:var(--text-hell); font-weight:normal">(optional)</span></h1>
+<p class="empty" style="padding-top:0">
+    Nur relevant, falls in diesem Büro auch Archivio läuft. Liest die von Archivio gepflegte
+    Signatur-Datenbank und schlägt daraus neue Kontakte vor. Leer lassen, um diesen Schritt zu überspringen.
+</p>
+
+{% if gespeichert %}
+<p style="color:#1a7f37; padding:0.5rem 0">Gespeichert.</p>
+{% endif %}
+
+<form method="post" action="/setup/6">
+    <div class="field">
+        <label>Pfad zur Archivio-Signatur-Datenbank</label>
+        <input type="text" name="archivio_signatur_db_path" value="{{ archivio_signatur_db_path }}"
+               placeholder="/Users/…/Library/Application Support/Archivio/rubrica.db" style="width:100%">
+    </div>
+    <div class="field">
+        <label>Mindestanzahl E-Mails pro Absender</label>
+        <input type="number" name="archivio_min_mails" value="{{ archivio_min_mails }}" min="1" style="width:6rem">
+    </div>
+    <button type="submit" class="secondary">Speichern &amp; prüfen</button>
+</form>
+
+{% if archivio_signatur_db_path %}
+<p class="empty" style="padding-top:1rem">
+    {% if pruefung.gefunden %}
+        ✓ Datei gefunden, {{ pruefung.anzahl }} Einträge in der Signatur-Datenbank.
+    {% else %}
+        ✗ Keine Datei unter diesem Pfad gefunden.
+    {% endif %}
+</p>
+{% endif %}
+
+<div class="actions" style="justify-content:space-between; margin-top:1.5rem">
+    <a class="btn secondary" href="/setup/7">Überspringen</a>
+    <a class="btn" href="/setup/7">Weiter</a>
+</div>
+{% endblock %}

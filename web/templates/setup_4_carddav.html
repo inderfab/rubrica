@@ -1,0 +1,74 @@
+{% extends "setup_base.html" %}
+{% block title %}CardDAV einrichten – Rubrica-Einrichtung{% endblock %}
+{% block schritt_anzeige %}<span class="setup-schritt">Schritt 4 von 7</span>{% endblock %}
+{% block content %}
+<h1>CardDAV einrichten</h1>
+<p class="empty" style="padding-top:0">
+    Damit gibt Rubrica Kontakte/Ordner an Apple Kontakte weiter. Dieser Schritt ist der wichtigste – bitte
+    genau befolgen.
+</p>
+
+<fieldset>
+    <legend>1. Zertifikat vertrauen</legend>
+    <p class="empty" style="padding:0 0 0.5rem">
+        Zertifikat herunterladen, per Doppelklick öffnen, im Schlüsselbund auf „Immer vertrauen" setzen.
+        Auf jeder weiteren Station (Kolleg:innen) muss dieser Schritt ebenfalls einmal gemacht werden.
+    </p>
+    <a class="btn secondary" href="/einstellungen/ca-zertifikat">Zertifikat herunterladen</a>
+</fieldset>
+
+<fieldset>
+    <legend>2. Konto in Kontakte.app anlegen</legend>
+    <p class="empty" style="padding:0 0 0.5rem">
+        Kontakte.app → Einstellungen → Accounts → Account hinzufügen → Andere → CardDAV-Account.
+        <strong>Modus „Manuell" wählen (nicht „Erweitert"), nur den Server eintragen – ohne Port, ohne
+        Pfad.</strong>
+    </p>
+    <div class="grid-2">
+        <div class="field">
+            <label>Server</label>
+            <input type="text" value="{{ hostname }}" readonly onclick="this.select()">
+        </div>
+        <div class="field">
+            <label>Benutzername</label>
+            <input type="text" value="{{ radicale_username }}" readonly onclick="this.select()">
+        </div>
+    </div>
+    <div class="field">
+        <label>Passwort</label>
+        <input type="text" value="{{ radicale_password }}" readonly onclick="this.select()" style="width:100%">
+    </div>
+</fieldset>
+
+<fieldset>
+    <legend>3. Verbindung testen</legend>
+    <p class="empty" style="padding:0 0 0.5rem">
+        Prüft, ob der lokale Radicale-Server erreichbar ist und die Zugangsdaten stimmen – unabhängig vom
+        Kontakte.app-Setup.
+    </p>
+    <button type="button" class="secondary" onclick="rubricaSetupCardDavTest()">Verbindung testen</button>
+    <p id="setup-carddav-ergebnis" class="empty" style="padding-top:0.5rem"></p>
+</fieldset>
+
+<div class="actions" style="justify-content:space-between; margin-top:1.5rem">
+    <a class="btn secondary" href="/setup/5">Überspringen</a>
+    <a class="btn" href="/setup/5">Weiter</a>
+</div>
+
+<script>
+function rubricaSetupCardDavTest() {
+    const ergebnis = document.getElementById('setup-carddav-ergebnis');
+    ergebnis.textContent = 'Teste Verbindung…';
+    fetch('/setup/carddav-test', { method: 'POST' })
+        .then(r => r.json())
+        .then(daten => {
+            ergebnis.textContent = (daten.ok ? '✓ Verbindung erfolgreich (' : '✗ Verbindung fehlgeschlagen (') + daten.detail + ')';
+            ergebnis.style.color = daten.ok ? '#1a7f37' : '#eb5757';
+        })
+        .catch(() => {
+            ergebnis.textContent = '✗ Verbindung fehlgeschlagen (Netzwerkfehler)';
+            ergebnis.style.color = '#eb5757';
+        });
+}
+</script>
+{% endblock %}
