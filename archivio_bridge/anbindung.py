@@ -12,7 +12,8 @@ noch zu wenig Mails bewusst "pending" bleiben (kuenftige Mails koennen sie ergae
 
 Bewusst auf hohe Praezision statt Vollstaendigkeit ausgelegt, um eine Explosion der
 Kontaktzahl zu vermeiden (siehe Konzept-Abschnitt 11, Strategische Richtung):
-  - eigene Mitarbeiter (EIGENE_DOMAIN) werden nie als Kandidat vorgeschlagen
+  - eigene Mitarbeiter (archivio.eigene_domains, siehe hole_kandidaten) werden nie
+    als Kandidat vorgeschlagen
   - nur Absender mit mindestens `min_mails` E-Mails (Indiz fuer echte Korrespondenz)
   - bis zu `MAX_VERSUCHE_PRO_ABSENDER` Mails je Absender probieren, nicht nur die
     neueste - falls eine Mail kein vollstaendiges Ergebnis liefert, vielleicht eine
@@ -49,10 +50,6 @@ _EMAIL_EINFACH = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 _AUTOMATISIERTER_ABSENDER = re.compile(r"^(no-?reply|donotreply|mailer-daemon|postmaster)@", re.IGNORECASE)
 
 MAX_VERSUCHE_PRO_ABSENDER = 5
-
-# Bespoke fuer Muster Architektur AG (siehe CLAUDE.md) - eigene Mitarbeiter sind nie
-# Import-Kandidaten (sie sind bereits als Kontakte erfasst bzw. kein Adressbuch-Eintrag).
-EIGENE_DOMAIN = "@muster.ch"
 
 # Zeilen, an denen zitierter Mailverlauf beginnt (Outlook-Stil "Von:/Gesendet:/An:/
 # Betreff:", Apple-Mail/Gmail-Stil "Am ... schrieb ...:", englische Pendants,
@@ -251,16 +248,24 @@ def markiere_status(signatur_db_pfad: str, absender_email: str, status: str) -> 
 
 
 def hole_kandidaten(signatur_db_pfad: str, rubrica_conn: sqlite3.Connection,
-                     min_mails: int = 2, postfaecher: list | None = None) -> list:
+                     min_mails: int = 2, postfaecher: list | None = None,
+                     eigene_domains: list | None = None) -> list:
     """Liefert eine Liste von Kandidaten-Dicts (kompatibel zu
     db.queries.create_vorschlag, plus `absender_email` fuer die spaetere Status-
     Markierung beim Bestaetigen/Ablehnen). Mails ohne verwertbares Ergebnis bleiben
-    'pending'; erkannte Dubletten werden sofort als 'abgelehnt' markiert."""
+    'pending'; erkannte Dubletten werden sofort als 'abgelehnt' markiert.
+
+    `eigene_domains` (z.B. ["muster.ch"], ohne fuehrendes "@", konfiguriert unter
+    archivio.eigene_domains) schliesst Absender der eigenen Mitarbeiter aus - je
+    Domain eine NOT LIKE-Klausel, UND-verknuepft (= keine dieser Domains)."""
     conn = sqlite3.connect(signatur_db_pfad)
     conn.row_factory = sqlite3.Row
     try:
-        where = ["status = 'pending'", "absender_email != ''", "absender_email NOT LIKE ?"]
-        params: list = [f"%{EIGENE_DOMAIN}"]
+        where = ["status = 'pending'", "absender_email != ''"]
+        params: list = []
+        for domain in eigene_domains or []:
+            where.append("absender_email NOT LIKE ?")
+            params.append(f"%@{domain}")
         if postfaecher:
             platzhalter = ",".join("?" * len(postfaecher))
             where.append(f"postfach IN ({platzhalter})")

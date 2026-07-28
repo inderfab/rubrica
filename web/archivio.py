@@ -39,8 +39,10 @@ def _hole_kandidaten_oder_leer(conn, postfaecher: List[str]):
     if not db_pfad:
         return [], "Keine Archivio-Signatur-Datenbank konfiguriert (archivio.signatur_db_path in den Einstellungen)."
     min_mails = settings.get("archivio.min_mails", 2)
+    eigene_domains = settings.get("archivio.eigene_domains", []) or []
     try:
-        return hole_kandidaten(db_pfad, conn, min_mails=min_mails, postfaecher=postfaecher or None), ""
+        return hole_kandidaten(db_pfad, conn, min_mails=min_mails, postfaecher=postfaecher or None,
+                                eigene_domains=eigene_domains), ""
     except Exception as exc:
         return [], f"Archivio-Signatur-Datenbank nicht lesbar: {type(exc).__name__}"
 

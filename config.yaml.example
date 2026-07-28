@@ -11,7 +11,7 @@ server:
 radicale:
   base_url: https://127.0.0.1:8443
   # Benutzername/Adressbuch-Pfad sind bewusst NICHT hier konfigurierbar - fest
-  # verdrahtet auf "pas" (siehe sync.radicale.RADICALE_BENUTZER). Frueher wurde
+  # verdrahtet auf "rubrica" (siehe sync.radicale.RADICALE_BENUTZER). Frueher wurde
   # hier der macOS-Benutzername der jeweiligen Maschine eingesetzt, was je nach
   # Maschine zu unterschiedlichen Werten und damit zu einem stillen Sync-Ausfall
   # unter Radicales "owner_only"-Rechtemodell fuehrte (siehe docs/konzept.md).
@@ -20,10 +20,12 @@ radicale:
 # Phase 4: Archivio-Anbindung - liest die von Archivio gefuehrte Signatur-DB
 # (Tabelle signatur_quelle: Absender, Postfach, voller Mailtext, Status) und
 # erzeugt daraus Kontaktvorschlaege im Archivio-Import. Deaktiviert, solange
-# signatur_db_path leer ist.
+# signatur_db_path leer ist. eigene_domains (ohne fuehrendes "@") schliesst die
+# eigenen Mitarbeiter des Buros von Vorschlaegen aus, z.B. ["muster.ch"].
 archivio:
   signatur_db_path: ""
   min_mails: 2
+  eigene_domains: []
 
 # Automatisches Backup: nach jeder aendernden Anfrage wird ein Snapshot der
 # Datenbank an diesen Ordner geschrieben (per sqlite3-Backup-API, konsistent

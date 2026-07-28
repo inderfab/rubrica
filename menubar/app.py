@@ -19,7 +19,8 @@ from pathlib import Path
 import httpx
 import rumps
 
-WEB_PORT = 8001
+# RADICALE_PORT bleibt bewusst fest (kein bekannter Konfliktfall, vermeidet
+# Config-Drift zwischen diesem Wert und radicale.base_url in config.yaml).
 RADICALE_PORT = 8443
 # Muss mit sync.radicale.RADICALE_BENUTZER uebereinstimmen (hier dupliziert statt
 # importiert, damit die Menubar-App ihre bewusst minimalen Abhaengigkeiten behaelt).
@@ -30,6 +31,23 @@ _ICON = str(_HERE / "icon.png")
 _DATA_DIR = Path.home() / "Library" / "Application Support" / "Rubrica"
 _LOG_DIR = _DATA_DIR / "logs"
 _LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _web_port() -> int:
+    """Liest server.port aus config.yaml (leichtgewichtig, ohne das volle config-
+    Package zu importieren - bewusst minimale Abhaengigkeiten der Menubar-App).
+    Faellt bei jedem Fehler (fehlende Datei, kaputtes YAML, fehlender Schluessel)
+    auf 8001 zurueck - ein Port-Konflikt (z.B. mit einer anderen lokalen App im
+    selben Buero) soll konfigurierbar sein, ohne die Menubar-App am Start zu hindern."""
+    try:
+        import yaml
+        daten = yaml.safe_load((_DATA_DIR / "config.yaml").read_text(encoding="utf-8")) or {}
+        return int(daten.get("server", {}).get("port", 8001))
+    except Exception:
+        return 8001
+
+
+WEB_PORT = _web_port()
 
 logging.basicConfig(
     filename=str(_LOG_DIR / "menubar.log"),

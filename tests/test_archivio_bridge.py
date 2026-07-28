@@ -85,9 +85,17 @@ def test_signatur_ohne_firma_wird_ausgeschlossen(archivio_db, tmp_db):
 
 
 def test_eigene_mitarbeiter_werden_nie_kandidat(archivio_db, tmp_db):
-    kandidaten = hole_kandidaten(archivio_db, tmp_db, min_mails=2)
+    kandidaten = hole_kandidaten(archivio_db, tmp_db, min_mails=2, eigene_domains=["muster.ch"])
     mails = {k["emails"][0]["email"] for k in kandidaten if k["emails"]}
     assert "fi@muster.ch" not in mails
+
+
+def test_ohne_eigene_domains_werden_alle_kandidaten_gezeigt(archivio_db, tmp_db):
+    # eigene_domains ist optional (Default leer) - ohne konfigurierte Domain wird
+    # niemand automatisch ausgefiltert.
+    kandidaten = hole_kandidaten(archivio_db, tmp_db, min_mails=2)
+    mails = {k["emails"][0]["email"] for k in kandidaten if k["emails"]}
+    assert "fi@muster.ch" in mails
 
 
 def test_automatisierte_systemadressen_werden_nie_kandidat(tmp_path, tmp_db):
@@ -193,24 +201,22 @@ def test_zitierter_verlauf_wird_vor_signatursuche_abgeschnitten(tmp_path, tmp_db
     conn = _neue_signatur_db(pfad)
     text = (
         "Hallo zusammen\n\nHier meine Rueckmeldung.\n\n"
-        "Freundliche Gruesse\n\nAnna Muster\nMuster Architektur AG\n"
-        "Musterstrasse 1, 8000 Zürich\nT 052 214 20 37\nfi@muster.ch\n\n"
+        "Freundliche Gruesse\n\nJohanna Muster\nMuster Architektur AG\n"
+        "Musterstrasse 1, 8000 Zürich\nT 052 214 20 37\njohanna@muster.ch\n\n"
         "Von: Marcel Mueller <marcel@andere-firma.ch>\n"
-        "Gesendet: Montag, 1. Januar 2026\nAn: Anna Muster\nBetreff: AW: Test\n\n"
+        "Gesendet: Montag, 1. Januar 2026\nAn: Johanna Muster\nBetreff: AW: Test\n\n"
         "Alte Nachricht mit ganz anderer Signatur.\n\n"
         "Gruss\nMarcel Mueller\nAndere Firma AG\nMusterweg 3\n9000 St. Gallen\nT 071 111 22 33\nmarcel@andere-firma.ch"
     )
-    _mail(conn, "m1", "fi@muster.ch", text, "2026-01-05")
-    _mail(conn, "m2", "fi@muster.ch", text, "2026-01-06")
+    _mail(conn, "m1", "johanna@muster.ch", text, "2026-01-05")
+    _mail(conn, "m2", "johanna@muster.ch", text, "2026-01-06")
     conn.commit()
     conn.close()
 
-    # fi@muster.ch ist eine eigene Mitarbeiterin und wird ausgefiltert - stattdessen
-    # pruefen wir hier direkt die Kernfunktion, um die Zitat-Abschneidung isoliert
-    # zu testen (unabhaengig vom Mitarbeiter-Filter).
+    # Testet die Zitat-Abschneidung isoliert, unabhaengig vom Mitarbeiter-Filter.
     from archivio_bridge.anbindung import _ohne_zitat
     bereinigt = _ohne_zitat(text)
-    assert "Anna Muster" in bereinigt
+    assert "Johanna Muster" in bereinigt
     assert "Marcel Mueller" not in bereinigt
     assert "Von:" not in bereinigt
 

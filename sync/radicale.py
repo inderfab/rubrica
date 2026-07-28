@@ -26,8 +26,9 @@ log = logging.getLogger(__name__)
 # (Aendern nur eines der beiden Werte, bzw. ein Maschinen-Benutzername, der vom
 # gewuenschten CardDAV-Konto-Namen abwich) - ein einziger fester Wert fuer alle
 # Installationen macht diese Fehlerklasse strukturell unmoeglich. Produktbezogen
-# statt an ein bestimmtes Buero gebunden (2026-07-14: "pas" -> "rubrica", siehe
-# scripts/migrate-radicale-user.sh fuer bereits laufende Installationen).
+# statt an ein bestimmtes Buero gebunden (2026-07-14 umbenannt vom vorherigen
+# buerospezifischen Wert, siehe scripts/migrate-radicale-user.sh fuer bereits
+# laufende Installationen).
 RADICALE_BENUTZER = "rubrica"
 
 # Text des zuletzt aufgetretenen Sync-Fehlers (z.B. "401 Unauthorized",

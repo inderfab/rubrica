@@ -125,6 +125,15 @@
             <label>Mindestanzahl E-Mails pro Absender (Indiz für echte Korrespondenz)</label>
             <input type="number" name="archivio_min_mails" value="{{ archivio_min_mails }}" min="1" style="width:6rem">
         </div>
+        <div class="field">
+            <label>Eigene E-Mail-Domain(s) (kommagetrennt, ohne "@")</label>
+            <input type="text" name="archivio_eigene_domains" value="{{ archivio_eigene_domains }}"
+                   placeholder="z. B. musterfirma.ch" style="width:100%">
+            <p class="empty" style="padding-top:0.3rem">
+                Mitarbeitende dieser Domain(s) werden nie als Kontaktvorschlag angezeigt (sie sind bereits
+                erfasst, kein externer Ansprechpartner).
+            </p>
+        </div>
     </fieldset>
 
     <fieldset>

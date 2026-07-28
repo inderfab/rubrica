@@ -37,6 +37,7 @@ def einstellungen_form(request: Request, gespeichert: str = "", sync: str = ""):
         "sync_ergebnis": sync,
         "archivio_signatur_db_path": settings.get("archivio.signatur_db_path", "") or "",
         "archivio_min_mails": settings.get("archivio.min_mails", 2),
+        "archivio_eigene_domains": ", ".join(settings.get("archivio.eigene_domains", []) or []),
         "backup_pfad": settings.get("backup.pfad", "") or "",
         "export_firmenname": settings.get("export.firmenname", "") or "",
         "logo_vorhanden": settings.logo_pfad() is not None,
@@ -89,6 +90,11 @@ async def einstellungen_speichern(request: Request):
         min_mails = int(form.get("archivio_min_mails") or 2)
     except ValueError:
         min_mails = 2
+    eigene_domains = [
+        d.strip().lstrip("@").lower()
+        for d in (form.get("archivio_eigene_domains") or "").split(",")
+        if d.strip()
+    ]
     backup_pfad = (form.get("backup_pfad") or "").strip()
     export_firmenname = (form.get("export_firmenname") or "").strip()
     radicale_base_url = (form.get("radicale_base_url") or "").strip()
@@ -103,7 +109,8 @@ async def einstellungen_speichern(request: Request):
             ziel.write_bytes(await logo.read())
 
     settings.save({
-        "archivio": {"signatur_db_path": signatur_db_path, "min_mails": min_mails},
+        "archivio": {"signatur_db_path": signatur_db_path, "min_mails": min_mails,
+                     "eigene_domains": eigene_domains},
         "backup": {"pfad": backup_pfad},
         "radicale": {
             "base_url": radicale_base_url,

@@ -349,14 +349,17 @@ PLISTEOF
 _install_agent "ch.rubrica.server" "/Applications/Rubrica Server.app/Contents/MacOS/Rubrica Server"
 
 # Migration: fruehere Versionen installierten Radicale als eigenen zweiten
-# launchd-Dienst. Den alten Agent entladen und dessen Plist entfernen, sonst
-# liefe eine verwaiste zweite Radicale-Instanz neben der, die die Menubar-App
-# jetzt selbst als Kindprozess startet (Port-Konflikt auf 8443).
-ALTE_RADICALE_PLIST="$LA_DIR/ch.rubrica.radicale.plist"
-if [ -f "$ALTE_RADICALE_PLIST" ]; then
-  sudo -u "$CURRENT_USER" launchctl bootout "gui/$USER_UID/ch.rubrica.radicale" 2>/dev/null || true
-  rm -f "$ALTE_RADICALE_PLIST"
-fi
+# launchd-Dienst unter einer anderen Bundle-ID (ch.rubrica.*). Alte Agents
+# entladen und deren Plists entfernen, sonst liefe eine verwaiste zweite
+# Radicale-Instanz neben der, die die Menubar-App jetzt selbst als Kindprozess
+# startet (Port-Konflikt auf 8443), bzw. zwei Instanzen unter altem/neuem Label.
+for ALTES_LABEL in ch.rubrica.server ch.rubrica.radicale; do
+  ALTE_PLIST="$LA_DIR/$ALTES_LABEL.plist"
+  if [ -f "$ALTE_PLIST" ]; then
+    sudo -u "$CURRENT_USER" launchctl bootout "gui/$USER_UID/$ALTES_LABEL" 2>/dev/null || true
+    rm -f "$ALTE_PLIST"
+  fi
+done
 
 exit 0
 POSTINSTALL

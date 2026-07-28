@@ -20,7 +20,7 @@
 set -euo pipefail
 
 TLS_DIR="${1:?TLS-Zielverzeichnis fehlt}"
-HOSTNAME_LOCAL="${2:?Hostname (z.B. Anna-Mac-Studio.local) fehlt}"
+HOSTNAME_LOCAL="${2:?Hostname (z.B. Mein-Mac.local) fehlt}"
 
 mkdir -p "$TLS_DIR"
 CA_KEY="$TLS_DIR/ca-key.pem"

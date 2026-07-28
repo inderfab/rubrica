@@ -1353,3 +1353,25 @@ Kapitel, Reihenfolge per Nutzer-Vorgabe: 3 (Radicale-Benutzer) → 4 (übrige b�
   (Konten lassen sich nicht zuverlaessig umbenennen). Beide Skripte werden ins `.pkg` mitgeliefert
   (`Contents/Resources/`). `scripts/restore-data-archive.sh` im selben Aufwasch von den laengst veralteten
   Zwei-Agent-Referenzen bereinigt.
+
+- **Kapitel 4 — übrige büro­spezifische Werte entkoppelt (2026-07-28):**
+  - `EIGENE_DOMAIN` (Einzelstring `"@muster.ch"`) in `archivio_bridge/anbindung.py` durch einen Parameter
+    `eigene_domains: list[str]` ersetzt (Konfig-Schlüssel `archivio.eigene_domains`, ohne führendes "@" -
+    das wird erst am SQL-Parameter angehängt). Pro Domain eine `NOT LIKE`-Klausel, UND-verknüpft; leere
+    Liste = kein Filter. Neues Textfeld (kommagetrennt) in den Einstellungen.
+  - Bundle-ID `ch.rubrica.*` → `ch.rubrica.server` (`menubar/app.py`, `scripts/build-pkg.sh`
+    CFBundleIdentifier/LaunchAgent-Label/`pkgbuild --identifier`). Die bestehende Alt-Agent-Aufräum-Logik im
+    Postinstall (früher nur für das längst nicht mehr existierende `ch.rubrica.radicale` gedacht)
+    räumt jetzt eine Liste alter Labels auf, inkl. des alten `ch.rubrica.server` - diese beiden
+    Strings bleiben bewusst im Code stehen (Migrationslogik braucht den exakten alten Wert) und sind die
+    einzige zulässige Ausnahme vom Abschluss-Grep unten.
+  - `menubar/app.py`: `WEB_PORT` liest jetzt `server.port` aus `config.yaml` (leichtgewichtiges
+    `yaml.safe_load`, Fallback 8001) statt hartcodiert zu sein - Hintergrund: Rubrica kollidierte an einem
+    früheren Standort bereits mit einer anderen App auf Port 8000. `RADICALE_PORT` bleibt bewusst
+    hartcodiert (kein bekannter Konfliktfall, vermeidet Drift gegenüber `radicale.base_url`).
+  - Testdaten neutralisiert: "Muster Architektur AG"/`@muster.ch` → "Muster Architektur AG"/`@muster.ch` in
+    allen Testdateien (rein kosmetisch, Tests werden nicht mitgeliefert).
+  - `scripts/radicale_spike_testdata.py` gelöscht - ein abgeschlossener Einmal-Spike (Apple-Gruppen-Test,
+    siehe Abschnitt 9), nirgends mehr referenziert.
+  - Zwischen-Grep (`muster|anna|/Users/fi|"pas"`, ohne `docs/konzept.md` selbst) zeigt nur noch die oben
+    begründete Migrationslogik in `build-pkg.sh` - Rest der finalen Bereinigung folgt in Kapitel 6.
