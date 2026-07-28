@@ -8,6 +8,7 @@
 # Aufruf: bash scripts/build-pkg.sh
 set -e
 cd "$(dirname "$0")/.."
+source scripts/sign_lib.sh
 
 DIST="dist"
 APP_NAME="Rubrica Server"
@@ -89,12 +90,18 @@ _build_python "aarch64-apple-darwin" "arm64"
 _build_python "x86_64-apple-darwin"  "x86_64"
 
 # ── Bundle-Struktur ───────────────────────────────────────────────────────────
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Frameworks"
+# Kein Contents/Frameworks: eingebettetes Python liegt unter Contents/Resources
+# (siehe scripts/sign_lib.sh Kommentarkopf fuer den Grund - codesign lehnt jedes
+# Verzeichnis direkt unter Contents/Frameworks ohne gueltige Framework-Struktur ab).
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 
 for dir in web db config importer sync export archivio_bridge backup; do
   cp -r "$dir" "$APP/Contents/Resources/"
 done
 find "$APP/Contents/Resources" -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
+# config/entitlements.plist ist ein reines Build-Zeit-Artefakt fuer die Signierung
+# weiter unten - die laufende Python-App soll es nicht in ihrem config/-Ordner sehen.
+rm -f "$APP/Contents/Resources/config/entitlements.plist"
 cp requirements.txt         "$APP/Contents/Resources/"
 cp config.yaml.example      "$APP/Contents/Resources/"
 cp VERSION                  "$APP/Contents/Resources/"
@@ -109,7 +116,7 @@ cp scripts/generate-cert.sh         "$APP/Contents/Resources/"
 _install_python_to_bundle() {
     local ARCH_TAG="$1"
     local SRC="$DIST/.python-installed-$ARCH_TAG"
-    local DST="$APP/Contents/Frameworks/rubrica-python-$ARCH_TAG"
+    local DST="$APP/Contents/Resources/rubrica-python-$ARCH_TAG"
 
     if [ ! -x "$SRC/bin/python3" ]; then
         echo "  ⚠  $ARCH_TAG: kein Python — wird übersprungen"
@@ -131,21 +138,18 @@ echo "→ Python-Umgebungen ins Bundle kopieren…"
 _install_python_to_bundle "arm64"
 _install_python_to_bundle "x86_64"
 
-# ── Ad-hoc Code-Signierung ────────────────────────────────────────────────────
-# Erforderlich, damit macOS Gatekeeper die nativen Bibliotheken (.so, .dylib,
-# u.a. bcrypt) zulaesst.
-if command -v codesign &>/dev/null; then
-    echo "→ Ad-hoc Code-Signierung…"
-    for ARCH_TAG in arm64 x86_64; do
-        PF="$APP/Contents/Frameworks/rubrica-python-$ARCH_TAG"
-        [ -d "$PF" ] || continue
-        find "$PF" \( -name "*.so" -o -name "*.dylib" \) -type f \
-            | while read -r f; do codesign -s - --force "$f" 2>/dev/null || true; done
-        find "$PF/bin" -type f \
-            | while read -r f; do codesign -s - --force "$f" 2>/dev/null || true; done
-    done
-    echo "  Signierung abgeschlossen (nur Binaries, nicht Bundle)"
-fi
+# ── Code-Signierung der eingebetteten Python-Umgebungen ──────────────────────
+# sign_inner (scripts/sign_lib.sh) signiert mit RUBRICA_SIGN_APP inkl.
+# Entitlements, falls gesetzt, sonst ad-hoc wie bisher - lokale Entwicklung ohne
+# Zertifikat bleibt unveraendert moeglich. sign_bundle() (weiter unten, nach dem
+# vollstaendigen Bundle-Aufbau) durchlaeuft dieselben Verzeichnisse ohnehin noch
+# einmal, dieser Durchlauf hier stellt aber sicher, dass die Python-Umgebungen
+# auch bei rein ad-hoc-Signierung (kein RUBRICA_SIGN_APP) denselben Zustand wie
+# vor dieser Umstellung haben.
+echo "→ Code-Signierung (eingebettete Python-Umgebungen)…"
+for ARCH_TAG in arm64 x86_64; do
+    sign_inner "$APP/Contents/Resources/rubrica-python-$ARCH_TAG"
+done
 
 # ── Gemeinsame venv-Bootstrap-Logik (Fallback, falls kein eingebettetes Python
 #    fuer die jeweilige Architektur mitgeliefert wurde) ──────────────────────
@@ -214,7 +218,7 @@ echo "$(date): Rubrica Menubar-App v$(cat "$RESOURCES/VERSION" 2>/dev/null) star
 
 # ── 1. Eingebettetes Python (immer bevorzugt) ────────────────────────────────
 ARCH=$(uname -m)
-EMBEDDED_PY="$BUNDLE/Frameworks/rubrica-python-$ARCH/bin/python3"
+EMBEDDED_PY="$BUNDLE/Resources/rubrica-python-$ARCH/bin/python3"
 if [ -x "$EMBEDDED_PY" ]; then
   echo "$(date): Eingebettetes Python ($ARCH): $("$EMBEDDED_PY" --version 2>&1)"
   RUBRICA_PYTHON="$EMBEDDED_PY"
@@ -262,6 +266,13 @@ PLIST
 echo -n "APPL????" > "$APP/Contents/PkgInfo"
 
 echo "✓ $APP gebaut ($(du -sh "$APP" | cut -f1))"
+
+# ── Bundle signieren + notarisieren (App zuerst, .pkg weiter unten) ──────────
+# sign_bundle/notarize_and_staple (scripts/sign_lib.sh) sind ohne gesetzte
+# RUBRICA_SIGN_*-Umgebungsvariablen No-Ops (ad-hoc-Signierung mit Warnung) -
+# lokale Entwicklung ohne Zertifikat bleibt unveraendert moeglich.
+sign_bundle "$APP"
+notarize_and_staple "$APP"
 
 # ── PKG-Installer ─────────────────────────────────────────────────────────────
 if ! command -v pkgbuild &>/dev/null; then
@@ -366,13 +377,23 @@ exit 0
 POSTINSTALL
 chmod +x "$PKG_SCRIPTS/postinstall"
 
+PKGBUILD_SIGN_ARGS=()
+if [ -n "$RUBRICA_SIGN_INSTALLER" ]; then
+  PKGBUILD_SIGN_ARGS=(--sign "$RUBRICA_SIGN_INSTALLER")
+else
+  echo "⚠️  RUBRICA_SIGN_INSTALLER nicht gesetzt — .pkg bleibt unsigniert"
+fi
+
 pkgbuild \
   --root "$PKG_ROOT" \
   --scripts "$PKG_SCRIPTS" \
   --identifier "ch.rubrica.server" \
   --version "$VERSION" \
   --install-location "/" \
+  "${PKGBUILD_SIGN_ARGS[@]}" \
   "$PKG"
 
 rm -rf "$PKG_ROOT" "$PKG_SCRIPTS"
 echo "✓ $PKG erstellt ($(du -sh "$PKG" | cut -f1))"
+
+notarize_and_staple "$PKG"
