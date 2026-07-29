@@ -179,14 +179,45 @@ async def setup_schritt5_speichern(request: Request):
 
 
 @router.get("/setup/6")
-def setup_schritt6(request: Request):
+def setup_schritt6_form(request: Request):
     if (r := _nur_lokal(request)) is not None:
         return r
-    return templates.TemplateResponse("setup_6_fertig.html", {"request": request})
+    return templates.TemplateResponse("setup_6_mail.html", {
+        "request": request,
+        "mail_host": settings.get("mail.host", "") or "",
+        "mail_port": settings.get("mail.port", 993),
+        "mail_username": settings.get("mail.username", "") or "",
+        "mail_password": settings.get("mail.password", "") or "",
+    })
 
 
 @router.post("/setup/6")
-def setup_schritt6_abschliessen(request: Request):
+async def setup_schritt6_speichern(request: Request):
+    if (r := _nur_lokal(request)) is not None:
+        return r
+    form = await request.form()
+    mail_host = (form.get("mail_host") or "").strip()
+    try:
+        mail_port = int(form.get("mail_port") or 993)
+    except ValueError:
+        mail_port = 993
+    mail_username = (form.get("mail_username") or "").strip()
+    mail_password = form.get("mail_password") or ""
+    settings.save({"mail": {
+        "host": mail_host, "port": mail_port, "username": mail_username, "password": mail_password,
+    }})
+    return RedirectResponse(url="/setup/7", status_code=303)
+
+
+@router.get("/setup/7")
+def setup_schritt7(request: Request):
+    if (r := _nur_lokal(request)) is not None:
+        return r
+    return templates.TemplateResponse("setup_7_fertig.html", {"request": request})
+
+
+@router.post("/setup/7")
+def setup_schritt7_abschliessen(request: Request):
     if (r := _nur_lokal(request)) is not None:
         return r
     settings.save({"setup": {"completed": True}})

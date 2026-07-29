@@ -91,6 +91,13 @@ def _setup_erforderlich() -> bool:
 templates.env.globals["setup_erforderlich"] = _setup_erforderlich
 
 
+def _mail_konfiguriert() -> bool:
+    return bool((settings.get("mail.host", "") or "").strip())
+
+
+templates.env.globals["mail_konfiguriert"] = _mail_konfiguriert
+
+
 def _archivio_konfiguriert() -> bool:
     """Prueft nicht nur, ob ein Pfad eingetragen ist, sondern ob dort tatsaechlich eine
     Datei liegt - ein veralteter/falscher Pfad soll den Nav-Punkt nicht anzeigen."""

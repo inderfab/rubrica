@@ -1,0 +1,43 @@
+{% extends "setup_base.html" %}
+{% block title %}Mail-Eingang – Rubrica-Einrichtung{% endblock %}
+{% block schritt_anzeige %}<span class="setup-schritt">Schritt 6 von 7</span>{% endblock %}
+{% block content %}
+<h1>Kontakte per Mail senden <span style="color:var(--text-hell); font-weight:normal">(optional)</span></h1>
+<p class="empty" style="padding-top:0">
+    Willst du Kontakte per Mail an Rubrica senden können? Mit einem dedizierten Postfach (z. B.
+    rubrica@musterfirma.ch) kann von unterwegs eine vCard geteilt ("Kontakt senden" in Kontakte.app) oder
+    einfach Name/Telefon/Mail als Text geschickt werden – Rubrica prüft das Postfach 1× täglich sowie manuell
+    und legt daraus offene Vorschläge an, die im Büro bestätigt werden müssen. Alle Felder leer lassen, um
+    diesen Schritt zu überspringen.
+</p>
+
+<form method="post" action="/setup/6">
+    <div class="grid-2">
+        <div class="field">
+            <label>IMAP-Server</label>
+            <input type="text" name="mail_host" value="{{ mail_host }}" placeholder="imap.beispiel.ch" style="width:100%">
+        </div>
+        <div class="field">
+            <label>Port</label>
+            <input type="number" name="mail_port" value="{{ mail_port }}" style="width:6rem">
+        </div>
+    </div>
+    <div class="grid-2">
+        <div class="field">
+            <label>Benutzername</label>
+            <input type="text" name="mail_username" value="{{ mail_username }}" placeholder="rubrica@musterfirma.ch" style="width:100%">
+        </div>
+        <div class="field">
+            <label>Passwort</label>
+            <input type="text" name="mail_password" value="{{ mail_password }}" style="width:100%">
+        </div>
+    </div>
+    <p class="empty" style="padding-top:0.3rem">
+        Verbindung und Zugangsdaten lassen sich später in den Einstellungen prüfen ("Verbindung testen").
+    </p>
+    <div class="actions" style="justify-content:space-between; margin-top:1.5rem">
+        <a class="btn secondary" href="/setup/7">Überspringen</a>
+        <button type="submit">Weiter</button>
+    </div>
+</form>
+{% endblock %}

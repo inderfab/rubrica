@@ -32,3 +32,15 @@ archivio:
 # auch bei laufendem Schreibzugriff). Deaktiviert, solange pfad leer ist.
 backup:
   pfad: ""
+
+# Mail-Eingang: ein dediziertes IMAP-Postfach (z.B. rubrica@musterfirma.ch), an das
+# Mitarbeitende von unterwegs eine vCard ("Kontakt senden" in Kontakte.app) oder
+# einfach Name/Telefon/Mail als Text schicken koennen. Wird taeglich automatisch
+# sowie manuell ("Jetzt pruefen" in den Einstellungen) abgefragt; jede gefundene
+# Nachricht erzeugt einen offenen Vorschlag, der erst im Buero manuell bestaetigt
+# wird (siehe mail_intake.py, web/mail_vorschlaege.py). Deaktiviert, solange host leer ist.
+mail:
+  host: ""
+  port: 993
+  username: ""
+  password: ""

@@ -197,14 +197,41 @@ def test_setup_schritt5_zeigt_anzahl_bei_vorhandener_datei(tmp_db, monkeypatch, 
     assert "2 Einträge" in r.text
 
 
-def test_setup_schritt6_setzt_completed_und_leitet_zu_kontakte(tmp_db, monkeypatch, tmp_path):
+def test_setup_schritt6_speichert_mail_konfiguration_und_leitet_weiter(tmp_db, monkeypatch, tmp_path):
     _lokal_bypass(monkeypatch)
     config_pfad = tmp_path / "config.yaml"
     config_pfad.write_text("database:\n  path: rubrica.db\n")
     monkeypatch.setattr(settings, "_CONFIG_PATH", config_pfad)
     monkeypatch.setattr(settings, "_settings", {})
 
-    r = TestClient(app).post("/setup/6", follow_redirects=False)
+    r = TestClient(app).post("/setup/6", data={
+        "mail_host": "imap.beispiel.ch", "mail_port": "993",
+        "mail_username": "rubrica@beispiel.ch", "mail_password": "geheim",
+    }, follow_redirects=False)
+    assert r.status_code == 303
+    assert r.headers["location"] == "/setup/7"
+    assert settings.get("mail.host") == "imap.beispiel.ch"
+    assert settings.get("mail.username") == "rubrica@beispiel.ch"
+
+
+def test_setup_schritt6_zeigt_gespeicherte_werte(tmp_db, monkeypatch):
+    _lokal_bypass(monkeypatch)
+    monkeypatch.setattr(settings, "_settings", {"mail": {"host": "imap.beispiel.ch", "username": "rubrica@beispiel.ch"}})
+
+    r = TestClient(app).get("/setup/6")
+    assert r.status_code == 200
+    assert "imap.beispiel.ch" in r.text
+    assert "rubrica@beispiel.ch" in r.text
+
+
+def test_setup_schritt7_setzt_completed_und_leitet_zu_kontakte(tmp_db, monkeypatch, tmp_path):
+    _lokal_bypass(monkeypatch)
+    config_pfad = tmp_path / "config.yaml"
+    config_pfad.write_text("database:\n  path: rubrica.db\n")
+    monkeypatch.setattr(settings, "_CONFIG_PATH", config_pfad)
+    monkeypatch.setattr(settings, "_settings", {})
+
+    r = TestClient(app).post("/setup/7", follow_redirects=False)
     assert r.status_code == 303
     assert r.headers["location"] == "/kontakte"
     assert settings.get("setup.completed") is True

@@ -368,10 +368,14 @@ def postfach_zuordnen(conn: sqlite3.Connection, postfach: str, projekt_id: "int 
             )
 
 
-def list_vorschlaege(conn: sqlite3.Connection, status: str = "offen") -> list[dict]:
-    rows = conn.execute(
-        "SELECT * FROM vorschlaege WHERE status = ? ORDER BY created_at", (status,)
-    ).fetchall()
+def list_vorschlaege(conn: sqlite3.Connection, status: str = "offen", quelle: str | None = None) -> list[dict]:
+    sql = "SELECT * FROM vorschlaege WHERE status = ?"
+    params: list = [status]
+    if quelle:
+        sql += " AND quelle = ?"
+        params.append(quelle)
+    sql += " ORDER BY created_at"
+    rows = conn.execute(sql, params).fetchall()
     result = []
     for row in rows:
         v = dict(row)
@@ -392,13 +396,34 @@ def get_vorschlag(conn: sqlite3.Connection, vorschlag_id: int) -> dict | None:
 
 
 def create_vorschlag(conn: sqlite3.Connection, rohdaten: dict, kontakt_id: int | None = None,
-                      quelle: str = "import") -> int:
+                      quelle: str = "import", message_id: str | None = None) -> int:
     with conn:
         cur = conn.execute(
-            "INSERT INTO vorschlaege (kontakt_id, quelle, status, rohdaten) VALUES (?, ?, 'offen', ?)",
-            (kontakt_id, quelle, json.dumps(rohdaten, ensure_ascii=False)),
+            "INSERT INTO vorschlaege (kontakt_id, quelle, status, rohdaten, message_id) VALUES (?, ?, 'offen', ?, ?)",
+            (kontakt_id, quelle, json.dumps(rohdaten, ensure_ascii=False), message_id),
         )
         return cur.lastrowid
+
+
+def update_vorschlag_rohdaten(conn: sqlite3.Connection, vorschlag_id: int, rohdaten: dict) -> None:
+    """Ersetzt die rohdaten eines noch offenen Vorschlags - genutzt beim Bearbeiten
+    vor der Uebernahme (z.B. Mail-Vorschlaege, siehe web/mail_vorschlaege.py), damit
+    dieselbe vorschlag_id (und damit derselbe Datensatz) bestaetigt wird, statt einen
+    zusaetzlichen Vorschlag anzulegen und den urspruenglichen offen zu lassen."""
+    with conn:
+        conn.execute(
+            "UPDATE vorschlaege SET rohdaten = ? WHERE id = ?",
+            (json.dumps(rohdaten, ensure_ascii=False), vorschlag_id),
+        )
+
+
+def vorschlag_existiert_fuer_message_id(conn: sqlite3.Connection, message_id: str) -> bool:
+    """Dublettenschutz fuer den Mail-Eingang (mail_intake.py): eine bereits verarbeitete
+    Mail (gleiche Message-ID) soll bei jedem taeglichen/manuellen Check nicht erneut
+    einen Vorschlag erzeugen."""
+    return conn.execute(
+        "SELECT 1 FROM vorschlaege WHERE message_id = ? LIMIT 1", (message_id,)
+    ).fetchone() is not None
 
 
 def set_vorschlag_status(conn: sqlite3.Connection, vorschlag_id: int, status: str) -> None:

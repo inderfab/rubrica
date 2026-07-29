@@ -10,6 +10,7 @@ from urllib.parse import quote
 from fastapi import APIRouter, Request
 from fastapi.responses import FileResponse, RedirectResponse, Response
 
+import mail_intake
 from config import settings
 from db.connection import get_connection
 from sync import htpasswd, radicale
@@ -30,11 +31,12 @@ def _ca_zertifikat_pfad() -> Path:
 
 
 @router.get("/einstellungen")
-def einstellungen_form(request: Request, gespeichert: str = "", sync: str = ""):
+def einstellungen_form(request: Request, gespeichert: str = "", sync: str = "", mail: str = ""):
     return templates.TemplateResponse("settings.html", {
         "request": request,
         "gespeichert": bool(gespeichert),
         "sync_ergebnis": sync,
+        "mail_ergebnis": mail,
         "archivio_signatur_db_path": settings.get("archivio.signatur_db_path", "") or "",
         "archivio_min_mails": settings.get("archivio.min_mails", 2),
         "archivio_eigene_domains": ", ".join(settings.get("archivio.eigene_domains", []) or []),
@@ -50,6 +52,10 @@ def einstellungen_form(request: Request, gespeichert: str = "", sync: str = ""):
         "radicale_password": settings.get("radicale.password", "") or "",
         "radicale_hostname": _hostname_local(),
         "ca_zertifikat_vorhanden": _ca_zertifikat_pfad().is_file(),
+        "mail_host": settings.get("mail.host", "") or "",
+        "mail_port": settings.get("mail.port", 993),
+        "mail_username": settings.get("mail.username", "") or "",
+        "mail_password": settings.get("mail.password", "") or "",
     })
 
 
@@ -100,6 +106,13 @@ async def einstellungen_speichern(request: Request):
     export_firmenname = (form.get("export_firmenname") or "").strip()
     radicale_base_url = (form.get("radicale_base_url") or "").strip()
     radicale_password = form.get("radicale_password") or ""
+    mail_host = (form.get("mail_host") or "").strip()
+    try:
+        mail_port = int(form.get("mail_port") or 993)
+    except ValueError:
+        mail_port = 993
+    mail_username = (form.get("mail_username") or "").strip()
+    mail_password = form.get("mail_password") or ""
 
     logo = form.get("logo")
     if logo is not None and getattr(logo, "filename", ""):
@@ -123,6 +136,10 @@ async def einstellungen_speichern(request: Request):
             "private_email_zeigen": form.get("private_email_zeigen") is not None,
             "privatadresse_zeigen": form.get("privatadresse_zeigen") is not None,
         },
+        "mail": {
+            "host": mail_host, "port": mail_port,
+            "username": mail_username, "password": mail_password,
+        },
     })
 
     # Das Radicale-Passwort in config.yaml ist nur die CLIENT-Seite (womit Rubrica pusht).
@@ -133,6 +150,44 @@ async def einstellungen_speichern(request: Request):
         htpasswd.set_password(radicale.RADICALE_BENUTZER, radicale_password)
 
     return RedirectResponse(url="/einstellungen?gespeichert=1", status_code=303)
+
+
+@router.post("/einstellungen/mail-test")
+def einstellungen_mail_test():
+    """Verbindungstest fuer das Mail-Eingang-Postfach - ein reiner Login+Logout,
+    kein Abruf von Nachrichten (siehe mail_intake._client fuer die readonly-Garantie
+    des eigentlichen Abrufs). Testet die zuletzt GESPEICHERTEN Zugangsdaten - erst
+    "Speichern" klicken, falls die Felder gerade erst geaendert wurden (wie beim
+    bestehenden "Jetzt synchronisieren"-Knopf fuer Radicale)."""
+    if not mail_intake.konfiguriert():
+        text = "Kein IMAP-Server konfiguriert (Host fehlt)."
+    else:
+        try:
+            client = mail_intake._client()
+            client.logout()
+            text = "Verbindung erfolgreich."
+        except Exception as exc:
+            text = f"Verbindung fehlgeschlagen: {type(exc).__name__}: {exc}"
+    return RedirectResponse(url=f"/einstellungen?mail={quote(text)}", status_code=303)
+
+
+@router.post("/einstellungen/mail-pruefen")
+def einstellungen_mail_pruefen():
+    conn = get_connection()
+    try:
+        ergebnis = mail_intake.pruefe_mail_eingang(conn)
+        if not ergebnis["aktiv"]:
+            text = "Mail-Eingang nicht konfiguriert."
+        else:
+            text = (f"{ergebnis['gefunden']} Nachrichten geprüft, {ergebnis['neu']} neue "
+                    f"Kontaktvorschläge angelegt.")
+            if ergebnis["fehler"]:
+                text += f" {ergebnis['fehler']} Nachrichten übersprungen (Fehler)."
+    except Exception as exc:
+        text = f"Prüfung fehlgeschlagen: {type(exc).__name__}: {exc}"
+    finally:
+        conn.close()
+    return RedirectResponse(url=f"/einstellungen?mail={quote(text)}", status_code=303)
 
 
 @router.post("/einstellungen/radicale-sync")

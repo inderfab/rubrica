@@ -31,6 +31,30 @@ _MIGRATIONS: list[tuple[str, str]] = [
             WHERE typ NOT IN ('Privat', 'Allgemein');
         """,
     ),
+    (
+        "2026-07-28_vorschlaege_mail_quelle",
+        """
+        -- SQLite kennt kein ALTER TABLE fuer CHECK-Constraints - Tabelle neu anlegen,
+        -- Daten uebernehmen. Fuegt 'mail' als erlaubte quelle hinzu (Mail-Eingang,
+        -- siehe mail_intake.py) und eine message_id-Spalte fuer deren Dublettenschutz.
+        ALTER TABLE vorschlaege RENAME TO vorschlaege_alt_2026_07_28;
+
+        CREATE TABLE vorschlaege (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            kontakt_id INTEGER REFERENCES kontakte(id) ON DELETE CASCADE,
+            quelle     TEXT    NOT NULL DEFAULT 'import' CHECK (quelle IN ('import', 'archivio', 'mail')),
+            status     TEXT    NOT NULL DEFAULT 'offen' CHECK (status IN ('offen', 'bestaetigt', 'abgelehnt')),
+            rohdaten   TEXT    NOT NULL DEFAULT '{}',
+            message_id TEXT,
+            created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+        );
+
+        INSERT INTO vorschlaege (id, kontakt_id, quelle, status, rohdaten, created_at)
+            SELECT id, kontakt_id, quelle, status, rohdaten, created_at FROM vorschlaege_alt_2026_07_28;
+
+        DROP TABLE vorschlaege_alt_2026_07_28;
+        """,
+    ),
 ]
 
 

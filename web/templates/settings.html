@@ -9,6 +9,9 @@
 {% if sync_ergebnis %}
 <p style="color:#1a7f37; padding:0.5rem 0">{{ sync_ergebnis }}</p>
 {% endif %}
+{% if mail_ergebnis %}
+<p style="color:#1a7f37; padding:0.5rem 0">{{ mail_ergebnis }}</p>
+{% endif %}
 
 <p class="empty">
     <a href="/einstellungen/funktionen-rollen">Funktion &amp; Rolle verwalten (Tippfehler korrigieren, umbenennen, zusammenführen) →</a>
@@ -150,6 +153,42 @@
                 Mitarbeitende dieser Domain(s) werden nie als Kontaktvorschlag angezeigt (sie sind bereits
                 erfasst, kein externer Ansprechpartner).
             </p>
+        </div>
+    </fieldset>
+
+    <fieldset>
+        <legend>Mail-Eingang (Kontaktvorschläge)</legend>
+        <p class="empty" style="padding:0 0 0.5rem">
+            Ein dediziertes Postfach (z. B. rubrica@musterfirma.ch), an das Mitarbeitende von unterwegs
+            eine vCard ("Kontakt senden" in Kontakte.app) oder einfach Name/Telefon/Mail als Text schicken
+            können. Wird 1× täglich automatisch sowie manuell geprüft; jede gefundene Nachricht erzeugt
+            einen offenen Vorschlag zur Bestätigung im Büro (siehe „Mail-Vorschläge"). Leer lassen, um die
+            Funktion zu deaktivieren.
+        </p>
+        <div class="grid-2">
+            <div class="field">
+                <label>IMAP-Server</label>
+                <input type="text" name="mail_host" value="{{ mail_host }}" placeholder="imap.beispiel.ch" style="width:100%">
+            </div>
+            <div class="field">
+                <label>Port</label>
+                <input type="number" name="mail_port" value="{{ mail_port }}" style="width:6rem">
+            </div>
+        </div>
+        <div class="grid-2">
+            <div class="field">
+                <label>Benutzername</label>
+                <input type="text" name="mail_username" value="{{ mail_username }}" placeholder="rubrica@musterfirma.ch" style="width:100%">
+            </div>
+            <div class="field">
+                <label>Passwort</label>
+                <input type="text" name="mail_password" value="{{ mail_password }}" style="width:100%">
+            </div>
+        </div>
+        <div class="actions" style="justify-content:flex-start; gap:0.5rem; margin-top:0.5rem">
+            <button type="submit" formaction="/einstellungen/mail-test" class="secondary">Verbindung testen</button>
+            <button type="submit" formaction="/einstellungen/mail-pruefen" class="secondary">Jetzt prüfen</button>
+            <a href="/mail-vorschlaege" class="btn secondary">Mail-Vorschläge ansehen →</a>
         </div>
     </fieldset>
 

@@ -176,6 +176,24 @@ Feldumfang bewusst an der tatsächlichen Nutzung im bestehenden Apple-Adressbuch
     (`sync/radicale.py`), keine doppelte Formatierungslogik.
   - Neue Abhängigkeit `reportlab==5.0.0` in `requirements.txt`.
 
+### 5.8 Mail-Eingang — Kontakte von unterwegs per Mail einreichen
+- **Umgesetzt (2026-07-28):** ein drittes Erfassungs­gleis neben Web-Neuanlage (5.1) und Import (5.6) für
+  den Fall "von unterwegs", wo weder Web-UI noch Kontakte.app-Export praktikabel sind. Ein dediziertes
+  IMAP-Postfach (z. B. `rubrica@musterfirma.ch`, in den Einstellungen konfigurierbar) kann per "Kontakt
+  senden" aus Kontakte.app (vCard-Anhang) oder schlicht als Freitext (Name/Telefon/Mail) adressiert werden.
+- Anders als Import/Archivio bleibt ein Mail-Vorschlag bewusst auf `vorschlaege.status = 'offen'` stehen,
+  bis er manuell auf einer eigenen Seite (`/mail-vorschlaege`) bestätigt oder abgelehnt wird — ein von
+  außen erreichbares Postfach ist ein weniger vertrauenswürdiger Kanal als die anderen beiden Wege, die
+  vom Büro-Rechner selbst ausgehen. `VORSCHLAEGE.quelle = 'mail'` (Migration ergänzt diesen Wert plus eine
+  `message_id`-Spalte für den Dublettenschutz derselben Mail).
+- Nur lesend gegenüber dem Postfach: IMAP `SELECT` readonly + `FETCH BODY.PEEK[]`, kein
+  `STORE`/`EXPUNGE`/`DELETE` (`mail_intake.py`, angelehnt an die Mail-Scan-Logik der Referenzimplementierung
+  Archivio, siehe `CLAUDE.md` für den Pfad). vCard-Anhang hat Vorrang vor dem Mailtext; ohne Anhang wird der
+  Text wie eine Signatur geparst (dieselbe Heuristik wie beim "Aus Signatur übernehmen"-Feld,
+  `importer/signatur.py`).
+- Abruf 1× täglich automatisch (Hintergrund-Thread in `web/main.py`, analog zum Updater-Check der
+  Menubar-App) sowie manuell über einen "Jetzt prüfen"-Knopf in den Einstellungen.
+
 ## 6. Vorgeschlagener Tech-Stack
 
 | Bereich | Empfehlung | Begründung |

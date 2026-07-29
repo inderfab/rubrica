@@ -49,6 +49,30 @@ def test_radicale_sync_button_ohne_konfiguration_meldet_inaktiv(tmp_db, monkeypa
     assert "sync=" in r.headers["location"]
 
 
+def test_mail_test_ohne_konfiguration_meldet_kein_server(tmp_db, monkeypatch):
+    monkeypatch.setattr(settings, "_settings", {"mail": {"host": ""}})
+    r = TestClient(app).post("/einstellungen/mail-test", follow_redirects=False)
+    assert r.status_code == 303
+    assert "mail=" in r.headers["location"]
+
+    r2 = TestClient(app).get(r.headers["location"])
+    assert "Kein IMAP-Server konfiguriert" in r2.text
+
+
+def test_mail_pruefen_ruft_mail_intake_auf(tmp_db, monkeypatch):
+    import web.settings as settings_modul
+
+    monkeypatch.setattr(settings_modul.mail_intake, "pruefe_mail_eingang", lambda conn: {
+        "aktiv": True, "gefunden": 3, "neu": 2, "fehler": 1,
+    })
+
+    r = TestClient(app).post("/einstellungen/mail-pruefen", follow_redirects=False)
+    assert r.status_code == 303
+    r2 = TestClient(app).get(r.headers["location"])
+    assert "2 neue" in r2.text
+    assert "1 Nachrichten übersprungen" in r2.text
+
+
 def test_einstellungen_speichern_schreibt_config(tmp_db, monkeypatch, tmp_path):
     config_pfad = tmp_path / "config.yaml"
     config_pfad.write_text("database:\n  path: rubrica.db\n")
