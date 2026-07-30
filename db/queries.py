@@ -369,6 +369,37 @@ def get_or_create_projekt(conn: sqlite3.Connection, name: str) -> int:
         return cur.lastrowid
 
 
+def get_or_create_projekt_von_apple_gruppe(conn: sqlite3.Connection, apple_gruppe_uid: "str | None",
+                                            name: str) -> int:
+    """Wie get_or_create_projekt, aber bevorzugt die stabile Apple-Gruppen-UID (falls
+    vorhanden) vor dem Namen - ein in Rubrica umbenannter Ordner wird beim naechsten
+    Kontakte.app-Import dadurch weiterhin korrekt wiedererkannt, statt den alten
+    Apple-Gruppennamen als zusaetzlichen neuen Ordner anzulegen (Nutzer-Feedback:
+    "Import robuster machen"). Ein nur namensbasiert gefundener Ordner (aus einem
+    Import VOR dieser Aenderung) bekommt die UID nachtraeglich ergaenzt (Backfill)."""
+    if apple_gruppe_uid:
+        row = conn.execute(
+            "SELECT id FROM projekte WHERE apple_gruppe_uid = ?", (apple_gruppe_uid,)
+        ).fetchone()
+        if row:
+            return row["id"]
+
+    row = conn.execute("SELECT id FROM projekte WHERE name = ?", (name,)).fetchone()
+    if row:
+        if apple_gruppe_uid:
+            with conn:
+                conn.execute(
+                    "UPDATE projekte SET apple_gruppe_uid = ? WHERE id = ?", (apple_gruppe_uid, row["id"])
+                )
+        return row["id"]
+
+    with conn:
+        cur = conn.execute(
+            "INSERT INTO projekte (name, apple_gruppe_uid) VALUES (?, ?)", (name, apple_gruppe_uid)
+        )
+        return cur.lastrowid
+
+
 def delete_projekt(conn: sqlite3.Connection, projekt_id: int) -> None:
     with conn:
         conn.execute("DELETE FROM projekte WHERE id = ?", (projekt_id,))
@@ -428,6 +459,27 @@ def list_vorschlaege(conn: sqlite3.Connection, status: str = "offen", quelle: st
         v["rohdaten"] = json.loads(v["rohdaten"])
         if v["kontakt_id"]:
             v["bestehender_kontakt"] = get_kontakt(conn, v["kontakt_id"])
+        result.append(v)
+    return result
+
+
+def list_import_zusammenfuehrungen(conn: sqlite3.Connection) -> list[dict]:
+    """Alle Import-Vorschlaege, die NICHT als neuer Kontakt angelegt, sondern in einen
+    bereits bestehenden Kontakt zusammengefuehrt wurden (kontakt_id gesetzt) - fuer die
+    Nachvollziehbarkeit, welche Apple-Kontakte als Dubletten erkannt wurden (siehe
+    web/imports.py, Nutzer-Wunsch nach einem groesseren Import: "sind das wirklich
+    Dubletten oder noch ein Fehler?"). rohdaten = eingehende vCard-Daten,
+    bestehender_kontakt = der aktuelle Kontakt, in den gemergt wurde - beides fuer den
+    direkten Vergleich nebeneinander."""
+    rows = conn.execute(
+        "SELECT * FROM vorschlaege WHERE quelle = 'import' AND status = 'bestaetigt' "
+        "AND kontakt_id IS NOT NULL ORDER BY created_at"
+    ).fetchall()
+    result = []
+    for row in rows:
+        v = dict(row)
+        v["rohdaten"] = json.loads(v["rohdaten"])
+        v["bestehender_kontakt"] = get_kontakt(conn, v["kontakt_id"])
         result.append(v)
     return result
 
@@ -494,8 +546,13 @@ def bestaetige_vorschlag(conn: sqlite3.Connection, vorschlag_id: int,
     else:
         kontakt_id = create_kontakt(conn, daten)
 
+    gruppen_apple_uids = daten.get("gruppen_apple_uids", {})
     for gruppe in daten.get("gruppen_als_ordner", []):
-        projekt_id = get_or_create_projekt(conn, gruppe)
+        apple_gruppe_uid = gruppen_apple_uids.get(gruppe)
+        if apple_gruppe_uid:
+            projekt_id = get_or_create_projekt_von_apple_gruppe(conn, apple_gruppe_uid, gruppe)
+        else:
+            projekt_id = get_or_create_projekt(conn, gruppe)
         with conn:
             conn.execute(
                 "INSERT OR IGNORE INTO kontakte_projekte (kontakt_id, projekt_id) VALUES (?, ?)",

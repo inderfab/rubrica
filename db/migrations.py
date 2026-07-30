@@ -72,8 +72,23 @@ def _kontakte_apple_uid(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_kontakte_apple_uid ON kontakte(apple_uid)")
 
 
+def _projekte_apple_gruppe_uid(conn: sqlite3.Connection) -> None:
+    """Stabile Apple-Gruppen-ID fuer zuverlaessiges Wiedererkennen von Ordnern bei
+    erneutem Kontakte.app-Import, auch wenn der Ordner in Rubrica zwischenzeitlich
+    umbenannt wurde - siehe queries.get_or_create_projekt_von_apple_gruppe. Ohne das
+    wuerde ein Re-Import den alten Apple-Gruppennamen als NEUEN Ordner wiederanlegen,
+    da die Zuordnung bisher rein ueber den (jetzt geaenderten) Namen lief. Gleiches
+    Guard-Muster wie _kontakte_apple_uid (schema.sql hat die Spalte bei frischen
+    Installationen schon, ein blindes ALTER TABLE wuerde dort fehlschlagen)."""
+    spalten = {row["name"] for row in conn.execute("PRAGMA table_info(projekte)")}
+    if "apple_gruppe_uid" not in spalten:
+        conn.execute("ALTER TABLE projekte ADD COLUMN apple_gruppe_uid TEXT")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_projekte_apple_gruppe_uid ON projekte(apple_gruppe_uid)")
+
+
 _PYTHON_MIGRATIONEN: list[tuple[str, "callable"]] = [
     ("2026-07-30_kontakte_apple_uid", _kontakte_apple_uid),
+    ("2026-07-30_projekte_apple_gruppe_uid", _projekte_apple_gruppe_uid),
 ]
 
 

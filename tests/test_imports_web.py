@@ -51,3 +51,27 @@ def test_import_kontakte_app_status_ueber_lan_meldet_nicht_laufend(tmp_db, monke
     r = TestClient(app).get("/import/kontakte-app/status")
     assert r.status_code == 200
     assert r.json()["laeuft"] is False
+
+
+def test_zusammengefuehrte_duplikate_seite_zeigt_eingehende_und_bestehende_daten(tmp_db):
+    from db import queries
+    bestehender_id = queries.create_kontakt(tmp_db, {
+        "vorname": "Peter", "nachname": "Kunz", "emails": [{"typ": "Direkt", "email": "peter@beispiel.ch"}],
+    })
+    queries.create_vorschlag(
+        tmp_db, {"vorname": "Peter", "nachname": "Kunz", "emails": [{"typ": "Direkt", "email": "peter@beispiel.ch"}],
+                 "telefonnummern": []},
+        kontakt_id=bestehender_id, quelle="import",
+    )
+    queries.set_vorschlag_status(tmp_db, 1, "bestaetigt")
+
+    r = TestClient(app).get("/import/zusammengefuehrte-duplikate")
+    assert r.status_code == 200
+    assert "Peter Kunz" in r.text
+    assert f"/kontakte/{bestehender_id}/bearbeiten" in r.text
+
+
+def test_zusammengefuehrte_duplikate_seite_ohne_ergebnisse(tmp_db):
+    r = TestClient(app).get("/import/zusammengefuehrte-duplikate")
+    assert r.status_code == 200
+    assert "Keine Zusammenführungen gefunden" in r.text

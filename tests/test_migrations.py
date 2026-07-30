@@ -70,6 +70,7 @@ def test_kontakte_apple_uid_migration_fuegt_spalte_bei_bestehender_installation_
             status TEXT NOT NULL DEFAULT 'offen', rohdaten TEXT NOT NULL DEFAULT '{}',
             created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
         );
+        CREATE TABLE projekte (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE);
         CREATE TABLE _migrations (id TEXT PRIMARY KEY, applied_at TEXT);
     """)
     conn.execute("INSERT INTO kontakte (id, vorname, nachname) VALUES (1, 'Anna', 'Muster')")

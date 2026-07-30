@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Request, UploadFile
 from fastapi.responses import RedirectResponse
 
+from db import queries
 from db.connection import get_connection
 from importer.vcard import importiere
 from sync import radicale
@@ -40,6 +41,21 @@ def import_kontakte_app_status(request: Request):
     if not _ist_lokal(request):
         return {"laeuft": False}
     return import_status.status()
+
+
+@router.get("/import/zusammengefuehrte-duplikate")
+def import_zusammengefuehrte_duplikate(request: Request):
+    """Zeigt alle Import-Vorschlaege, die als Dublette in einen bestehenden Kontakt
+    gemergt statt neu angelegt wurden - Nachvollziehbarkeit fuer den Nutzer, ob die
+    Differenz zwischen "gefunden" und "importiert" wirklich echte Dubletten sind."""
+    conn = get_connection()
+    try:
+        zusammenfuehrungen = queries.list_import_zusammenfuehrungen(conn)
+    finally:
+        conn.close()
+    return templates.TemplateResponse("import_duplikate.html", {
+        "request": request, "zusammenfuehrungen": zusammenfuehrungen,
+    })
 
 
 @router.post("/import")

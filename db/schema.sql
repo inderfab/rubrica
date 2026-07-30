@@ -60,6 +60,10 @@ CREATE TABLE IF NOT EXISTS urls (
 CREATE TABLE IF NOT EXISTS projekte (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     name       TEXT    NOT NULL UNIQUE,
+    -- Stabile Apple-Gruppen-ID (vCard-UID der Gruppe, nur bei Kontakte.app-Import
+    -- gesetzt) - ein in Rubrica umbenannter Ordner wird beim naechsten Import trotzdem
+    -- richtig wiedererkannt, siehe queries.get_or_create_projekt_von_apple_gruppe.
+    apple_gruppe_uid TEXT,
     created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 );
 

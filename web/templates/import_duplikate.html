@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Zusammengeführte Duplikate – Rubrica{% endblock %}
+{% block content %}
+<h1>Als Dublette erkannte Kontakte</h1>
+<p class="empty">
+    Diese Apple-Kontakte wurden beim letzten Import NICHT als neuer Kontakt angelegt, sondern über
+    Apple-Kontakt-ID oder exakte E-Mail-Adresse einem bereits bestehenden Rubrica-Kontakt zugeordnet
+    (zusammengeführt). Links die eingehenden Daten aus Kontakte.app, rechts der bestehende Rubrica-Kontakt,
+    in den gemergt wurde – zum direkten Vergleich. Ist das keine echte Dublette (unterschiedliche Personen),
+    bitte melden – dann korrigieren wir das im Kontakt manuell und schauen uns die Ursache an.
+</p>
+
+{% if zusammenfuehrungen %}
+<p><strong>{{ zusammenfuehrungen|length }}</strong> Zusammenführung(en) gefunden.</p>
+<table>
+    <thead>
+        <tr>
+            <th>Eingehend (Kontakte.app)</th>
+            <th>Zusammengeführt mit (bestehender Rubrica-Kontakt)</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for v in zusammenfuehrungen %}
+        {% set k = v.rohdaten %}
+        {% set b = v.bestehender_kontakt %}
+        <tr>
+            <td>
+                <strong>{{ k.vorname }} {{ k.nachname }}</strong><br>
+                {% if k.firma %}{{ k.firma }}<br>{% endif %}
+                {% for t in k.telefonnummern %}{{ t.nummer }}<br>{% endfor %}
+                {% for e in k.emails %}{{ e.email }}<br>{% endfor %}
+            </td>
+            <td>
+                <strong>{{ b.vorname }} {{ b.nachname }}</strong><br>
+                {% if b.firma %}{{ b.firma }}<br>{% endif %}
+                {% for t in b.telefonnummern %}{{ t.nummer }}<br>{% endfor %}
+                {% for e in b.emails %}{{ e.email }}<br>{% endfor %}
+                <a href="/kontakte/{{ b.id }}/bearbeiten" class="btn secondary" style="margin-top:0.4rem">Kontakt öffnen</a>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p class="empty">Keine Zusammenführungen gefunden.</p>
+{% endif %}
+
+<p class="empty" style="margin-top:1.5rem"><a href="/import">← Zurück zum Import</a></p>
+{% endblock %}

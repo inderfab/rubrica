@@ -62,6 +62,7 @@ def test_parse_vcf_gruppenzugehoerigkeit():
     kontakte = parse_vcf(VCF_GRUPPE)
     assert len(kontakte) == 1
     assert kontakte[0]["gruppen"] == ["Projekt X"]
+    assert kontakte[0]["gruppen_uids"] == {"Projekt X": "gruppe-uid"}
 
 
 def test_importiere_uebernimmt_gruppen_standardmaessig_ohne_flag(tmp_db):
@@ -70,6 +71,26 @@ def test_importiere_uebernimmt_gruppen_standardmaessig_ohne_flag(tmp_db):
     kontakt_ids = importiere(tmp_db, VCF_GRUPPE)
     kontakt = queries.get_kontakt(tmp_db, kontakt_ids[0])
     assert [p["name"] for p in kontakt["projekte"]] == ["Projekt X"]
+
+
+def test_erneuter_import_nach_ordner_umbenennung_legt_keinen_zweiten_ordner_an(tmp_db):
+    # Regression (Nutzer-Wunsch "Import robuster machen"): ein in Rubrica umbenannter
+    # Ordner wurde beim erneuten Kontakte.app-Import bisher nicht wiedererkannt (Matching
+    # lief rein ueber den - jetzt geaenderten - Namen) und dadurch unter dem alten
+    # Apple-Gruppennamen ein zweiter, verwaister Ordner angelegt. Die stabile
+    # Apple-Gruppen-UID (siehe queries.get_or_create_projekt_von_apple_gruppe) verhindert das.
+    kontakt_ids = importiere(tmp_db, VCF_GRUPPE)
+    ordner_id = queries.list_projekte(tmp_db)[0]["id"]
+    queries.rename_projekt(tmp_db, ordner_id, "Projekt X (umbenannt)")
+
+    kontakt_ids_2 = importiere(tmp_db, VCF_GRUPPE)
+
+    assert kontakt_ids_2 == kontakt_ids  # derselbe Kontakt, kein Duplikat
+    ordner = queries.list_projekte(tmp_db)
+    assert len(ordner) == 1  # kein zweiter "Projekt X"-Ordner entstanden
+    assert ordner[0]["name"] == "Projekt X (umbenannt)"  # Umbenennung bleibt erhalten
+    kontakt = queries.get_kontakt(tmp_db, kontakt_ids[0])
+    assert [p["name"] for p in kontakt["projekte"]] == ["Projekt X (umbenannt)"]
 
 
 def test_parse_vcf_mappt_englische_apple_typen_auf_direkt_privat_allgemein():
@@ -274,3 +295,40 @@ def test_batch_import_vieler_synthetischer_kontakte(tmp_db):
     assert tmp_db.execute("SELECT COUNT(*) FROM kontakte").fetchone()[0] == 60
     assert tmp_db.execute("SELECT COUNT(*) FROM adressen").fetchone()[0] == 60
     assert tmp_db.execute("SELECT COUNT(*) FROM urls").fetchone()[0] == 60
+
+
+def test_list_import_zusammenfuehrungen_zeigt_nur_gemergte_dubletten(tmp_db):
+    # Nutzer-Nachfrage bei einem grossen Import ("importiert" < "gefunden"): sind das
+    # wirklich Dubletten? Diese Abfrage macht die zusammengefuehrten Eintraege sichtbar.
+    vcf_zwei_verschiedene = textwrap.dedent("""\
+        BEGIN:VCARD
+        VERSION:3.0
+        N:Kunz;Peter;;;
+        FN:Peter Kunz
+        EMAIL;TYPE=WORK:peter@beispiel.ch
+        END:VCARD
+        BEGIN:VCARD
+        VERSION:3.0
+        N:Beispiel;Claudia;;;
+        FN:Claudia Beispiel
+        EMAIL;TYPE=WORK:claudia@beispiel.ch
+        END:VCARD
+    """)
+    importiere(tmp_db, vcf_zwei_verschiedene, gruppen_als_ordner=False)
+    assert queries.list_import_zusammenfuehrungen(tmp_db) == []  # beides neue Kontakte, keine Dublette
+
+    vcf_dublette = textwrap.dedent("""\
+        BEGIN:VCARD
+        VERSION:3.0
+        N:Kunz;Peter;;;
+        FN:Peter Kunz
+        EMAIL;TYPE=WORK:peter@beispiel.ch
+        TEL;TYPE=HOME:044 111 22 33
+        END:VCARD
+    """)
+    importiere(tmp_db, vcf_dublette, gruppen_als_ordner=False)
+
+    zusammenfuehrungen = queries.list_import_zusammenfuehrungen(tmp_db)
+    assert len(zusammenfuehrungen) == 1
+    assert zusammenfuehrungen[0]["rohdaten"]["emails"][0]["email"] == "peter@beispiel.ch"
+    assert zusammenfuehrungen[0]["bestehender_kontakt"]["nachname"] == "Kunz"

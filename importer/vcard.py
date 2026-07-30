@@ -127,7 +127,10 @@ def _gruppen_mitglieder_uids(vcard) -> list[str]:
 def parse_vcf(inhalt: str) -> list[dict]:
     """Parst eine .vcf-Datei (kann mehrere vCards enthalten, inkl. Apple-Gruppen).
     Gibt eine Liste von Kontakt-Dicts zurueck, jeweils mit optionalem Key
-    'gruppen' (Namen der Apple-Gruppen, denen der Kontakt angehoert)."""
+    'gruppen' (Namen der Apple-Gruppen, denen der Kontakt angehoert) und
+    'gruppen_uids' (Name -> stabile Apple-Gruppen-UID, siehe
+    queries.get_or_create_projekt_von_apple_gruppe - macht das Wiedererkennen eines
+    in Rubrica umbenannten Ordners bei einem erneuten Import robust)."""
     komponenten = list(vobject.readComponents(inhalt))
 
     gruppen_namen: dict[str, str] = {}       # uid der Gruppe -> Name
@@ -142,17 +145,19 @@ def parse_vcf(inhalt: str) -> list[dict]:
         else:
             kontakte_vcards.append(vcard)
 
-    # UID -> Liste von Gruppennamen, der das Mitglied angehoert
-    mitglied_zu_gruppen: dict[str, list[str]] = {}
+    # Mitglied-UID -> Liste von Gruppen-UIDs, denen das Mitglied angehoert
+    mitglied_zu_gruppen_uids: dict[str, list[str]] = {}
     for gruppen_uid, mitglieder in gruppen_mitglieder.items():
         for m_uid in mitglieder:
-            mitglied_zu_gruppen.setdefault(m_uid, []).append(gruppen_namen[gruppen_uid])
+            mitglied_zu_gruppen_uids.setdefault(m_uid, []).append(gruppen_uid)
 
     ergebnis = []
     for vcard in kontakte_vcards:
         kontakt = _parse_kontakt(vcard)
         uid = vcard.uid.value if hasattr(vcard, "uid") else None
-        kontakt["gruppen"] = mitglied_zu_gruppen.get(uid, []) if uid else []
+        gruppen_uids_fuer_kontakt = mitglied_zu_gruppen_uids.get(uid, []) if uid else []
+        kontakt["gruppen"] = [gruppen_namen[g_uid] for g_uid in gruppen_uids_fuer_kontakt]
+        kontakt["gruppen_uids"] = {gruppen_namen[g_uid]: g_uid for g_uid in gruppen_uids_fuer_kontakt}
         ergebnis.append(kontakt)
     return ergebnis
 
@@ -234,9 +239,11 @@ def importiere(conn: sqlite3.Connection, inhalt: str, gruppen_als_ordner: bool =
     kontakt_ids = []
     for kontakt in kontakte:
         gruppen = kontakt.pop("gruppen", [])
+        gruppen_uids = kontakt.pop("gruppen_uids", {})
         kontakt_id = _finde_match_fuer_import(conn, kontakt)
         if gruppen_als_ordner and gruppen:
             kontakt["gruppen_als_ordner"] = gruppen
+            kontakt["gruppen_apple_uids"] = gruppen_uids
         vorschlag_id = queries.create_vorschlag(conn, kontakt, kontakt_id=kontakt_id, quelle="import")
         kontakt_ids.append(queries.bestaetige_vorschlag(conn, vorschlag_id))
     return kontakt_ids
