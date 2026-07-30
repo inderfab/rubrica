@@ -4,4 +4,15 @@
    verhalten/aussehen. "kontakt" ist hier ein aus dem Kandidaten-Dict nachgebautes
    Pseudo-Kontakt-Dict (siehe web/archivio.py). #}
 <h2 style="margin-top:0">Vorschlag bearbeiten</h2>
+
+{% if kontakt.signatur_text %}
+<div style="background:var(--bg-hell, #f2f2f2); border-radius:6px; padding:0.7rem 0.9rem; margin-bottom:1rem;">
+    {% if kontakt.absender_email %}
+    <p style="margin:0 0 0.4rem; font-size:0.85rem"><strong>Absender-E-Mail (aus dem Mail-Header):</strong> {{ kontakt.absender_email }}</p>
+    {% endif %}
+    <p style="margin:0 0 0.3rem; font-size:0.85rem"><strong>Erkannter Signatur-Text (Ursprung dieses Vorschlags):</strong></p>
+    <pre style="white-space:pre-wrap; word-break:break-word; margin:0; font-family:inherit; font-size:0.8rem; max-height:12rem; overflow-y:auto;">{{ kontakt.signatur_text }}</pre>
+</div>
+{% endif %}
+
 {% include "_kontakt_bearbeiten_form.html" %}

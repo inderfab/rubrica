@@ -170,6 +170,17 @@ def test_bearbeiten_flyover_zeigt_vorausgefuelltes_formular(tmp_db, archivio_db,
     assert 'value="Beispiel AG"' in r.text
 
 
+def test_bearbeiten_flyover_zeigt_signatur_text_und_absender(tmp_db, archivio_db, monkeypatch):
+    # Nutzer-Wunsch: der Ursprungstext (Mail-Signatur) soll im Bearbeiten-Formular
+    # sichtbar sein, um falsch erkannte Felder korrigieren zu koennen.
+    monkeypatch.setattr(settings, "_settings", {"archivio": {"signatur_db_path": archivio_db, "min_mails": 2}})
+    r = TestClient(app).get("/archivio-import/bearbeiten-flyover", params={"email": "anna@beispiel.ch"})
+    assert r.status_code == 200
+    assert "Erkannter Signatur-Text" in r.text
+    assert "Absender-E-Mail" in r.text
+    assert "anna@beispiel.ch" in r.text
+
+
 def test_bearbeiten_flyover_unbekannte_email_ist_404(tmp_db, archivio_db, monkeypatch):
     monkeypatch.setattr(settings, "_settings", {"archivio": {"signatur_db_path": archivio_db, "min_mails": 2}})
     r = TestClient(app).get("/archivio-import/bearbeiten-flyover", params={"email": "unbekannt@nirgends.ch"})

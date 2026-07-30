@@ -299,11 +299,17 @@ def hole_kandidaten(signatur_db_pfad: str, rubrica_conn: sqlite3.Connection,
             daten = None
             for eintrag in eintraege[:MAX_VERSUCHE_PRO_ABSENDER]:
                 bereinigt = _ohne_zitat(eintrag["text"])
-                versuch = parse_signatur(_letzte_zeilen(bereinigt))
+                signatur_ausschnitt = _letzte_zeilen(bereinigt)
+                versuch = parse_signatur(signatur_ausschnitt)
                 _verbessere_namenerkennung(versuch, absender_email, bereinigt)
                 if not versuch["emails"] and _EMAIL_EINFACH.match(absender_email):
                     versuch["emails"] = [{"typ": "Direkt", "email": absender_email}]
                 if _ist_vollstaendig(versuch):
+                    # Fuer die Nachvollziehbarkeit im Bearbeiten-Formular (web/archivio.py) -
+                    # Nutzer-Feedback: eine falsch erkannte E-Mail (z.B. eine eingebettete
+                    # Bild-Content-ID wie "image001.png@01DD1F5A.CC" statt einer echten
+                    # Adresse) laesst sich nur mit Blick auf den Ursprungstext korrigieren.
+                    versuch["signatur_text"] = signatur_ausschnitt
                     daten = versuch
                     break
 

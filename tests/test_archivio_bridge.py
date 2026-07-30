@@ -72,6 +72,17 @@ def test_kandidat_mit_telefon_und_firma_wird_gefunden(archivio_db, tmp_db):
     assert "anna@beispiel.ch" in mails
 
 
+def test_kandidat_enthaelt_signatur_text_und_absender_email(archivio_db, tmp_db):
+    # Nutzer-Wunsch: im Bearbeiten-Formular soll der Ursprungstext sichtbar sein, um
+    # falsch erkannte Felder (z.B. eine Bild-Content-ID statt einer echten E-Mail-
+    # Adresse) anhand der Signatur selbst korrigieren zu koennen.
+    kandidaten = hole_kandidaten(archivio_db, tmp_db, min_mails=2)
+    kandidat = next(k for k in kandidaten if k.get("absender_email") == "anna@beispiel.ch")
+    assert kandidat["absender_email"] == "anna@beispiel.ch"
+    assert "Anna Beispiel" in kandidat["signatur_text"]
+    assert "anna@beispiel.ch" in kandidat["signatur_text"]
+
+
 def test_zu_wenig_korrespondenz_wird_ausgeschlossen(archivio_db, tmp_db):
     kandidaten = hole_kandidaten(archivio_db, tmp_db, min_mails=2)
     mails = {k["emails"][0]["email"] for k in kandidaten if k["emails"]}
