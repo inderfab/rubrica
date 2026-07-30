@@ -374,6 +374,17 @@ def delete_projekt(conn: sqlite3.Connection, projekt_id: int) -> None:
         conn.execute("DELETE FROM projekte WHERE id = ?", (projekt_id,))
 
 
+def delete_alle_projekte(conn: sqlite3.Connection) -> int:
+    """Loescht ALLE Ordner (fuer die "Auch alle Ordner loeschen"-Option bei
+    "Alle Kontakte loeschen", siehe web/settings.py) - kontakte_projekte-Zuordnungen
+    werden per ON DELETE CASCADE automatisch mit entfernt. Gibt die Anzahl
+    geloeschter Ordner zurueck."""
+    with conn:
+        anzahl = conn.execute("SELECT COUNT(*) FROM projekte").fetchone()[0]
+        conn.execute("DELETE FROM projekte")
+    return anzahl
+
+
 def rename_projekt(conn: sqlite3.Connection, projekt_id: int, neuer_name: str) -> None:
     with conn:
         conn.execute("UPDATE projekte SET name = ? WHERE id = ?", (neuer_name, projekt_id))

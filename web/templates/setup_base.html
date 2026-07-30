@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <title>{% block title %}Einrichtung – Rubrica{% endblock %}</title>
     <link rel="stylesheet" href="/static/style.css?v={{ app_version }}">
+    <script src="/static/app.js?v={{ app_version }}"></script>
 </head>
 <body>
     <div class="setup-wrapper">
@@ -12,6 +13,46 @@
                 <span class="brand">Rubrica</span>
                 {% block schritt_anzeige %}{% endblock %}
             </div>
+            {% block hintergrund_import_banner %}
+            <div id="setup-hintergrund-import-banner"
+                 style="display:none; padding:0.6rem 0.9rem; margin-bottom:1rem; border-radius:6px; background:var(--bg-hell, #f2f2f2); font-size:0.9rem;"></div>
+            <script>
+                (function () {
+                    function rubricaSetupImportBannerAktualisieren() {
+                        fetch('/setup/import-contacts-app/status')
+                            .then(r => r.json())
+                            .then(daten => {
+                                const banner = document.getElementById('setup-hintergrund-import-banner');
+                                if (!banner) return;
+                                if (daten.laeuft) {
+                                    let text = 'Kontakte werden im Hintergrund importiert…';
+                                    if (daten.gesamt) text += ` (${daten.verarbeitet} von ${daten.gesamt})`;
+                                    banner.textContent = text;
+                                    banner.style.display = 'block';
+                                    banner.style.background = 'var(--bg-hell, #f2f2f2)';
+                                    banner.style.color = '';
+                                    setTimeout(rubricaSetupImportBannerAktualisieren, 1500);
+                                } else if (daten.fertig && daten.ergebnis) {
+                                    const e = daten.ergebnis;
+                                    banner.textContent = `✓ Import abgeschlossen: ${e.importiert} von ${e.gefunden} Kontakten übernommen.`;
+                                    banner.style.display = 'block';
+                                    banner.style.background = '#e6f4ea';
+                                    banner.style.color = '#1a7f37';
+                                } else if (daten.fertig && daten.fehler_meldung) {
+                                    banner.textContent = `✗ Import fehlgeschlagen (${daten.fehler_meldung})`;
+                                    banner.style.display = 'block';
+                                    banner.style.background = '#fdecea';
+                                    banner.style.color = '#eb5757';
+                                } else {
+                                    banner.style.display = 'none';
+                                }
+                            })
+                            .catch(() => {});
+                    }
+                    rubricaSetupImportBannerAktualisieren();
+                })();
+            </script>
+            {% endblock %}
             {% block content %}{% endblock %}
         </div>
     </div>

@@ -205,19 +205,29 @@ def einstellungen_radicale_sync():
 
 
 @router.post("/einstellungen/alle-kontakte-loeschen")
-def einstellungen_alle_kontakte_loeschen():
-    """Loescht ALLE Kontakte - fuer einen sauberen Neustart vor einem erneuten Import
-    (siehe queries.delete_alle_kontakte). Stoesst danach einen Radicale-Vollabgleich an,
-    damit die jetzt verwaisten kontakt-*.vcf auch dort entfernt werden (sonst bleiben sie
-    bis zum naechsten regulaeren Sync in Apple Kontakte sichtbar). Ordner bleiben erhalten."""
+async def einstellungen_alle_kontakte_loeschen(request: Request):
+    """Loescht ALLE Kontakte (und optional auch alle Ordner) - fuer einen sauberen
+    Neustart vor einem erneuten Import (siehe queries.delete_alle_kontakte/
+    delete_alle_projekte). Stoesst danach einen Radicale-Vollabgleich an, damit die
+    jetzt verwaisten kontakt-*.vcf (und ggf. projekt-*.vcf) auch dort entfernt werden -
+    sonst bleiben sie bis zum naechsten regulaeren Sync in Apple Kontakte sichtbar.
+    Bei grossen Bestaenden (mehrere hundert/tausend Kontakte) kann dieser Vollabgleich
+    selbst einige Minuten dauern (ein HTTP-DELETE pro verwaistem Eintrag)."""
+    form = await request.form()
+    auch_ordner = bool(form.get("auch_ordner"))
+
     conn = get_connection()
     try:
         anzahl = queries.delete_alle_kontakte(conn)
+        ordner_anzahl = queries.delete_alle_projekte(conn) if auch_ordner else 0
         ergebnis = radicale.sync_alle(conn)
     finally:
         conn.close()
 
-    text = f"{anzahl} Kontakte gelöscht."
+    text = f"{anzahl} Kontakte"
+    if auch_ordner:
+        text += f" und {ordner_anzahl} Ordner"
+    text += " gelöscht."
     if ergebnis["aktiv"]:
         text += f" {ergebnis['entfernt']} verwaiste Einträge in Radicale entfernt."
     return RedirectResponse(url=f"/einstellungen?reset={quote(text)}", status_code=303)

@@ -215,12 +215,18 @@
 <fieldset style="border-color:#eb5757">
     <legend style="color:#eb5757">Gefahrenzone</legend>
     <p class="empty" style="padding:0 0 0.5rem">
-        Löscht ALLE Kontakte aus Rubrica unwiderruflich (Ordner bleiben erhalten) und stösst danach
-        einen Radicale-Vollabgleich an, damit sie auch aus Apple Kontakte verschwinden – z. B. um vor
-        einem sauberen Neu-Import mit einem leeren Bestand zu starten.
+        Löscht ALLE Kontakte aus Rubrica unwiderruflich und stösst danach einen Radicale-Vollabgleich an,
+        damit sie auch aus Apple Kontakte verschwinden – z. B. um vor einem sauberen Neu-Import mit einem
+        leeren Bestand zu starten. Bei grossen Beständen kann der Radicale-Abgleich selbst einige Minuten
+        dauern (ein Löschvorgang pro Kontakt) – ggf. danach "Jetzt alles neu synchronisieren" oben erneut
+        klicken, falls noch nicht alles verschwunden ist.
     </p>
     <form method="post" action="/einstellungen/alle-kontakte-loeschen"
-          onsubmit="return confirm('Bist du sicher, dass du ALLE Kontakte aus Rubrica unwiderruflich löschen willst? Dies kann nicht rückgängig gemacht werden.')">
+          onsubmit="return confirm('Bist du sicher, dass du ALLE Kontakte' + (this.auch_ordner.checked ? ' UND ALLE ORDNER' : '') + ' aus Rubrica unwiderruflich löschen willst? Dies kann nicht rückgängig gemacht werden.')">
+        <label style="display:flex; align-items:center; gap:0.35rem; font-size:0.9rem; margin-bottom:0.5rem;">
+            <input type="checkbox" name="auch_ordner" value="1">
+            Auch alle Ordner löschen
+        </label>
         <button type="submit" class="danger">Alle Kontakte löschen</button>
     </form>
 </fieldset>

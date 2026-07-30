@@ -81,6 +81,18 @@ def test_setup_schritt3_zeigt_carddav_zugangsdaten(tmp_db, monkeypatch):
     assert "geheim123" in r.text
 
 
+def test_setup_seiten_laden_app_js_fuer_kontakte_app_import_knopf(tmp_db, monkeypatch):
+    # Regression: setup_base.html band app.js nie ein - der "Aus Kontakte.app
+    # importieren"-Knopf auf Schritt 4 rief rubricaKontakteAppImportStarten() auf,
+    # die dadurch schlicht nicht existierte (ReferenceError in der Konsole, fuer den
+    # Nutzer aber "nichts passiert" beim Klicken - kein sichtbarer Fehler).
+    _lokal_bypass(monkeypatch)
+    r = TestClient(app).get("/setup/4")
+    assert r.status_code == 200
+    assert '/static/app.js' in r.text
+    assert "rubricaKontakteAppImportStarten" in r.text
+
+
 def test_carddav_test_ohne_konfiguration_meldet_fehler(tmp_db, monkeypatch):
     _lokal_bypass(monkeypatch)
     monkeypatch.setattr(settings, "_settings", {"radicale": {"base_url": ""}})

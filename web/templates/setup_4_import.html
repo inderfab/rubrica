@@ -1,6 +1,7 @@
 {% extends "setup_base.html" %}
 {% block title %}Kontakte importieren – Rubrica-Einrichtung{% endblock %}
 {% block schritt_anzeige %}<span class="setup-schritt">Schritt 4 von 7</span>{% endblock %}
+{% block hintergrund_import_banner %}{% endblock %}
 {% block content %}
 <h1>Bestehende Kontakte importieren</h1>
 
@@ -10,11 +11,12 @@
         Übernimmt alle Kontakte und Gruppen (als Ordner) aus der Kontakte.app auf diesem Rechner. macOS fragt
         beim ersten Mal nach Zugriff auf Kontakte – bitte erlauben. Doppelte Kontakte werden automatisch
         erkannt und zusammengeführt, nichts wird überschrieben. Bei sehr großen Adressbüchern
-        (mehrere Tausend Kontakte) kann dieser Schritt einige Minuten dauern – die Seite bitte offen lassen,
-        der Fortschritt wird laufend unten angezeigt.
+        (mehrere Tausend Kontakte) kann dieser Schritt einige Minuten dauern – der Import läuft im
+        Hintergrund weiter, du kannst die Einrichtung währenddessen fortsetzen (der Fortschritt wird dann
+        oben auf den folgenden Seiten angezeigt).
     </p>
     <button type="button" id="setup-import-knopf" class="secondary"
-            onclick="rubricaKontakteAppImportStarten('/setup/import-contacts-app', '/setup/import-contacts-app/status', 'setup-import-knopf', 'setup-import-ergebnis', (laeuft) => { rubricaImportLaeuft = laeuft; })">
+            onclick="rubricaKontakteAppImportStarten('/setup/import-contacts-app', '/setup/import-contacts-app/status', 'setup-import-knopf', 'setup-import-ergebnis')">
         Aus Kontakte.app importieren
     </button>
     <p id="setup-import-ergebnis" style="padding:0.6rem 0.8rem; margin-top:0.7rem; border-radius:6px; display:none"></p>
@@ -29,20 +31,7 @@
     Dieser Schritt kann jederzeit später nachgeholt werden.
 </p>
 <div class="actions" style="justify-content:space-between; margin-top:1.5rem">
-    <a class="btn secondary" id="setup-import-skip" href="/setup/5" onclick="return rubricaSetupNavGuard(event)">Überspringen</a>
-    <a class="btn" id="setup-import-weiter" href="/setup/5" onclick="return rubricaSetupNavGuard(event)">Weiter</a>
+    <a class="btn secondary" href="/setup/5">Überspringen</a>
+    <a class="btn" href="/setup/5">Weiter</a>
 </div>
-
-<script>
-let rubricaImportLaeuft = false;
-
-function rubricaSetupNavGuard(event) {
-    if (rubricaImportLaeuft) {
-        event.preventDefault();
-        alert('Der Import läuft noch – bitte warten, bis unten ein Ergebnis erscheint.');
-        return false;
-    }
-    return true;
-}
-</script>
 {% endblock %}

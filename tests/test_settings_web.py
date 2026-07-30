@@ -68,6 +68,23 @@ def test_alle_kontakte_loeschen_entfernt_alle_kontakte_behaelt_ordner(tmp_db, mo
     assert "2 Kontakte gelöscht" in r2.text
 
 
+def test_alle_kontakte_loeschen_mit_auch_ordner_entfernt_auch_ordner(tmp_db, monkeypatch):
+    from db import queries
+    monkeypatch.setattr(settings, "_settings", {"radicale": {"base_url": ""}})
+    queries.get_or_create_projekt(tmp_db, "Testordner")
+    queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster"})
+
+    r = TestClient(app).post("/einstellungen/alle-kontakte-loeschen", data={"auch_ordner": "1"},
+                              follow_redirects=False)
+    assert r.status_code == 303
+
+    assert queries.list_kontakte(tmp_db) == []
+    assert queries.list_projekte(tmp_db) == []
+
+    r2 = TestClient(app).get(r.headers["location"])
+    assert "1 Kontakte und 1 Ordner gelöscht" in r2.text
+
+
 def test_mail_test_ohne_konfiguration_meldet_kein_server(tmp_db, monkeypatch):
     monkeypatch.setattr(settings, "_settings", {"mail": {"host": ""}})
     r = TestClient(app).post("/einstellungen/mail-test", follow_redirects=False)
