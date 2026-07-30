@@ -126,3 +126,19 @@ def pruefe_mail_eingang(conn) -> dict:
             pass
 
     return {"aktiv": True, "gefunden": gefunden, "neu": neu, "fehler": fehler}
+
+
+def pruefe_und_beschreibe(conn) -> str:
+    """Fuehrt pruefe_mail_eingang() aus und baut daraus einen fertigen Anzeigetext -
+    gemeinsam genutzt vom "Jetzt pruefen"-Knopf in den Einstellungen und auf der
+    Mail-Vorschlaege-Seite, damit beide Stellen dieselbe Formulierung zeigen."""
+    try:
+        ergebnis = pruefe_mail_eingang(conn)
+        if not ergebnis["aktiv"]:
+            return "Mail-Eingang nicht konfiguriert."
+        text = f"{ergebnis['gefunden']} Nachrichten geprüft, {ergebnis['neu']} neue Kontaktvorschläge angelegt."
+        if ergebnis["fehler"]:
+            text += f" {ergebnis['fehler']} Nachrichten übersprungen (Fehler)."
+        return text
+    except Exception as exc:
+        return f"Prüfung fehlgeschlagen: {type(exc).__name__}: {exc}"

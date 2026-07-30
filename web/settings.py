@@ -175,16 +175,7 @@ def einstellungen_mail_test():
 def einstellungen_mail_pruefen():
     conn = get_connection()
     try:
-        ergebnis = mail_intake.pruefe_mail_eingang(conn)
-        if not ergebnis["aktiv"]:
-            text = "Mail-Eingang nicht konfiguriert."
-        else:
-            text = (f"{ergebnis['gefunden']} Nachrichten geprüft, {ergebnis['neu']} neue "
-                    f"Kontaktvorschläge angelegt.")
-            if ergebnis["fehler"]:
-                text += f" {ergebnis['fehler']} Nachrichten übersprungen (Fehler)."
-    except Exception as exc:
-        text = f"Prüfung fehlgeschlagen: {type(exc).__name__}: {exc}"
+        text = mail_intake.pruefe_und_beschreibe(conn)
     finally:
         conn.close()
     return RedirectResponse(url=f"/einstellungen?mail={quote(text)}", status_code=303)

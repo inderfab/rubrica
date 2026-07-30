@@ -1,12 +1,20 @@
 {% extends "base.html" %}
 {% block title %}Mail-Vorschläge – Rubrica{% endblock %}
 {% block content %}
-<h1>Mail-Vorschläge</h1>
+<div style="display:flex; justify-content:space-between; align-items:center;">
+    <h1>Mail-Vorschläge</h1>
+    <form method="post" action="/mail-vorschlaege/pruefen">
+        <button type="submit" class="secondary">Jetzt prüfen</button>
+    </form>
+</div>
 <p class="empty">
     Kontakte, die per Mail an das Mail-Eingang-Postfach geschickt wurden (vCard-Anhang oder Name/Telefon/
     Mail als Text) – siehe <a href="/einstellungen">Einstellungen</a>. Nichts wird automatisch übernommen,
     erst nach Bestätigung hier landet ein Vorschlag in den <a href="/kontakte">Kontakten</a>.
 </p>
+{% if meldung %}
+<p style="color:#1a7f37; padding:0.5rem 0">{{ meldung }}</p>
+{% endif %}
 
 {% if vorschlaege %}
 <table>
@@ -25,13 +33,23 @@
             <td>{% for e in k.emails %}{{ e.email }}{% if not loop.last %}, {% endif %}{% endfor %}</td>
             <td>
                 {% if v.bestehender_kontakt %}
-                <span class="tag">möglich. Duplikat: {{ v.bestehender_kontakt.vorname }} {{ v.bestehender_kontakt.nachname }}</span>
+                <span class="tag" style="background:#fff4e5; border:1px solid #f0b429">
+                    Möglicher Duplikat: {{ v.bestehender_kontakt.vorname }} {{ v.bestehender_kontakt.nachname }}
+                </span>
                 {% endif %}
             </td>
             <td class="actions">
+                {% if v.bestehender_kontakt %}
+                <form method="post" action="/mail-vorschlaege/{{ v.id }}/uebernehmen"
+                      onsubmit="return confirm('Möglicher Duplikat: {{ v.bestehender_kontakt.vorname }} {{ v.bestehender_kontakt.nachname }} ist bereits vorhanden. Mit diesem Kontakt zusammenführen?')">
+                    <button type="submit">Übernehmen</button>
+                </form>
+                <a href="/kontakte/{{ v.bestehender_kontakt.id }}/bearbeiten" class="btn secondary">Bestehenden ansehen</a>
+                {% else %}
                 <form method="post" action="/mail-vorschlaege/{{ v.id }}/uebernehmen">
                     <button type="submit">Übernehmen</button>
                 </form>
+                {% endif %}
                 <button type="button" class="secondary"
                         hx-get="/mail-vorschlaege/{{ v.id }}/bearbeiten-flyover"
                         hx-target="#mail-modal-inhalt" hx-swap="innerHTML"

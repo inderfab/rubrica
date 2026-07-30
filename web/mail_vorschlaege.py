@@ -5,9 +5,12 @@ erreichbares Postfach ist ein weniger vertrauenswuerdiger Kanal als Import/Archi
 die vom Buero-Rechner selbst ausgehen."""
 from __future__ import annotations
 
+from urllib.parse import quote
+
 from fastapi import APIRouter, Request, Response
 from fastapi.responses import RedirectResponse
 
+import mail_intake
 from db import queries
 from db.connection import get_connection
 from sync import radicale
@@ -18,15 +21,25 @@ router = APIRouter()
 
 
 @router.get("/mail-vorschlaege")
-def mail_vorschlaege_seite(request: Request):
+def mail_vorschlaege_seite(request: Request, meldung: str = ""):
     conn = get_connection()
     try:
         vorschlaege = queries.list_vorschlaege(conn, status="offen", quelle="mail")
     finally:
         conn.close()
     return templates.TemplateResponse("mail_vorschlaege.html", {
-        "request": request, "vorschlaege": vorschlaege,
+        "request": request, "vorschlaege": vorschlaege, "meldung": meldung,
     })
+
+
+@router.post("/mail-vorschlaege/pruefen")
+def mail_vorschlaege_pruefen():
+    conn = get_connection()
+    try:
+        text = mail_intake.pruefe_und_beschreibe(conn)
+    finally:
+        conn.close()
+    return RedirectResponse(url=f"/mail-vorschlaege?meldung={quote(text)}", status_code=303)
 
 
 @router.post("/mail-vorschlaege/{vorschlag_id}/uebernehmen")

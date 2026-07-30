@@ -75,3 +75,45 @@ def test_uebernehmen_bearbeitet_speichert_korrigierte_werte(tmp_db):
     assert len(kontakte) == 1
     assert kontakte[0]["nachname"] == "Korrigiert"
     assert queries.list_vorschlaege(tmp_db, status="offen", quelle="mail") == []
+
+
+def test_moeglicher_duplikat_zeigt_bestaetigungs_abfrage(tmp_db):
+    # Regression: Nutzer-Feedback - beim Uebernehmen eines Mail-Vorschlags mit
+    # bereits bekanntem Namen (aber anderer Mailadresse) kam keine Rueckfrage, im
+    # Gegensatz zur manuellen Kontakt-Neuanlage. finde_match() erkennt den
+    # Duplikat-Kandidaten selbst schon korrekt (siehe kontakt_id auf dem Vorschlag) -
+    # es fehlte nur die sichtbare Warnung + Bestaetigung vor dem Zusammenfuehren.
+    bestehender_id = queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster"})
+    vorschlag_id = queries.create_vorschlag(
+        tmp_db, {"vorname": "Anna", "nachname": "Muster", "telefonnummern": [],
+                 "emails": [{"typ": "Direkt", "email": "neu@beispiel.ch"}]},
+        kontakt_id=bestehender_id, quelle="mail",
+    )
+
+    r = _client().get("/mail-vorschlaege")
+    assert r.status_code == 200
+    assert "Möglicher Duplikat" in r.text
+    assert "confirm(" in r.text
+    assert f"/mail-vorschlaege/{vorschlag_id}/uebernehmen" in r.text
+    assert f"/kontakte/{bestehender_id}/bearbeiten" in r.text
+
+
+def test_ohne_duplikat_keine_bestaetigungs_abfrage(tmp_db):
+    queries.create_vorschlag(
+        tmp_db, {"vorname": "Anna", "nachname": "Muster", "telefonnummern": [], "emails": []}, quelle="mail",
+    )
+    r = _client().get("/mail-vorschlaege")
+    assert r.status_code == 200
+    assert "Möglicher Duplikat" not in r.text
+
+
+def test_jetzt_pruefen_route_leitet_mit_meldung_um(tmp_db, monkeypatch):
+    import mail_intake
+    monkeypatch.setattr(mail_intake, "pruefe_und_beschreibe", lambda conn: "3 Nachrichten geprüft, 1 neue Kontaktvorschläge angelegt.")
+
+    r = _client().post("/mail-vorschlaege/pruefen", follow_redirects=False)
+    assert r.status_code == 303
+    assert "meldung=" in r.headers["location"]
+
+    r2 = _client().get(r.headers["location"])
+    assert "1 neue Kontaktvorschläge" in r2.text
