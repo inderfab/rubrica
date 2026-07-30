@@ -19,7 +19,7 @@ from db.connection import get_connection
 from sync import radicale
 from web import import_status
 from web.settings import LOGO_ERLAUBTE_ENDUNGEN, _logo_entfernen
-from web.shared import _hostname_local, templates
+from web.shared import _hostname_local, _ist_lokale_maschine, templates
 
 router = APIRouter()
 
@@ -27,10 +27,14 @@ router = APIRouter()
 def _nur_lokal(request: Request) -> Response | None:
     """Der Setup-Assistent fragt u.a. das CardDAV-Passwort ab, bevor irgendein
     Zugriffsschutz eingerichtet ist - waehrend einer frischen Installation daher
-    bewusst nur ueber localhost erreichbar, nicht ueber das Buero-LAN."""
-    host = request.client.host if request.client else ""
-    if host not in ("127.0.0.1", "::1", "localhost"):
-        return Response(status_code=403, content="Setup nur lokal auf diesem Rechner möglich.")
+    bewusst nur auf dem Server-Rechner selbst erreichbar, nicht ueber das Buero-LAN
+    (siehe web.shared._ist_lokale_maschine fuer die Definition von "selbst")."""
+    if not _ist_lokale_maschine(request):
+        return Response(
+            status_code=403,
+            content="Der Einrichtungsassistent ist nur auf dem Gerät möglich, auf dem Rubrica installiert ist.",
+            media_type="text/plain; charset=utf-8",
+        )
     return None
 
 

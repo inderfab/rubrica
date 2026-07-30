@@ -7,7 +7,7 @@ from db.connection import get_connection
 from importer.vcard import importiere
 from sync import radicale
 from web import import_status
-from web.shared import templates
+from web.shared import _ist_lokale_maschine, templates
 
 router = APIRouter()
 
@@ -17,9 +17,8 @@ def _ist_lokal(request: Request) -> bool:
     Rubrica laeuft (osascript, serverseitig) - nicht auf dem Rechner der/des
     Zugreifenden. Ueber das Buero-LAN wuerde das versehentlich das Adressbuch
     des Servers statt des eigenen importieren, daher wie im Setup-Assistenten
-    nur lokal anbieten."""
-    host = request.client.host if request.client else ""
-    return host in ("127.0.0.1", "::1", "localhost")
+    nur auf dem Server-Rechner selbst anbieten."""
+    return _ist_lokale_maschine(request)
 
 
 @router.get("/import")

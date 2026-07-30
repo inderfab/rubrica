@@ -1,7 +1,30 @@
 import json
 
 from config import settings
-from web.shared import _update_verfuegbar, importiere_kontakte_app_und_synchronisiere
+from web.shared import _eigene_ip_adressen, _ist_lokale_maschine, _update_verfuegbar, importiere_kontakte_app_und_synchronisiere
+
+
+def test_eigene_ip_adressen_enthaelt_immer_loopback():
+    adressen = _eigene_ip_adressen()
+    assert "127.0.0.1" in adressen
+    assert "::1" in adressen
+
+
+def test_ist_lokale_maschine_lehnt_fremde_ip_ab():
+    class _FakeClient:
+        host = "203.0.113.5"  # TEST-NET-3, garantiert nicht diese Maschine
+
+    class _FakeRequest:
+        client = _FakeClient()
+
+    assert _ist_lokale_maschine(_FakeRequest()) is False
+
+
+def test_ist_lokale_maschine_ohne_client_ist_false():
+    class _FakeRequest:
+        client = None
+
+    assert _ist_lokale_maschine(_FakeRequest()) is False
 
 
 def test_importiere_kontakte_app_und_synchronisiere_pusht_jeden_kontakt(tmp_db, monkeypatch):

@@ -6,6 +6,7 @@ import socket
 import subprocess
 from pathlib import Path
 from urllib.parse import quote_plus
+from fastapi import Request
 from fastapi.templating import Jinja2Templates
 from packaging.version import Version
 
@@ -27,6 +28,45 @@ def _hostname_local() -> str:
     except Exception:
         name = ""
     return f"{name or socket.gethostname()}.local"
+
+
+def _eigene_ip_adressen() -> set:
+    """Alle IP-Adressen, unter denen dieser Rechner selbst erreichbar ist. Der
+    Bonjour-Hostname (z.B. "windows.local", siehe _hostname_local) loest auf die
+    tatsaechliche LAN-Interface-Adresse auf, NICHT auf 127.0.0.1 - ruft man ihn also
+    direkt am Server-Rechner selbst im Browser auf, sieht request.client.host die
+    LAN-IP, nicht "localhost"/"127.0.0.1". Ein reiner Loopback-Vergleich block­ierte
+    dadurch faelschlich sogar den Zugriff auf dem Server-Rechner selbst."""
+    adressen = {"127.0.0.1", "::1"}
+    try:
+        for info in socket.getaddrinfo(socket.gethostname(), None):
+            adressen.add(info[4][0])
+    except Exception:
+        pass
+    try:
+        # Ermittelt die tatsaechlich nach aussen genutzte Interface-IP zuverlaessiger
+        # als gethostname()/getaddrinfo (die bei mDNS/.local-Namen manchmal leer bzw.
+        # unvollstaendig sind) - "connect" auf UDP baut keine echte Verbindung auf,
+        # der Kernel waehlt aber schon dabei das ausgehende Interface.
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            s.connect(("8.8.8.8", 80))
+            adressen.add(s.getsockname()[0])
+        finally:
+            s.close()
+    except Exception:
+        pass
+    return adressen
+
+
+def _ist_lokale_maschine(request: Request) -> bool:
+    """Prueft, ob eine Anfrage tatsaechlich vom Server-Rechner selbst kommt (nicht
+    nur ueber "localhost"/"127.0.0.1", sondern auch ueber dessen eigene LAN-IP bzw.
+    Bonjour-Hostnamen aufgerufen, siehe _eigene_ip_adressen) - gemeinsam genutzt vom
+    Setup-Assistenten (web/setup.py) und dem Kontakte.app-Import (web/imports.py),
+    die beide sicherheitskritisch nur lokal erreichbar sein duerfen."""
+    host = request.client.host if request.client else ""
+    return host in _eigene_ip_adressen()
 
 
 def importiere_kontakte_app_und_synchronisiere(conn, fortschritt_callback=None) -> dict:

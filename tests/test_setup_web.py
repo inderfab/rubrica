@@ -23,6 +23,33 @@ def test_setup_blockiert_nicht_lokale_anfragen(tmp_db):
     assert r.status_code == 403
 
 
+def test_setup_blockierung_ist_lesbares_utf8_ohne_mojibake(tmp_db):
+    # Regression: Response() ohne media_type liess den Browser die UTF-8-Bytes als
+    # Latin-1 interpretieren ("möglich" -> "mÃ¶glich"). content-type muss den
+    # Zeichensatz jetzt explizit deklarieren.
+    r = TestClient(app).get("/setup/1")
+    assert r.status_code == 403
+    assert "charset=utf-8" in r.headers["content-type"].lower()
+    assert "möglich" in r.text
+    assert "Ã¶" not in r.text
+
+
+def test_setup_erlaubt_zugriff_ueber_eigene_lan_ip(tmp_db, monkeypatch):
+    # Regression: der Bonjour-Hostname (z.B. "windows.local") loest auf die
+    # tatsaechliche LAN-IP auf, nicht auf 127.0.0.1 - auch direkt am Server-Rechner
+    # selbst aufgerufen sah request.client.host dadurch wie eine fremde IP aus.
+    from web import shared as shared_modul
+    monkeypatch.setattr(shared_modul, "_eigene_ip_adressen", lambda: {"127.0.0.1", "::1", "192.168.1.50"})
+
+    class _FakeClient:
+        host = "192.168.1.50"
+
+    class _FakeRequest:
+        client = _FakeClient()
+
+    assert shared_modul._ist_lokale_maschine(_FakeRequest()) is True
+
+
 def test_setup_schritt1_zeigt_willkommen(tmp_db, monkeypatch):
     _lokal_bypass(monkeypatch)
     r = TestClient(app).get("/setup/1")
