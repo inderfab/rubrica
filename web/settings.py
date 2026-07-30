@@ -12,6 +12,7 @@ from fastapi.responses import FileResponse, RedirectResponse, Response
 
 import mail_intake
 from config import settings
+from db import queries
 from db.connection import get_connection
 from sync import htpasswd, radicale
 from web.shared import _hostname_local, templates
@@ -31,12 +32,13 @@ def _ca_zertifikat_pfad() -> Path:
 
 
 @router.get("/einstellungen")
-def einstellungen_form(request: Request, gespeichert: str = "", sync: str = "", mail: str = ""):
+def einstellungen_form(request: Request, gespeichert: str = "", sync: str = "", mail: str = "", reset: str = ""):
     return templates.TemplateResponse("settings.html", {
         "request": request,
         "gespeichert": bool(gespeichert),
         "sync_ergebnis": sync,
         "mail_ergebnis": mail,
+        "reset_ergebnis": reset,
         "archivio_signatur_db_path": settings.get("archivio.signatur_db_path", "") or "",
         "archivio_min_mails": settings.get("archivio.min_mails", 2),
         "archivio_eigene_domains": ", ".join(settings.get("archivio.eigene_domains", []) or []),
@@ -200,3 +202,22 @@ def einstellungen_radicale_sync():
         if ergebnis["fehler"]:
             text += f" {len(ergebnis['fehler'])} Fehler (z. B. {ergebnis['fehler'][0]})."
     return RedirectResponse(url=f"/einstellungen?sync={quote(text)}", status_code=303)
+
+
+@router.post("/einstellungen/alle-kontakte-loeschen")
+def einstellungen_alle_kontakte_loeschen():
+    """Loescht ALLE Kontakte - fuer einen sauberen Neustart vor einem erneuten Import
+    (siehe queries.delete_alle_kontakte). Stoesst danach einen Radicale-Vollabgleich an,
+    damit die jetzt verwaisten kontakt-*.vcf auch dort entfernt werden (sonst bleiben sie
+    bis zum naechsten regulaeren Sync in Apple Kontakte sichtbar). Ordner bleiben erhalten."""
+    conn = get_connection()
+    try:
+        anzahl = queries.delete_alle_kontakte(conn)
+        ergebnis = radicale.sync_alle(conn)
+    finally:
+        conn.close()
+
+    text = f"{anzahl} Kontakte gelöscht."
+    if ergebnis["aktiv"]:
+        text += f" {ergebnis['entfernt']} verwaiste Einträge in Radicale entfernt."
+    return RedirectResponse(url=f"/einstellungen?reset={quote(text)}", status_code=303)

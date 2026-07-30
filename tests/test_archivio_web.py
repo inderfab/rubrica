@@ -194,23 +194,27 @@ def test_bearbeiten_flyover_zeigt_typ_combobox_und_plus_buttons_wie_bei_kontakte
 
 def test_uebernehmen_bearbeitet_verwendet_korrigierte_werte(tmp_db, archivio_db, monkeypatch):
     monkeypatch.setattr(settings, "_settings", {"archivio": {"signatur_db_path": archivio_db, "min_mails": 2}})
+    projekt_id = queries.get_or_create_projekt(tmp_db, "Testprojekt")
     r = TestClient(app).post(
         "/archivio-import/uebernehmen-bearbeitet?absender_email=anna@beispiel.ch", data={
             "vorname": "Hanna",  # vom Nutzer korrigiert (statt "Anna")
             "nachname": "Beispiel",
             "firma": "Beispiel AG",
-            "rolle": "", "kategorie": "", "notizen": "",
+            "rolle": "", "kategorie": "Geologe", "notizen": "",
             "telefon_typ": "Direkt", "telefon_nummer": "044 123 45 67",
             "email_typ": "Direkt", "email_adresse": "anna@beispiel.ch",
+            "adresse_typ": "arbeit", "adresse_strasse": "Musterstrasse 1", "adresse_plz": "8000", "adresse_ort": "Zürich",
+            "adresse_region": "", "adresse_land": "", "ordner_ids": str(projekt_id),
         }, follow_redirects=False)
     assert r.status_code == 303
+    assert r.headers["location"] == "/archivio-import"
 
     kontakte = _kontakte(tmp_db)
     assert len(kontakte) == 1
     assert kontakte[0]["vorname"] == "Hanna"
     kontakt = queries.get_kontakt(tmp_db, kontakte[0]["id"])
     nummern = [(t["typ"], t["nummer"]) for t in kontakt["telefonnummern"]]
-    assert nummern == [("Direkt", "044 123 45 67")]
+    assert nummern == [("Direkt", "+41 44 123 45 67")]
 
     conn = sqlite3.connect(archivio_db)
     status = {r[0] for r in conn.execute("SELECT status FROM signatur_quelle WHERE absender_email = 'anna@beispiel.ch'")}
@@ -228,6 +232,17 @@ def test_uebernehmen_ausgewaehlte_uebernimmt_nur_selektierte(tmp_db, archivio_db
     kontakte = _kontakte(tmp_db)
     assert len(kontakte) == 1
     assert kontakte[0]["firma"] == "Beispiel AG"
+
+
+def test_uebernehmen_einzeln_behaelt_postfach_filter_im_redirect(tmp_db, archivio_db, monkeypatch):
+    """Regression: nach jeder Aktion (Uebernehmen/Ablehnen/Bearbeiten) fiel der
+    Postfach-Filter weg und musste manuell neu gesetzt werden."""
+    monkeypatch.setattr(settings, "_settings", {"archivio": {"signatur_db_path": archivio_db, "min_mails": 2}})
+    r = TestClient(app).post("/archivio-import/uebernehmen-einzeln", data={
+        "email": "anna@beispiel.ch", "postfaecher": ["200_projekt"],
+    }, follow_redirects=False)
+    assert r.status_code == 303
+    assert r.headers["location"] == "/archivio-import?postfaecher=200_projekt"
 
 
 def test_ablehnen_ausgewaehlte_lehnt_nur_selektierte_ab(tmp_db, archivio_db, monkeypatch):

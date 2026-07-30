@@ -15,7 +15,7 @@
         <a class="ordner-eintrag {% if not ordner_id %}aktiv{% endif %}" href="/kontakte">
             Alle Kontakte
         </a>
-        {% for o in ordner %}
+        {% for o in ordner if o.name[:1]|lower != 'z' %}
         <a class="ordner-eintrag {% if ordner_id == o.id %}aktiv{% endif %}"
            href="/kontakte?ordner_id={{ o.id }}"
            ondragover="event.preventDefault(); this.classList.add('drop-hover')"
@@ -25,12 +25,28 @@
         </a>
         {% endfor %}
         {% if not ordner %}<p class="empty">Noch keine <a href="/ordner">Ordner</a> angelegt.</p>{% endif %}
+        {% set z_ordner = [] %}
+        {% for o in ordner if o.name[:1]|lower == 'z' %}{% set _ = z_ordner.append(o) %}{% endfor %}
+        {% if z_ordner %}
+        <details class="ordner-z-gruppe">
+            <summary>Weitere Ordner ({{ z_ordner|length }})</summary>
+            {% for o in z_ordner %}
+            <a class="ordner-eintrag {% if ordner_id == o.id %}aktiv{% endif %}"
+               href="/kontakte?ordner_id={{ o.id }}"
+               ondragover="event.preventDefault(); this.classList.add('drop-hover')"
+               ondragleave="this.classList.remove('drop-hover')"
+               ondrop="rubricaOrdnerDrop(event, {{ o.id }})">
+                {{ o.name }} <span class="ordner-anzahl">{{ o.anzahl_kontakte }}</span>
+            </a>
+            {% endfor %}
+        </details>
+        {% endif %}
     </aside>
 
     <div class="kontakte-hauptbereich">
         <form class="filter" hx-get="/kontakte" hx-target="#kontakte-ergebnis" hx-select="#kontakte-ergebnis"
               hx-push-url="true"
-              hx-trigger="keyup changed delay:300ms from:input[name='suche'], change from:select">
+              hx-trigger="keyup changed delay:300ms from:input[name='suche'], change from:select, change from:input[name='unvollstaendig']">
             <input type="hidden" name="ordner_id" value="{{ ordner_id or '' }}">
             <input type="text" name="suche" placeholder="Name oder Firma suchen…" value="{{ suche }}">
             <select name="kategorie">
@@ -39,6 +55,10 @@
                 <option value="{{ k }}" {% if kategorie == k %}selected{% endif %}>{{ k }}</option>
                 {% endfor %}
             </select>
+            <label style="display:flex; align-items:center; gap:0.35rem; font-size:0.9rem; white-space:nowrap;">
+                <input type="checkbox" name="unvollstaendig" value="1" {% if unvollstaendig %}checked{% endif %}>
+                Unvollständige Kontakte{% if unvollstaendig_anzahl %} ({{ unvollstaendig_anzahl }}){% endif %}
+            </label>
         </form>
 
         <div id="sammel-leiste" class="sammel-leiste" style="display:none" data-ordner='{{ ordner|tojson }}'>
@@ -68,13 +88,16 @@
                         <td class="zieh-griff" draggable="true"
                             ondragstart="rubricaDragStart(event, '{{ k.id }}', '{{ (k.vorname ~ ' ' ~ k.nachname)|trim|e }}')"
                             title="Zum Zuordnen auf einen Ordner links ziehen">⠿</td>
-                        <td>{{ k.vorname }} {{ k.nachname }}</td>
+                        <td class="{{ 'zelle-fehler' if k.fehlende_felder.vorname or k.fehlende_felder.nachname or k.fehlende_felder.adresse }}"
+                            {% if k.fehlende_felder.adresse and not (k.fehlende_felder.vorname or k.fehlende_felder.nachname) %}title="Adresse fehlt"{% endif %}>
+                            {{ k.vorname }} {{ k.nachname }}
+                        </td>
                         <td>{{ k.firma }}</td>
-                        <td>{{ k.kategorie }}</td>
+                        <td class="{{ 'zelle-fehler' if k.fehlende_felder.kategorie }}">{{ k.kategorie }}</td>
                         <td>{{ k.rolle }}</td>
-                        <td>{% for t in k.telefonnummern %}<a href="tel:{{ t.nummer }}">{{ t.nummer }}</a>{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
-                        <td>{% for e in k.emails %}<a href="mailto:{{ e.email }}">{{ e.email }}</a>{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
-                        <td>{% for o in k.projekte %}<span class="tag">{{ o.name }}</span>{% endfor %}</td>
+                        <td class="{{ 'zelle-fehler' if k.fehlende_felder.telefon }}">{% for t in k.telefonnummern %}<a href="tel:{{ t.nummer }}">{{ t.nummer }}</a>{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
+                        <td class="{{ 'zelle-fehler' if k.fehlende_felder.email }}">{% for e in k.emails %}<a href="mailto:{{ e.email }}">{{ e.email }}</a>{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
+                        <td class="{{ 'zelle-fehler' if k.fehlende_felder.ordner }}">{% for o in k.projekte %}<span class="tag">{{ o.name }}</span>{% endfor %}</td>
                         <td class="actions">
                             <button type="button" class="secondary"
                                     hx-get="/kontakte/{{ k.id }}/bearbeiten-flyover?ordner_id={{ ordner_id or '' }}"

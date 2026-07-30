@@ -1,12 +1,31 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from datetime import datetime, timezone
 
 
 def _now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _schweizer_telefonformat(nummer: str) -> str:
+    """Normalisiert eine mit fuehrender 0 eingegebene Nummer (z.B. "079 123 45 67")
+    auf das internationale Format mit Schweizer Landesvorwahl ("+41 79 123 45 67") -
+    99% der Kontakte sind Schweizer Nummern (Nutzer-Vorgabe), Freitext-Eingabe ohne
+    Vorwahl waere sonst der Normalfall. Bereits internationale Nummern (+.../00...)
+    und Eingaben ohne fuehrende 0 (z.B. interne Kurzwahlen) bleiben unveraendert."""
+    n = (nummer or "").strip()
+    if not n or n.startswith("+") or n.startswith("00"):
+        return n
+    ziffern = re.sub(r"\D", "", n)
+    if not ziffern.startswith("0") or len(ziffern) < 2:
+        return n
+    rest = ziffern[1:]
+    if len(rest) == 9:
+        return "+41 " + " ".join([rest[0:2], rest[2:5], rest[5:7], rest[7:9]])
+    return "+41 " + rest
 
 
 def _kontakt_row_to_dict(conn: sqlite3.Connection, row: sqlite3.Row) -> dict:
@@ -89,12 +108,12 @@ def get_kontakt(conn: sqlite3.Connection, kontakt_id: int) -> dict | None:
 def create_kontakt(conn: sqlite3.Connection, daten: dict) -> int:
     with conn:
         cur = conn.execute(
-            """INSERT INTO kontakte (vorname, nachname, firma, rolle, kategorie, notizen)
-               VALUES (?, ?, ?, ?, ?, ?)""",
+            """INSERT INTO kontakte (vorname, nachname, firma, rolle, kategorie, notizen, apple_uid)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
             (
                 daten.get("vorname", ""), daten.get("nachname", ""),
                 daten.get("firma", ""), daten.get("rolle", ""), daten.get("kategorie", ""),
-                daten.get("notizen", ""),
+                daten.get("notizen", ""), daten.get("apple_uid") or None,
             ),
         )
         kontakt_id = cur.lastrowid
@@ -208,14 +227,18 @@ def merge_kontakt(conn: sqlite3.Connection, kontakt_id: int, daten: dict) -> Non
     with conn:
         conn.execute(
             """UPDATE kontakte SET vorname = ?, nachname = ?, firma = ?, rolle = ?,
-               kategorie = ?, notizen = ?, updated_at = ? WHERE id = ?""",
+               kategorie = ?, notizen = ?, apple_uid = ?, updated_at = ? WHERE id = ?""",
             (
                 daten.get("vorname") or bestehend["vorname"],
                 daten.get("nachname") or bestehend["nachname"],
                 daten.get("firma") or bestehend["firma"],
                 daten.get("rolle") or bestehend["rolle"],
                 daten.get("kategorie") or bestehend["kategorie"],
-                notizen, _now(), kontakt_id,
+                notizen,
+                # Einmal gesetzte apple_uid bleibt erhalten (verlaesslicher Wiedererkennungs-
+                # Anker) - wird nur befuellt, wenn der bestehende Kontakt noch keine hat.
+                bestehend.get("apple_uid") or daten.get("apple_uid") or None,
+                _now(), kontakt_id,
             ),
         )
         bestehende_nummern = {t["nummer"] for t in bestehend["telefonnummern"]}
@@ -223,7 +246,7 @@ def merge_kontakt(conn: sqlite3.Connection, kontakt_id: int, daten: dict) -> Non
             if tel.get("nummer") and tel["nummer"] not in bestehende_nummern:
                 conn.execute(
                     "INSERT INTO telefonnummern (kontakt_id, typ, nummer) VALUES (?, ?, ?)",
-                    (kontakt_id, tel.get("typ", "mobil"), tel["nummer"]),
+                    (kontakt_id, tel.get("typ", "mobil"), _schweizer_telefonformat(tel["nummer"])),
                 )
         bestehende_mails = {e["email"] for e in bestehend["emails"]}
         for mail in daten.get("emails", []):
@@ -258,13 +281,25 @@ def delete_kontakt(conn: sqlite3.Connection, kontakt_id: int) -> None:
         conn.execute("DELETE FROM kontakte WHERE id = ?", (kontakt_id,))
 
 
+def delete_alle_kontakte(conn: sqlite3.Connection) -> int:
+    """Loescht ALLE Kontakte (fuer einen sauberen Neustart vor einem erneuten Import,
+    siehe web/settings.py) - telefonnummern/emails/adressen/urls/kontakte_projekte sowie
+    darauf verweisende vorschlaege-Eintraege werden per ON DELETE CASCADE automatisch mit
+    entfernt. Ordner (projekte) bleiben bewusst erhalten. Gibt die Anzahl geloeschter
+    Kontakte zurueck."""
+    with conn:
+        anzahl = conn.execute("SELECT COUNT(*) FROM kontakte").fetchone()[0]
+        conn.execute("DELETE FROM kontakte")
+    return anzahl
+
+
 def _replace_telefonnummern(conn: sqlite3.Connection, kontakt_id: int, nummern: list[dict]) -> None:
     conn.execute("DELETE FROM telefonnummern WHERE kontakt_id = ?", (kontakt_id,))
     for tel in nummern:
         if tel.get("nummer"):
             conn.execute(
                 "INSERT INTO telefonnummern (kontakt_id, typ, nummer) VALUES (?, ?, ?)",
-                (kontakt_id, tel.get("typ", "mobil"), tel["nummer"]),
+                (kontakt_id, tel.get("typ", "mobil"), _schweizer_telefonformat(tel["nummer"])),
             )
 
 

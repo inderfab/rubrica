@@ -120,6 +120,26 @@ def test_push_projekt_sendet_mitgliederliste(tmp_db, monkeypatch):
     assert f"kontakt-{k2}".encode() in body
 
 
+def test_push_projekt_ueberspringt_z_ordner(tmp_db, monkeypatch):
+    """Z-Ordner (z.B. "Z1_Weihnachten 2013") werden nie als Apple-Gruppe
+    synchronisiert - siehe radicale._ist_z_ordner (Nutzer-Vorgabe)."""
+    projekt_id = queries.get_or_create_projekt(tmp_db, "Z1_Archiv")
+
+    empfangen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        empfangen.append(request)
+        return httpx.Response(201)
+
+    mock_client = httpx.Client(transport=httpx.MockTransport(handler), base_url="https://test/addressbook/")
+    monkeypatch.setattr(radicale, "_client", lambda: mock_client)
+
+    ergebnis = radicale.push_projekt(tmp_db, projekt_id)
+
+    assert ergebnis is True  # kein Fehler, einfach nichts zu tun
+    assert empfangen == []
+
+
 def test_delete_projekt_sendet_delete(monkeypatch):
     empfangen = []
 
@@ -233,3 +253,29 @@ def test_sync_alle_pusht_alle_und_entfernt_verwaiste(tmp_db, monkeypatch):
     assert ("PUT", f"/a/kontakt-{k2}.vcf") in gesendet
     # Effizienz: der gesamte Voll-Sync nutzt EINE Verbindung, nicht eine pro Datensatz.
     assert len(client_aufrufe) == 1
+
+
+def test_sync_alle_entfernt_bereits_gepushten_z_ordner(tmp_db, monkeypatch):
+    """Ein Z-Ordner, der vor Einfuehrung der Z-Ordner-Regel schon als Apple-Gruppe
+    gepusht wurde, wird beim naechsten Voll-Sync als verwaist erkannt und entfernt -
+    ohne eigenen Loesch-Code, siehe radicale.sync_alle/_ist_z_ordner."""
+    z_projekt_id = queries.get_or_create_projekt(tmp_db, "Z1_Archiv")
+
+    gesendet = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        gesendet.append((request.method, request.url.path))
+        if request.method == "PROPFIND":
+            xml = f'<multistatus><response><href>/a/projekt-{z_projekt_id}.vcf</href></response></multistatus>'
+            return httpx.Response(207, text=xml)
+        return httpx.Response(201)
+
+    monkeypatch.setattr(radicale, "_client", lambda: httpx.Client(
+        transport=httpx.MockTransport(handler), base_url="https://test/a/"
+    ))
+
+    ergebnis = radicale.sync_alle(tmp_db)
+
+    assert ergebnis["entfernt"] == 1
+    assert ("DELETE", f"/a/projekt-{z_projekt_id}.vcf") in gesendet
+    assert ("PUT", f"/a/projekt-{z_projekt_id}.vcf") not in gesendet

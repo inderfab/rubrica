@@ -14,7 +14,13 @@ import mail_intake
 from db import queries
 from db.connection import get_connection
 from sync import radicale
-from web.contacts import _email_typ_optionen, _funktion_optionen, _parse_kontakt_form, _telefon_typ_optionen
+from web.contacts import (
+    _email_typ_optionen,
+    _funktion_optionen,
+    _parse_kontakt_form,
+    _telefon_typ_optionen,
+    _validiere_pflichtfelder,
+)
 from web.shared import templates
 
 router = APIRouter()
@@ -89,18 +95,35 @@ def mail_vorschlag_bearbeiten_flyover(request: Request, vorschlag_id: int):
         "request": request, "kontakt": pseudo_kontakt, "ordner": ordner, "funktionen": funktionen,
         "telefon_typen": telefon_typen, "email_typen": email_typen,
         "action": f"/mail-vorschlaege/{vorschlag_id}/uebernehmen-bearbeitet",
-        "modal": True, "zurueck_ordner_id": "",
+        "modal": True, "zurueck_ordner_id": "", "hx_target": "mail-modal-inhalt",
     })
 
 
 @router.post("/mail-vorschlaege/{vorschlag_id}/uebernehmen-bearbeitet")
 async def mail_vorschlag_uebernehmen_bearbeitet(request: Request, vorschlag_id: int):
+    """Wird per htmx abgeschickt (siehe hx_target im Bearbeiten-Formular): bei
+    fehlenden Pflichtfeldern wird das Modal mit rot markierten Feldern neu
+    eingeschwenkt statt die Seite zu verlassen; bei Erfolg sorgt HX-Redirect fuer
+    einen echten Seitenwechsel."""
     form = await request.form()
     daten = _parse_kontakt_form(form)
     ordner_ids = {int(o) for o in form.getlist("ordner_ids")}
 
     conn = get_connection()
     try:
+        fehlende_felder = _validiere_pflichtfelder(daten, list(ordner_ids))
+        if fehlende_felder:
+            ordner = queries.list_projekte(conn)
+            pseudo_kontakt = dict(daten)
+            pseudo_kontakt["projekte"] = [{"id": oid} for oid in ordner_ids]
+            return templates.TemplateResponse("archivio_bearbeiten_modal.html", {
+                "request": request, "kontakt": pseudo_kontakt, "ordner": ordner,
+                "funktionen": _funktion_optionen(conn),
+                "telefon_typen": _telefon_typ_optionen(conn), "email_typen": _email_typ_optionen(conn),
+                "action": f"/mail-vorschlaege/{vorschlag_id}/uebernehmen-bearbeitet",
+                "modal": True, "zurueck_ordner_id": "", "hx_target": "mail-modal-inhalt",
+                "fehlende_felder": fehlende_felder,
+            })
         ordner = queries.list_projekte(conn)
         daten["gruppen_als_ordner"] = [o["name"] for o in ordner if o["id"] in ordner_ids]
         queries.update_vorschlag_rohdaten(conn, vorschlag_id, daten)
@@ -108,4 +131,6 @@ async def mail_vorschlag_uebernehmen_bearbeitet(request: Request, vorschlag_id: 
         radicale.push_kontakt_mit_ordnern(conn, kontakt_id)
     finally:
         conn.close()
+    if request.headers.get("HX-Request") == "true":
+        return Response(status_code=200, headers={"HX-Redirect": "/mail-vorschlaege"})
     return RedirectResponse(url="/mail-vorschlaege", status_code=303)

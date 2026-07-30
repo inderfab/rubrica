@@ -8,7 +8,8 @@ weniger vertrauenswuerdiger Kanal als Import/Archivio, die vom Buero-Rechner sel
 ausgehen.
 
 Nur lesend gegenueber dem Postfach: IMAP SELECT readonly + FETCH BODY.PEEK, kein
-STORE/EXPUNGE/DELETE - angelehnt an /Users/dev/archivio/scanner/mail_scanner.py.
+STORE/EXPUNGE/DELETE - angelehnt an die Mail-Scan-Logik der Referenzimplementierung
+Archivio (siehe CLAUDE.md, Abschnitt Referenzprojekt).
 Dubletten (bereits verarbeitete Mails) werden ueber die Message-ID erkannt statt
 ueber IMAP-Flags, damit ein Postfach-Wechsel/erneutes Verbinden nie zu Duplikaten
 fuehrt.

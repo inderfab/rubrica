@@ -85,7 +85,12 @@ def _letzte_zeilen(text: str, n: int = 14) -> str:
 
 
 def _normalisiere_telefon(nummer: str) -> str:
-    return re.sub(r"\D", "", nummer).lstrip("0")
+    """Normalisiert fuer den Dublettenvergleich auf die letzten 9 Ziffern (gleiches
+    Muster wie importer/vcard.py._normalisiere_telefon) - dadurch werden "044 123 45 67"
+    und "+41 44 123 45 67" (siehe db.queries._schweizer_telefonformat) als dieselbe
+    Nummer erkannt, unabhaengig vom Format."""
+    ziffern = re.sub(r"\D", "", nummer)
+    return ziffern[-9:] if len(ziffern) >= 9 else ziffern
 
 
 # Woerter/Wortstaemme, die auf eine Funktion oder Organisation statt eine Person

@@ -63,13 +63,19 @@ def test_bearbeiten_flyover_unbekannter_vorschlag_ist_404(tmp_db):
 
 
 def test_uebernehmen_bearbeitet_speichert_korrigierte_werte(tmp_db):
+    projekt_id = queries.get_or_create_projekt(tmp_db, "Testprojekt")
     vorschlag_id = queries.create_vorschlag(
         tmp_db, {"vorname": "Anna", "nachname": "Muster", "telefonnummern": [], "emails": []}, quelle="mail",
     )
     r = _client().post(f"/mail-vorschlaege/{vorschlag_id}/uebernehmen-bearbeitet", data={
-        "vorname": "Anna", "nachname": "Korrigiert", "firma": "", "kategorie": "", "rolle": "",
+        "vorname": "Anna", "nachname": "Korrigiert", "firma": "", "kategorie": "Geologe", "rolle": "",
+        "telefon_typ": "Direkt", "telefon_nummer": "079 111 22 33",
+        "email_typ": "Direkt", "email_adresse": "anna@beispiel.ch",
+        "adresse_typ": "arbeit", "adresse_strasse": "Musterstrasse 1", "adresse_plz": "8000", "adresse_ort": "Zürich",
+        "adresse_region": "", "adresse_land": "", "ordner_ids": str(projekt_id),
     }, follow_redirects=False)
     assert r.status_code == 303
+    assert r.headers["location"] == "/mail-vorschlaege"
 
     kontakte = queries.list_kontakte(tmp_db)
     assert len(kontakte) == 1
@@ -83,9 +89,9 @@ def test_moeglicher_duplikat_zeigt_bestaetigungs_abfrage(tmp_db):
     # Gegensatz zur manuellen Kontakt-Neuanlage. finde_match() erkennt den
     # Duplikat-Kandidaten selbst schon korrekt (siehe kontakt_id auf dem Vorschlag) -
     # es fehlte nur die sichtbare Warnung + Bestaetigung vor dem Zusammenfuehren.
-    bestehender_id = queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster"})
+    bestehender_id = queries.create_kontakt(tmp_db, {"vorname": "Bruno", "nachname": "Beispiel"})
     vorschlag_id = queries.create_vorschlag(
-        tmp_db, {"vorname": "Anna", "nachname": "Muster", "telefonnummern": [],
+        tmp_db, {"vorname": "Bruno", "nachname": "Beispiel", "telefonnummern": [],
                  "emails": [{"typ": "Direkt", "email": "neu@beispiel.ch"}]},
         kontakt_id=bestehender_id, quelle="mail",
     )

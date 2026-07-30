@@ -12,6 +12,9 @@
 {% if mail_ergebnis %}
 <p style="color:#1a7f37; padding:0.5rem 0">{{ mail_ergebnis }}</p>
 {% endif %}
+{% if reset_ergebnis %}
+<p style="color:#1a7f37; padding:0.5rem 0">{{ reset_ergebnis }}</p>
+{% endif %}
 
 <p class="empty">
     <a href="/einstellungen/funktionen-rollen">Funktion &amp; Rolle verwalten (Tippfehler korrigieren, umbenennen, zusammenführen) →</a>
@@ -208,4 +211,17 @@
 
     <button type="submit">Speichern</button>
 </form>
+
+<fieldset style="border-color:#eb5757">
+    <legend style="color:#eb5757">Gefahrenzone</legend>
+    <p class="empty" style="padding:0 0 0.5rem">
+        Löscht ALLE Kontakte aus Rubrica unwiderruflich (Ordner bleiben erhalten) und stösst danach
+        einen Radicale-Vollabgleich an, damit sie auch aus Apple Kontakte verschwinden – z. B. um vor
+        einem sauberen Neu-Import mit einem leeren Bestand zu starten.
+    </p>
+    <form method="post" action="/einstellungen/alle-kontakte-loeschen"
+          onsubmit="return confirm('Bist du sicher, dass du ALLE Kontakte aus Rubrica unwiderruflich löschen willst? Dies kann nicht rückgängig gemacht werden.')">
+        <button type="submit" class="danger">Alle Kontakte löschen</button>
+    </form>
+</fieldset>
 {% endblock %}

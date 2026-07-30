@@ -1,17 +1,30 @@
 {# Gemeinsames Formular fuer Kontakt-Bearbeiten - genutzt sowohl von der
    Vollseite (contact_form.html) als auch vom Flyover-Modal
    (kontakt_bearbeiten_modal.html). Erwartet: kontakt, ordner, funktionen, action,
-   modal (bool - steuert ob "Abbrechen" navigiert oder das Modal schliesst). #}
-<form method="post" action="{{ action }}">
+   modal (bool - steuert ob "Abbrechen" navigiert oder das Modal schliesst).
+   hx_target (optional): wenn gesetzt, wird das Formular per htmx abgeschickt und
+   die Antwort in das Element mit dieser ID eingeschwenkt, statt die Seite normal
+   zu verlassen - noetig, damit bei Archivio-/Mail-Vorschlaegen ein Validierungsfehler
+   im Modal angezeigt werden kann (siehe archivio_bearbeiten_modal.html) und ein
+   erfolgreiches Speichern den zugrundeliegenden Filter (z.B. Postfach-Auswahl bei
+   Archivio-Import) nicht durch einen vollen Seitenwechsel verliert. #}
+{% set fehlende_felder = fehlende_felder | default({}) %}
+<form method="post" action="{{ action }}"
+      {% if hx_target %}hx-post="{{ action }}" hx-target="#{{ hx_target }}" hx-swap="innerHTML"{% endif %}>
     <input type="hidden" name="zurueck_ordner_id" value="{{ zurueck_ordner_id or '' }}">
+    {% if fehlende_felder %}
+    <p class="pflichtfeld-hinweis">Bitte die rot markierten Pflichtfelder ausfüllen.</p>
+    {% endif %}
     <div class="grid-2">
         <div class="field">
             <label>Vorname</label>
-            <input type="text" name="vorname" value="{{ kontakt.vorname if kontakt else '' }}">
+            <input type="text" name="vorname" value="{{ kontakt.vorname if kontakt else '' }}"
+                   class="{{ 'feld-fehler' if fehlende_felder.vorname }}">
         </div>
         <div class="field">
             <label>Nachname</label>
-            <input type="text" name="nachname" value="{{ kontakt.nachname if kontakt else '' }}">
+            <input type="text" name="nachname" value="{{ kontakt.nachname if kontakt else '' }}"
+                   class="{{ 'feld-fehler' if fehlende_felder.nachname }}">
         </div>
         <div class="field">
             <label>Firma</label>
@@ -24,7 +37,7 @@
         <div class="field">
             <label>Funktion</label>
             <div class="combobox" data-optionen='{{ funktionen|tojson }}'>
-                <input type="text" class="combobox-input" name="kategorie" autocomplete="off"
+                <input type="text" class="combobox-input {{ 'feld-fehler' if fehlende_felder.kategorie }}" name="kategorie" autocomplete="off"
                        value="{{ kontakt.kategorie if kontakt else '' }}" placeholder="z. B. Bauingenieur/in (Statik)"
                        oninput="rubricaComboboxInput(event)" onfocus="rubricaComboboxInput(event)"
                        onblur="rubricaComboboxBlur(event)">
@@ -33,7 +46,7 @@
         </div>
     </div>
 
-    <fieldset>
+    <fieldset class="{{ 'feld-fehler' if fehlende_felder.telefon }}">
         <legend>Telefonnummern</legend>
         <div id="tel-rows">
             {% for t in (kontakt.telefonnummern if kontakt else []) %}
@@ -53,7 +66,7 @@
                 onclick="addRow('tel-rows', 'tel', this)">+ Telefonnummer</button>
     </fieldset>
 
-    <fieldset>
+    <fieldset class="{{ 'feld-fehler' if fehlende_felder.email }}">
         <legend>E-Mails</legend>
         <div id="mail-rows">
             {% for e in (kontakt.emails if kontakt else []) %}
@@ -73,7 +86,7 @@
                 onclick="addRow('mail-rows', 'mail', this)">+ E-Mail</button>
     </fieldset>
 
-    <fieldset>
+    <fieldset class="{{ 'feld-fehler' if fehlende_felder.adresse }}">
         <legend>Adressen</legend>
         <div id="adr-rows">
             {% for a in (kontakt.adressen if kontakt else []) %}
@@ -110,10 +123,10 @@
         <textarea name="notizen" rows="4" style="width: 100%;">{{ kontakt.notizen if kontakt else '' }}</textarea>
     </fieldset>
 
-    <fieldset>
+    <fieldset class="{{ 'feld-fehler' if fehlende_felder.ordner }}">
         <legend>Ordner</legend>
         <div class="ordner-checkliste" id="ordner-checkliste">
-            {% for o in ordner %}
+            {% for o in ordner if o.name[:1]|lower != 'z' %}
             <label>
                 <input type="checkbox" name="ordner_ids" value="{{ o.id }}"
                     {% if kontakt and o.id in kontakt.projekte|map(attribute='id')|list %}checked{% endif %}>
@@ -122,6 +135,22 @@
             {% endfor %}
         </div>
         {% if not ordner %}<p class="empty">Noch keine Ordner angelegt.</p>{% endif %}
+        {% set z_ordner = [] %}
+        {% for o in ordner if o.name[:1]|lower == 'z' %}{% set _ = z_ordner.append(o) %}{% endfor %}
+        {% if z_ordner %}
+        <details class="ordner-z-gruppe">
+            <summary>Weitere Ordner ({{ z_ordner|length }})</summary>
+            <div class="ordner-checkliste">
+                {% for o in z_ordner %}
+                <label>
+                    <input type="checkbox" name="ordner_ids" value="{{ o.id }}"
+                        {% if kontakt and o.id in kontakt.projekte|map(attribute='id')|list %}checked{% endif %}>
+                    {{ o.name }}
+                </label>
+                {% endfor %}
+            </div>
+        </details>
+        {% endif %}
         <div style="display:flex; gap:0.5rem; margin-top:0.5rem;">
             <input type="text" id="neuer-ordner-name" placeholder="Neuer Ordner…" style="flex:1">
             <button type="button" class="secondary" onclick="rubricaOrdnerCheckelisteAnlegen('ordner-checkliste', 'neuer-ordner-name')">+ Ordner anlegen</button>

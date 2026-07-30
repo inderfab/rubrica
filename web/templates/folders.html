@@ -8,37 +8,55 @@
     <button type="submit">Anlegen</button>
 </form>
 
-{% if ordner %}
+{% macro ordner_zeile(o) %}
+<tr>
+    <td>
+        <span id="ordner-anzeige-{{ o.id }}">
+            <a href="/kontakte?ordner_id={{ o.id }}">{{ o.name }}</a>
+        </span>
+        <form method="post" action="/ordner/{{ o.id }}/bearbeiten"
+              id="ordner-bearbeiten-{{ o.id }}" class="tel-row" style="display:none">
+            <input type="text" name="name" value="{{ o.name }}" required>
+            <button type="submit">Speichern</button>
+            <button type="button" class="secondary"
+                    onclick="ordnerBearbeitenAbbrechen({{ o.id }})">Abbrechen</button>
+        </form>
+    </td>
+    <td>{{ o.anzahl_kontakte }}</td>
+    <td class="actions">
+        <button type="button" class="secondary" onclick="ordnerBearbeitenStarten({{ o.id }})">Bearbeiten</button>
+        <form method="post" action="/ordner/{{ o.id }}/loeschen" onsubmit="return confirm('Ordner wirklich löschen?')">
+            <button type="submit" class="danger">Löschen</button>
+        </form>
+    </td>
+</tr>
+{% endmacro %}
+
+{% set normale_ordner = [] %}
+{% set z_ordner = [] %}
+{% for o in ordner %}{% if o.name[:1]|lower == 'z' %}{% set _ = z_ordner.append(o) %}{% else %}{% set _ = normale_ordner.append(o) %}{% endif %}{% endfor %}
+
+{% if normale_ordner %}
 <table>
     <thead><tr><th>Name</th><th>Kontakte</th><th></th></tr></thead>
     <tbody>
-        {% for o in ordner %}
-        <tr>
-            <td>
-                <span id="ordner-anzeige-{{ o.id }}">
-                    <a href="/kontakte?ordner_id={{ o.id }}">{{ o.name }}</a>
-                </span>
-                <form method="post" action="/ordner/{{ o.id }}/bearbeiten"
-                      id="ordner-bearbeiten-{{ o.id }}" class="tel-row" style="display:none">
-                    <input type="text" name="name" value="{{ o.name }}" required>
-                    <button type="submit">Speichern</button>
-                    <button type="button" class="secondary"
-                            onclick="ordnerBearbeitenAbbrechen({{ o.id }})">Abbrechen</button>
-                </form>
-            </td>
-            <td>{{ o.anzahl_kontakte }}</td>
-            <td class="actions">
-                <button type="button" class="secondary" onclick="ordnerBearbeitenStarten({{ o.id }})">Bearbeiten</button>
-                <form method="post" action="/ordner/{{ o.id }}/loeschen" onsubmit="return confirm('Ordner wirklich löschen?')">
-                    <button type="submit" class="danger">Löschen</button>
-                </form>
-            </td>
-        </tr>
-        {% endfor %}
+        {% for o in normale_ordner %}{{ ordner_zeile(o) }}{% endfor %}
     </tbody>
 </table>
-{% else %}
+{% elif not ordner %}
 <p class="empty">Noch keine Ordner angelegt.</p>
+{% endif %}
+
+{% if z_ordner %}
+<details class="ordner-z-gruppe">
+    <summary>Weitere Ordner ({{ z_ordner|length }}) – werden nicht auf Geräte synchronisiert</summary>
+    <table style="margin-top:0.5rem">
+        <thead><tr><th>Name</th><th>Kontakte</th><th></th></tr></thead>
+        <tbody>
+            {% for o in z_ordner %}{{ ordner_zeile(o) }}{% endfor %}
+        </tbody>
+    </table>
+</details>
 {% endif %}
 
 <script>

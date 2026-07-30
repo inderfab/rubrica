@@ -248,12 +248,22 @@ def delete_kontakt(kontakt_id: int) -> bool:
     return _delete(f"kontakt-{kontakt_id}.vcf")
 
 
+def _ist_z_ordner(name: str) -> bool:
+    """Ordner mit fuehrendem 'Z' (z.B. "Z1_Weihnachten 2013") sind interne
+    Sammelordner, die zwar in der Web-Oberflaeche editierbar bleiben, aber nie als
+    Apple-Gruppe auf die Geraete synchronisiert werden sollen (Nutzer-Vorgabe) -
+    Fallunterscheidung bewusst grosszuegig (nur der erste Buchstabe zaehlt)."""
+    return (name or "").strip().lower().startswith("z")
+
+
 def push_projekt(conn: sqlite3.Connection, projekt_id: int,
                  client: "httpx.Client | None" = None) -> bool:
     row = conn.execute("SELECT * FROM projekte WHERE id = ?", (projekt_id,)).fetchone()
     if row is None:
         return False
     projekt = dict(row)
+    if _ist_z_ordner(projekt["name"]):
+        return True
     mitglieder_ids = [
         r["kontakt_id"] for r in conn.execute(
             "SELECT kontakt_id FROM kontakte_projekte WHERE projekt_id = ? ORDER BY kontakt_id", (projekt_id,)
@@ -311,8 +321,13 @@ def sync_alle(conn: sqlite3.Connection) -> dict:
     # Voll-Syncs). Die serverseitige bcrypt-Passwortpruefung pro Anfrage bleibt.
     try:
         kontakt_ids = [row["id"] for row in conn.execute("SELECT id FROM kontakte")]
-        projekt_ids = [row["id"] for row in conn.execute("SELECT id FROM projekte")]
-        gueltig = {f"kontakt-{i}.vcf" for i in kontakt_ids} | {f"projekt-{i}.vcf" for i in projekt_ids}
+        projekt_rows = [dict(r) for r in conn.execute("SELECT id, name FROM projekte")]
+        # Z-Ordner werden nie synchronisiert (siehe push_projekt/_ist_z_ordner) - hier
+        # zusaetzlich aus "gueltig" ausgeschlossen, damit eine schon vorher (vor
+        # Einfuehrung dieser Regel) gepushte Z-Ordner-vCard hier als verwaist erkannt
+        # und automatisch entfernt wird, ohne eigenen Loesch-Code.
+        sync_projekt_ids = [r["id"] for r in projekt_rows if not _ist_z_ordner(r["name"])]
+        gueltig = {f"kontakt-{i}.vcf" for i in kontakt_ids} | {f"projekt-{i}.vcf" for i in sync_projekt_ids}
 
         fehler = []
         entfernt = 0
@@ -331,7 +346,7 @@ def sync_alle(conn: sqlite3.Connection) -> dict:
                 fehler.append(f"Push von kontakt-{kontakt_id} fehlgeschlagen")
 
         ordner_ok = 0
-        for projekt_id in projekt_ids:
+        for projekt_id in sync_projekt_ids:
             if push_projekt(conn, projekt_id, client=client):
                 ordner_ok += 1
             elif len(fehler) < 5:

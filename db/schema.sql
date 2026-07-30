@@ -12,6 +12,10 @@ CREATE TABLE IF NOT EXISTS kontakte (
     kategorie  TEXT    NOT NULL DEFAULT '',
     notizen    TEXT    NOT NULL DEFAULT '',
     status     TEXT    NOT NULL DEFAULT 'aktiv' CHECK (status IN ('aktiv', 'inaktiv')),
+    -- Stabile Apple-Kontakt-ID aus dem vCard-UID-Feld (nur bei Kontakte.app-Import gesetzt) -
+    -- der zuverlaessigste Wiedererkennungs-Anker bei erneutem Import desselben Adressbuchs,
+    -- siehe importer/vcard.py._finde_match_fuer_import. NULL bei manuell angelegten Kontakten.
+    apple_uid  TEXT,
     created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
     updated_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 );
@@ -108,3 +112,4 @@ CREATE INDEX IF NOT EXISTS idx_urls_kontakt            ON urls(kontakt_id);
 CREATE INDEX IF NOT EXISTS idx_kontakte_projekte_proj  ON kontakte_projekte(projekt_id);
 CREATE INDEX IF NOT EXISTS idx_vorschlaege_status      ON vorschlaege(status);
 CREATE INDEX IF NOT EXISTS idx_kontakte_nachname       ON kontakte(nachname);
+CREATE INDEX IF NOT EXISTS idx_kontakte_apple_uid      ON kontakte(apple_uid);

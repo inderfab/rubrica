@@ -49,6 +49,25 @@ def test_radicale_sync_button_ohne_konfiguration_meldet_inaktiv(tmp_db, monkeypa
     assert "sync=" in r.headers["location"]
 
 
+def test_alle_kontakte_loeschen_entfernt_alle_kontakte_behaelt_ordner(tmp_db, monkeypatch):
+    from db import queries
+    monkeypatch.setattr(settings, "_settings", {"radicale": {"base_url": ""}})
+    ordner_id = queries.get_or_create_projekt(tmp_db, "Testordner")
+    k1 = queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster"})
+    queries.create_kontakt(tmp_db, {"vorname": "Bob", "nachname": "Beispiel"})
+    queries.set_kontakt_projekte(tmp_db, k1, [ordner_id])
+
+    r = TestClient(app).post("/einstellungen/alle-kontakte-loeschen", follow_redirects=False)
+    assert r.status_code == 303
+    assert "reset=" in r.headers["location"]
+
+    assert queries.list_kontakte(tmp_db) == []
+    assert len(queries.list_projekte(tmp_db)) == 1  # Ordner bleibt erhalten
+
+    r2 = TestClient(app).get(r.headers["location"])
+    assert "2 Kontakte gelöscht" in r2.text
+
+
 def test_mail_test_ohne_konfiguration_meldet_kein_server(tmp_db, monkeypatch):
     monkeypatch.setattr(settings, "_settings", {"mail": {"host": ""}})
     r = TestClient(app).post("/einstellungen/mail-test", follow_redirects=False)

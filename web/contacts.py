@@ -179,12 +179,54 @@ def _parse_kontakt_form(form) -> dict:
     }
 
 
+PFLICHTFELDER_LABELS = {
+    "vorname": "Vorname", "nachname": "Nachname", "kategorie": "Funktion",
+    "telefon": "Telefon", "email": "E-Mail", "adresse": "Adresse", "ordner": "Ordner",
+}
+
+
+def _validiere_pflichtfelder(daten: dict, ordner_ids: list) -> dict:
+    """Prueft die beim Kontakt-Anlegen/-Bearbeiten sowie beim Uebernehmen von
+    Vorschlaegen (Mail-Eingang, Archivio-Import - siehe web/mail_vorschlaege.py,
+    web/archivio.py) einheitlich geforderten Pflichtfelder. Gibt ein Dict
+    {feldname: True} fuer jedes fehlende Feld zurueck, das die gemeinsamen
+    Formular-Templates (_kontakt_felder.html, _kontakt_bearbeiten_form.html) zum
+    roten Hervorheben der jeweiligen Eingabe nutzen."""
+    fehlend = {}
+    if not daten.get("vorname", "").strip():
+        fehlend["vorname"] = True
+    if not daten.get("nachname", "").strip():
+        fehlend["nachname"] = True
+    if not daten.get("kategorie", "").strip():
+        fehlend["kategorie"] = True
+    if not any(t.get("nummer", "").strip() for t in daten.get("telefonnummern", [])):
+        fehlend["telefon"] = True
+    if not any(e.get("email", "").strip() for e in daten.get("emails", [])):
+        fehlend["email"] = True
+    if not any(a.get("strasse") or a.get("plz") or a.get("ort") for a in daten.get("adressen", [])):
+        fehlend["adresse"] = True
+    if not ordner_ids:
+        fehlend["ordner"] = True
+    return fehlend
+
+
 @router.get("/kontakte")
-def kontakte_liste(request: Request, suche: str = "", ordner_id: str = "", kategorie: str = ""):
+def kontakte_liste(request: Request, suche: str = "", ordner_id: str = "", kategorie: str = "",
+                    unvollstaendig: str = ""):
     ordner_id_int: Optional[int] = int(ordner_id) if ordner_id else None
     conn = get_connection()
     try:
         kontakte = queries.list_kontakte(conn, suche=suche, projekt_id=ordner_id_int, kategorie=kategorie)
+        # Pflichtfelder-Check pro Kontakt (gleiche Definition wie beim Anlegen/Bearbeiten,
+        # siehe _validiere_pflichtfelder) - fuer den Filter "Unvollständige Kontakte" und
+        # das rote Hervorheben der fehlenden Angaben direkt in der Tabelle (Nutzer-Wunsch:
+        # bereits importierte Kontakte mit noch nicht ausgefuellten Pflichtfeldern sichtbar
+        # machen, ohne dafuer jeden einzeln oeffnen zu muessen).
+        for k in kontakte:
+            k["fehlende_felder"] = _validiere_pflichtfelder(k, [o["id"] for o in k["projekte"]])
+        unvollstaendig_anzahl = sum(1 for k in kontakte if k["fehlende_felder"])
+        if unvollstaendig:
+            kontakte = [k for k in kontakte if k["fehlende_felder"]]
         ordner = queries.list_projekte(conn)
         for o in ordner:
             o["anzahl_kontakte"] = conn.execute(
@@ -196,6 +238,7 @@ def kontakte_liste(request: Request, suche: str = "", ordner_id: str = "", kateg
     return templates.TemplateResponse("contacts_list.html", {
         "request": request, "kontakte": kontakte, "ordner": ordner,
         "kategorien": kategorien, "suche": suche, "ordner_id": ordner_id_int, "kategorie": kategorie,
+        "unvollstaendig": unvollstaendig, "unvollstaendig_anzahl": unvollstaendig_anzahl,
     })
 
 
@@ -258,6 +301,15 @@ async def kontakt_neu_speichern(request: Request):
     ordner_ids = [int(o) for o in form.getlist("ordner_ids")]
     conn = get_connection()
     try:
+        fehlende_felder = _validiere_pflichtfelder(daten, ordner_ids)
+        if fehlende_felder:
+            return templates.TemplateResponse("contact_new.html", {
+                "request": request, "ordner": queries.list_projekte(conn),
+                "funktionen": _funktion_optionen(conn),
+                "telefon_typen": _telefon_typ_optionen(conn), "email_typen": _email_typ_optionen(conn),
+                "kontakt": daten, "ausgewaehlte_ordner": ordner_ids,
+                "fehlende_felder": fehlende_felder,
+            })
         if not form.get("dublette_bestaetigt"):
             dublette_id = finde_match(conn, daten)
             if dublette_id is not None:
@@ -334,6 +386,17 @@ async def kontakt_bearbeiten_speichern(request: Request, kontakt_id: int):
     zurueck_ordner_id = form.get("zurueck_ordner_id", "").strip()
     conn = get_connection()
     try:
+        fehlende_felder = _validiere_pflichtfelder(daten, ordner_ids)
+        if fehlende_felder:
+            pseudo_kontakt = dict(daten)
+            pseudo_kontakt["projekte"] = [{"id": oid} for oid in ordner_ids]
+            return templates.TemplateResponse("contact_form.html", {
+                "request": request, "kontakt": pseudo_kontakt, "ordner": queries.list_projekte(conn),
+                "funktionen": _funktion_optionen(conn),
+                "telefon_typen": _telefon_typ_optionen(conn), "email_typen": _email_typ_optionen(conn),
+                "action": f"/kontakte/{kontakt_id}/bearbeiten", "modal": False,
+                "zurueck_ordner_id": zurueck_ordner_id, "fehlende_felder": fehlende_felder,
+            })
         alte_ordner_ids = {o["id"] for o in queries.get_kontakt(conn, kontakt_id)["projekte"]}
         queries.update_kontakt(conn, kontakt_id, daten)
         queries.set_kontakt_projekte(conn, kontakt_id, ordner_ids)

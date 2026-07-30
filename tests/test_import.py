@@ -129,8 +129,79 @@ def test_import_mergt_statt_ueberschreibt(tmp_db):
     assert kontakt["firma"] == "Muster AG"  # aus dem Import uebernommen
     # bestehende Festnetznummer bleibt erhalten, neue Mobilnummer wird ergaenzt
     nummern = {t["nummer"] for t in kontakt["telefonnummern"]}
-    assert "044 123 45 67" in nummern
+    assert "+41 44 123 45 67" in nummern
     assert "+41 79 123 45 67" in nummern
+
+
+def test_import_verschiedene_kontakte_mit_gleichem_festnetz_werden_nicht_zusammengelegt(tmp_db):
+    # Regression (Nutzer-Meldung): zwei verschiedene Personen mit gemeinsamem
+    # Festnetzanschluss (z.B. Ehepaar) wurden zuvor ueber den Telefon-Abgleich in
+    # finde_match() faelschlich als derselbe Kontakt erkannt und automatisch (ohne
+    # Rueckfrage) zusammengefuehrt - siehe importer/vcard.py._finde_match_fuer_import.
+    vcf = textwrap.dedent("""\
+        BEGIN:VCARD
+        VERSION:3.0
+        N:Kunz;Peter;;;
+        FN:Peter Kunz
+        TEL;TYPE=HOME:044 000 00 00
+        EMAIL;TYPE=WORK:peter@beispiel.ch
+        END:VCARD
+        BEGIN:VCARD
+        VERSION:3.0
+        N:Beispiel;Claudia;;;
+        FN:Claudia Beispiel
+        TEL;TYPE=HOME:044 000 00 00
+        EMAIL;TYPE=WORK:claudia@beispiel.ch
+        END:VCARD
+    """)
+    kontakt_ids = importiere(tmp_db, vcf, gruppen_als_ordner=False)
+
+    assert len(kontakt_ids) == 2
+    assert len(set(kontakt_ids)) == 2
+    assert tmp_db.execute("SELECT COUNT(*) FROM kontakte").fetchone()[0] == 2
+
+    nachnamen = {queries.get_kontakt(tmp_db, kid)["nachname"] for kid in kontakt_ids}
+    assert nachnamen == {"Kunz", "Beispiel"}
+    for kid in kontakt_ids:
+        kontakt = queries.get_kontakt(tmp_db, kid)
+        # Jeder behaelt seine eigene Mailadresse - keine Vermischung.
+        mails = {e["email"] for e in kontakt["emails"]}
+        if kontakt["nachname"] == "Kunz":
+            assert mails == {"peter@beispiel.ch"}
+        else:
+            assert mails == {"claudia@beispiel.ch"}
+
+
+def test_import_erkennt_erneuten_import_ueber_apple_uid(tmp_db):
+    vcf_alt = textwrap.dedent("""\
+        BEGIN:VCARD
+        VERSION:3.0
+        UID:peter-kunz-uid
+        N:Kunz;Peter;;;
+        FN:Peter Kunz
+        EMAIL;TYPE=WORK:peter@alt.ch
+        END:VCARD
+    """)
+    kontakt_ids = importiere(tmp_db, vcf_alt, gruppen_als_ordner=False)
+    kontakt_id = kontakt_ids[0]
+
+    # Peter hat seine Mailadresse gewechselt - ohne UID-Abgleich wuerde die reine
+    # E-Mail-Heuristik hier keinen Treffer mehr finden und einen Dublikat anlegen.
+    vcf_neu = textwrap.dedent("""\
+        BEGIN:VCARD
+        VERSION:3.0
+        UID:peter-kunz-uid
+        N:Kunz;Peter;;;
+        FN:Peter Kunz
+        EMAIL;TYPE=WORK:peter@neu.ch
+        END:VCARD
+    """)
+    kontakt_ids_2 = importiere(tmp_db, vcf_neu, gruppen_als_ordner=False)
+
+    assert kontakt_ids_2 == [kontakt_id]
+    assert tmp_db.execute("SELECT COUNT(*) FROM kontakte").fetchone()[0] == 1
+    mails = {e["email"] for e in queries.get_kontakt(tmp_db, kontakt_id)["emails"]}
+    assert mails == {"peter@alt.ch", "peter@neu.ch"}  # ergaenzt, nicht ersetzt
 
 
 def test_finde_match_ueber_telefonnummer_normalisiert(tmp_db):

@@ -58,6 +58,25 @@ _MIGRATIONS: list[tuple[str, str]] = [
 ]
 
 
+def _kontakte_apple_uid(conn: sqlite3.Connection) -> None:
+    """Stabile Apple-Kontakt-ID (vCard-UID) fuer zuverlaessiges Wiedererkennen bei
+    erneutem Kontakte.app-Import - siehe importer/vcard.py._finde_match_fuer_import.
+    Regression: zwei verschiedene Personen mit gemeinsamem Festnetzanschluss wurden
+    zuvor ueber den Telefon-Abgleich faelschlich als derselbe Kontakt erkannt und
+    automatisch (ohne Rueckfrage) zusammengefuehrt. Als Funktion statt reinem SQL-
+    String, da schema.sql fuer frische Installationen die Spalte bereits enthaelt -
+    ein blindes ALTER TABLE ADD COLUMN wuerde dort mit "duplicate column name" fehlschlagen."""
+    spalten = {row["name"] for row in conn.execute("PRAGMA table_info(kontakte)")}
+    if "apple_uid" not in spalten:
+        conn.execute("ALTER TABLE kontakte ADD COLUMN apple_uid TEXT")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_kontakte_apple_uid ON kontakte(apple_uid)")
+
+
+_PYTHON_MIGRATIONEN: list[tuple[str, "callable"]] = [
+    ("2026-07-30_kontakte_apple_uid", _kontakte_apple_uid),
+]
+
+
 def run(conn: sqlite3.Connection) -> None:
     applied = {row["id"] for row in conn.execute("SELECT id FROM _migrations")}
     for migration_id, sql in _MIGRATIONS:
@@ -65,4 +84,10 @@ def run(conn: sqlite3.Connection) -> None:
             continue
         with conn:
             conn.executescript(sql)
+            conn.execute("INSERT INTO _migrations (id) VALUES (?)", (migration_id,))
+    for migration_id, funktion in _PYTHON_MIGRATIONEN:
+        if migration_id in applied:
+            continue
+        with conn:
+            funktion(conn)
             conn.execute("INSERT INTO _migrations (id) VALUES (?)", (migration_id,))

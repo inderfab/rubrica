@@ -5,15 +5,22 @@
 {% set mails = (kontakt.emails if kontakt else []) or [] %}
 {% set urls = (kontakt.urls if kontakt else []) or [] %}
 {% set adr = (kontakt.adressen[0] if kontakt and kontakt.adressen else {}) %}
+{% set fehlende_felder = fehlende_felder | default({}) %}
+
+{% if fehlende_felder %}
+<p class="pflichtfeld-hinweis">Bitte die rot markierten Pflichtfelder ausfüllen.</p>
+{% endif %}
 
 <div class="grid-2">
     <div class="field">
         <label>Vorname</label>
-        <input type="text" name="vorname" value="{{ kontakt.vorname if kontakt else '' }}">
+        <input type="text" name="vorname" value="{{ kontakt.vorname if kontakt else '' }}"
+               class="{{ 'feld-fehler' if fehlende_felder.vorname }}">
     </div>
     <div class="field">
         <label>Nachname</label>
-        <input type="text" name="nachname" value="{{ kontakt.nachname if kontakt else '' }}">
+        <input type="text" name="nachname" value="{{ kontakt.nachname if kontakt else '' }}"
+               class="{{ 'feld-fehler' if fehlende_felder.nachname }}">
     </div>
     <div class="field">
         <label>Firma</label>
@@ -22,7 +29,7 @@
     <div class="field">
         <label>Funktion</label>
         <div class="combobox" data-optionen='{{ funktionen|tojson }}'>
-            <input type="text" class="combobox-input" name="kategorie" autocomplete="off"
+            <input type="text" class="combobox-input {{ 'feld-fehler' if fehlende_felder.kategorie }}" name="kategorie" autocomplete="off"
                    placeholder="z. B. Bauingenieur/in (Statik)" value="{{ kontakt.kategorie if kontakt else '' }}"
                    oninput="rubricaComboboxInput(event)" onfocus="rubricaComboboxInput(event)"
                    onblur="rubricaComboboxBlur(event)">
@@ -36,7 +43,7 @@
     </div>
 </div>
 
-<fieldset>
+<fieldset class="{{ 'feld-fehler' if fehlende_felder.telefon }}">
     <legend>Telefon</legend>
     {% for i in range([tels|length, 3]|max) %}
     {% set t = tels[i] if i < tels|length else {'typ': '', 'nummer': ''} %}
@@ -52,7 +59,7 @@
     {% endfor %}
 </fieldset>
 
-<fieldset>
+<fieldset class="{{ 'feld-fehler' if fehlende_felder.email }}">
     <legend>E-Mail</legend>
     {% for i in range([mails|length, 2]|max) %}
     {% set m = mails[i] if i < mails|length else {'typ': '', 'email': ''} %}
@@ -68,8 +75,8 @@
     {% endfor %}
 </fieldset>
 
-<fieldset>
-    <legend>Adresse <span style="color:#86868b; font-weight:normal">(optional)</span></legend>
+<fieldset class="{{ 'feld-fehler' if fehlende_felder.adresse }}">
+    <legend>Adresse</legend>
     <input type="hidden" name="adresse_typ" value="arbeit">
     <div class="field">
         <label>Strasse</label>
@@ -96,10 +103,10 @@
     <input type="text" name="url_adresse" value="{{ u.url }}" placeholder="www.beispiel.ch" style="width:100%">
 </fieldset>
 
-<fieldset>
+<fieldset class="{{ 'feld-fehler' if fehlende_felder.ordner }}">
     <legend>Ordner (Projekte)</legend>
     <div class="ordner-checkliste" id="ordner-checkliste">
-        {% for o in ordner %}
+        {% for o in ordner if o.name[:1]|lower != 'z' %}
         <label>
             <input type="checkbox" name="ordner_ids" value="{{ o.id }}"
                 {% if o.id in ausgewaehlte_ordner %}checked{% endif %}>
@@ -108,6 +115,22 @@
         {% endfor %}
     </div>
     {% if not ordner %}<p class="empty">Noch keine Ordner angelegt.</p>{% endif %}
+    {% set z_ordner = [] %}
+    {% for o in ordner if o.name[:1]|lower == 'z' %}{% set _ = z_ordner.append(o) %}{% endfor %}
+    {% if z_ordner %}
+    <details class="ordner-z-gruppe">
+        <summary>Weitere Ordner ({{ z_ordner|length }})</summary>
+        <div class="ordner-checkliste">
+            {% for o in z_ordner %}
+            <label>
+                <input type="checkbox" name="ordner_ids" value="{{ o.id }}"
+                    {% if o.id in ausgewaehlte_ordner %}checked{% endif %}>
+                {{ o.name }}
+            </label>
+            {% endfor %}
+        </div>
+    </details>
+    {% endif %}
     <div style="display:flex; gap:0.5rem; margin-top:0.5rem;">
         <input type="text" id="neuer-ordner-name" placeholder="Neuer Ordner…" style="flex:1">
         <button type="button" class="secondary" onclick="rubricaOrdnerCheckelisteAnlegen('ordner-checkliste', 'neuer-ordner-name')">+ Ordner anlegen</button>

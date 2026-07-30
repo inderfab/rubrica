@@ -9,6 +9,31 @@ def _client(tmp_db):
     return TestClient(app)
 
 
+def test_unvollstaendige_kontakte_filter_zeigt_nur_kontakte_mit_fehlenden_pflichtfeldern(tmp_db):
+    projekt_id = queries.get_or_create_projekt(tmp_db, "Testordner")
+    queries.create_kontakt(tmp_db, {
+        "vorname": "Anna", "nachname": "Vollstaendig", "kategorie": "Geologe",
+        "telefonnummern": [{"typ": "Direkt", "nummer": "079 111 22 33"}],
+        "emails": [{"typ": "Direkt", "email": "anna@beispiel.ch"}],
+        "adressen": [{"typ": "arbeit", "strasse": "Musterstrasse 1", "plz": "8000", "ort": "Zürich"}],
+    })
+    vollstaendig_id = queries.list_kontakte(tmp_db)[0]["id"]
+    queries.set_kontakt_projekte(tmp_db, vollstaendig_id, [projekt_id])
+
+    unvollstaendig_id = queries.create_kontakt(tmp_db, {"vorname": "Bob", "nachname": "Unvollstaendig"})
+
+    client = _client(tmp_db)
+    r = client.get("/kontakte?unvollstaendig=1")
+    assert r.status_code == 200
+    assert "Bob" in r.text
+    assert "Vollstaendig" not in r.text  # nur der unvollstaendige Kontakt wird angezeigt
+    assert "zelle-fehler" in r.text
+
+    r2 = client.get("/kontakte")
+    assert "1)" in r2.text or "(1)" in r2.text  # Anzahl unvollstaendiger Kontakte sichtbar
+    assert "Bob" in r2.text and "Anna" in r2.text  # ohne Filter beide sichtbar
+
+
 def test_neu_formular_erreichbar(tmp_db):
     r = _client(tmp_db).get("/kontakte/neu")
     assert r.status_code == 200
@@ -50,7 +75,7 @@ def test_kontakt_anlegen_speichert_und_leitet_um(tmp_db):
         "kategorie": "Geologe", "rolle": "",
         "telefon_typ": "mobil", "telefon_nummer": "079 111 22 33",
         "email_typ": "arbeit", "email_adresse": "bob@beispiel.ch",
-        "adresse_typ": "arbeit", "adresse_strasse": "", "adresse_plz": "", "adresse_ort": "",
+        "adresse_typ": "arbeit", "adresse_strasse": "Musterstrasse 1", "adresse_plz": "8000", "adresse_ort": "Zürich",
         "adresse_region": "", "adresse_land": "", "url_typ": "homepage", "url_adresse": "",
         "notizen": "", "ordner_ids": str(projekt_id),
     }, follow_redirects=False)
@@ -61,16 +86,27 @@ def test_kontakt_anlegen_speichert_und_leitet_um(tmp_db):
     k = kontakte[0]
     assert k["nachname"] == "Beispiel"
     assert k["kategorie"] == "Geologe"
-    assert k["telefonnummern"][0]["nummer"] == "079 111 22 33"
+    assert k["telefonnummern"][0]["nummer"] == "+41 79 111 22 33"
     assert k["projekte"][0]["name"] == "Testprojekt"
 
 
+_PFLICHTFELDER_KOMPLETT = {
+    "kategorie": "Geologe",
+    "telefon_typ": "mobil", "telefon_nummer": "079 111 22 33",
+    "email_typ": "arbeit", "email_adresse": "bruno@beispiel.ch",
+    "adresse_typ": "arbeit", "adresse_strasse": "Musterstrasse 1", "adresse_plz": "8000", "adresse_ort": "Zürich",
+    "adresse_region": "", "adresse_land": "",
+}
+
+
 def test_kontakt_anlegen_warnt_bei_vermutlichem_duplikat(tmp_db):
+    projekt_id = queries.get_or_create_projekt(tmp_db, "Testprojekt")
     queries.create_kontakt(tmp_db, {"vorname": "Bruno", "nachname": "Beispiel"})
     client = _client(tmp_db)
 
     r = client.post("/kontakte/neu", data={
-        "vorname": "Bruno", "nachname": "Beispiel", "firma": "", "kategorie": "", "rolle": "",
+        "vorname": "Bruno", "nachname": "Beispiel", "firma": "", "rolle": "",
+        "ordner_ids": str(projekt_id), **_PFLICHTFELDER_KOMPLETT,
     }, follow_redirects=False)
 
     assert r.status_code == 200  # kein Redirect - Formular wird mit Warnung erneut gezeigt
@@ -80,16 +116,48 @@ def test_kontakt_anlegen_warnt_bei_vermutlichem_duplikat(tmp_db):
 
 
 def test_kontakt_anlegen_trotz_duplikat_erzwingt_neuanlage(tmp_db):
+    projekt_id = queries.get_or_create_projekt(tmp_db, "Testprojekt")
     queries.create_kontakt(tmp_db, {"vorname": "Bruno", "nachname": "Beispiel"})
     client = _client(tmp_db)
 
     r = client.post("/kontakte/neu", data={
-        "vorname": "Bruno", "nachname": "Beispiel", "firma": "", "kategorie": "", "rolle": "",
+        "vorname": "Bruno", "nachname": "Beispiel", "firma": "", "rolle": "",
+        "ordner_ids": str(projekt_id), **_PFLICHTFELDER_KOMPLETT,
         "dublette_bestaetigt": "1",
     }, follow_redirects=False)
 
     assert r.status_code == 303
     assert len(queries.list_kontakte(tmp_db)) == 2
+
+
+def test_kontakt_anlegen_ohne_pflichtfelder_zeigt_fehler(tmp_db):
+    client = _client(tmp_db)
+    r = client.post("/kontakte/neu", data={
+        "vorname": "Bob", "nachname": "Beispiel", "firma": "", "rolle": "", "kategorie": "",
+    }, follow_redirects=False)
+
+    assert r.status_code == 200  # kein Redirect - Formular wird mit Fehlern erneut gezeigt
+    assert "Bitte die rot markierten Pflichtfelder ausfüllen" in r.text
+    assert "feld-fehler" in r.text
+    assert queries.list_kontakte(tmp_db) == []
+
+
+def test_schweizer_telefonvorwahl_wird_beim_anlegen_automatisch_ergaenzt(tmp_db):
+    kontakt_id = queries.create_kontakt(tmp_db, {
+        "vorname": "Anna", "nachname": "Muster",
+        "telefonnummern": [{"typ": "mobil", "nummer": "079 123 45 67"}],
+    })
+    nummer = queries.get_kontakt(tmp_db, kontakt_id)["telefonnummern"][0]["nummer"]
+    assert nummer == "+41 79 123 45 67"
+
+
+def test_telefonnummer_mit_landesvorwahl_bleibt_unveraendert(tmp_db):
+    kontakt_id = queries.create_kontakt(tmp_db, {
+        "vorname": "Anna", "nachname": "Muster",
+        "telefonnummern": [{"typ": "mobil", "nummer": "+49 30 123456"}],
+    })
+    nummer = queries.get_kontakt(tmp_db, kontakt_id)["telefonnummern"][0]["nummer"]
+    assert nummer == "+49 30 123456"  # keine Schweizer Nummer - unveraendert
 
 
 def test_suche_findet_kontakt_ueber_vor_und_nachname_in_beliebiger_reihenfolge(tmp_db):
@@ -180,8 +248,9 @@ def test_bearbeiten_speichern_bleibt_im_ordner(tmp_db):
     ordner_id = queries.get_or_create_projekt(tmp_db, "Testordner")
     client = _client(tmp_db)
     r = client.post(f"/kontakte/{kontakt_id}/bearbeiten", data={
-        "vorname": "Anna", "nachname": "Muster", "firma": "", "rolle": "", "kategorie": "",
+        "vorname": "Anna", "nachname": "Muster", "firma": "", "rolle": "",
         "notizen": "", "zurueck_ordner_id": str(ordner_id),
+        "ordner_ids": str(ordner_id), **_PFLICHTFELDER_KOMPLETT,
     }, follow_redirects=False)
     assert r.status_code == 303
     assert r.headers["location"] == f"/kontakte?ordner_id={ordner_id}"
@@ -189,9 +258,11 @@ def test_bearbeiten_speichern_bleibt_im_ordner(tmp_db):
 
 def test_bearbeiten_speichern_ohne_ordner_kontext_geht_auf_alle(tmp_db):
     kontakt_id = queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster"})
+    ordner_id = queries.get_or_create_projekt(tmp_db, "Testordner")
     r = _client(tmp_db).post(f"/kontakte/{kontakt_id}/bearbeiten", data={
-        "vorname": "Anna", "nachname": "Muster", "firma": "", "rolle": "", "kategorie": "",
+        "vorname": "Anna", "nachname": "Muster", "firma": "", "rolle": "",
         "notizen": "", "zurueck_ordner_id": "",
+        "ordner_ids": str(ordner_id), **_PFLICHTFELDER_KOMPLETT,
     }, follow_redirects=False)
     assert r.headers["location"] == "/kontakte"
 
@@ -246,7 +317,7 @@ def test_update_kontakt_felder_laesst_kontaktdaten_arrays_unangetastet(tmp_db):
     kontakt = queries.get_kontakt(tmp_db, kontakt_id)
     assert kontakt["firma"] == "Neue Firma"
     assert kontakt["rolle"] == "Chefin"
-    assert kontakt["telefonnummern"][0]["nummer"] == "079 000 00 00"  # unveraendert
+    assert kontakt["telefonnummern"][0]["nummer"] == "+41 79 000 00 00"  # unveraendert
 
 
 def test_kategorie_umstellen_nur_passende_eintraege(tmp_db):
@@ -259,8 +330,8 @@ def test_kategorie_umstellen_nur_passende_eintraege(tmp_db):
     })
     queries.kategorie_umstellen(tmp_db, "telefon", kontakt_id, "Allgemein", "Privat")
     typen = {t["nummer"]: t["typ"] for t in queries.get_kontakt(tmp_db, kontakt_id)["telefonnummern"]}
-    assert typen["052 111 11 11"] == "Privat"
-    assert typen["052 222 22 22"] == "Direkt"
+    assert typen["+41 52 111 11 11"] == "Privat"
+    assert typen["+41 52 222 22 22"] == "Direkt"
 
 
 def test_feld_werte_uebersicht_zaehlt_kontakte_pro_wert(tmp_db):
@@ -362,10 +433,10 @@ def test_bulk_kategorie_umstellen_telefon_bei_allen_ausgewaehlten(tmp_db):
     }, follow_redirects=False)
 
     typen_k1 = {t["nummer"]: t["typ"] for t in queries.get_kontakt(tmp_db, k1)["telefonnummern"]}
-    assert typen_k1["052 111 11 11"] == "Privat"
-    assert typen_k1["052 999 99 99"] == "Direkt"  # nicht betroffen, war schon "Direkt"
+    assert typen_k1["+41 52 111 11 11"] == "Privat"
+    assert typen_k1["+41 52 999 99 99"] == "Direkt"  # nicht betroffen, war schon "Direkt"
     typen_k2 = {t["nummer"]: t["typ"] for t in queries.get_kontakt(tmp_db, k2)["telefonnummern"]}
-    assert typen_k2["052 222 22 22"] == "Privat"
+    assert typen_k2["+41 52 222 22 22"] == "Privat"
 
 
 def test_bulk_kategorie_umstellen_email_unabhaengig_von_telefon(tmp_db):

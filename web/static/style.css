@@ -78,7 +78,26 @@ th { font-weight: 600; color: var(--text-hell); border-bottom: 1px solid var(--r
 tbody tr:hover { background: #fafafa; }
 tr:last-child td { border-bottom: none; }
 
+/* table-layout: fixed noetig, damit die per JS gesetzte th-Breite die Spalte
+   tatsaechlich begrenzt - bei "auto" (Default) rechnen Browser die Spaltenbreite
+   aus dem Zellinhalt neu und ignorieren eine explizite th-Breite weitgehend,
+   sobald eine td (z.B. lange E-Mail-Adresse) mehr Platz beansprucht.
+   Ohne sinnvolle Default-Breiten wuerde "fixed" alle Spalten stattdessen einfach
+   gleichmaessig aufteilen (deutlich schlechter als vorher) - die nth-child-Regeln
+   unten geben also nur den Ausgangszustand vor; sobald eine Spalte manuell per
+   Ziehgriff resized wurde, ueberschreibt deren Inline-style (siehe app.js) das hier. */
+.kontakte-tabelle { table-layout: fixed; }
+.kontakte-tabelle td { overflow-wrap: break-word; }
 .kontakte-tabelle th { position: relative; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.kontakte-tabelle th:nth-child(1) { width: 34px; }
+.kontakte-tabelle th:nth-child(2) { width: 28px; }
+.kontakte-tabelle th:nth-child(3) { width: 14%; }
+.kontakte-tabelle th:nth-child(4) { width: 14%; }
+.kontakte-tabelle th:nth-child(5) { width: 10%; }
+.kontakte-tabelle th:nth-child(6) { width: 9%; }
+.kontakte-tabelle th:nth-child(7) { width: 12%; }
+.kontakte-tabelle th:nth-child(8) { width: 13%; }
+.kontakte-tabelle th:nth-child(9) { width: 9%; }
 .kontakte-tabelle .col-resize-griff {
     position: absolute; right: 0; top: 0; bottom: 0; width: 6px; cursor: col-resize; user-select: none;
 }
@@ -127,6 +146,11 @@ legend { font-weight: 600; padding: 0 0.4rem; color: var(--text); }
 .actions { display: flex; gap: 0.5rem; }
 .empty { color: var(--text-hell); padding: 1rem 0; }
 .fehler { color: var(--gefahr); padding: 0.5rem 0; }
+.pflichtfeld-hinweis { color: var(--gefahr); padding: 0.5rem 0; font-weight: 600; }
+input.feld-fehler, .combobox-input.feld-fehler { border-color: var(--gefahr); }
+fieldset.feld-fehler { border-color: var(--gefahr); }
+.kontakte-tabelle td.zelle-fehler { background: rgba(255, 59, 48, 0.08); }
+.kontakte-tabelle td.zelle-fehler:empty::after { content: "—"; color: var(--gefahr); }
 label { display: block; font-size: 0.85rem; color: var(--text-hell); margin-bottom: 0.2rem; }
 .field { margin-bottom: 0.75rem; }
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
@@ -161,6 +185,9 @@ label { display: block; font-size: 0.85rem; color: var(--text-hell); margin-bott
 .ordner-eintrag.drop-hover { background: var(--akzent); color: #fff; outline: 2px dashed #fff; outline-offset: -3px; }
 .ordner-anzahl { background: var(--flaeche-hover); border-radius: 10px; padding: 0.05rem 0.5rem; font-size: 0.75rem; }
 .kontakte-hauptbereich { flex: 1; min-width: 0; }
+.ordner-z-gruppe { margin-top: 0.4rem; }
+.ordner-z-gruppe summary { padding: 0.45rem 0.6rem; font-size: 0.85rem; color: var(--text-hell); cursor: pointer; }
+.ordner-z-gruppe[open] summary { color: var(--text); }
 .zieh-griff { color: #b9b9b6; width: 1.5rem; text-align: center; user-select: none; cursor: grab; }
 .zieh-griff:active { cursor: grabbing; }
 

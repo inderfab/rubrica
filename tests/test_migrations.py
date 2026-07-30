@@ -51,3 +51,43 @@ def test_migration_ist_idempotent():
 
     typ = conn.execute("SELECT typ FROM telefonnummern").fetchone()["typ"]
     assert typ == "Direkt"
+
+
+def test_kontakte_apple_uid_migration_fuegt_spalte_bei_bestehender_installation_hinzu():
+    # Simuliert eine bestehende Installation von VOR dieser Aenderung (kontakte ohne
+    # apple_uid-Spalte) - hier muss migrations.run() die Spalte per ALTER TABLE ergaenzen.
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.executescript("""
+        CREATE TABLE kontakte (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            vorname TEXT NOT NULL DEFAULT '', nachname TEXT NOT NULL DEFAULT ''
+        );
+        CREATE TABLE telefonnummern (id INTEGER PRIMARY KEY, kontakt_id INTEGER, typ TEXT NOT NULL DEFAULT '', nummer TEXT NOT NULL);
+        CREATE TABLE emails (id INTEGER PRIMARY KEY, kontakt_id INTEGER, typ TEXT NOT NULL DEFAULT '', email TEXT NOT NULL);
+        CREATE TABLE vorschlaege (
+            id INTEGER PRIMARY KEY, kontakt_id INTEGER, quelle TEXT NOT NULL DEFAULT 'import',
+            status TEXT NOT NULL DEFAULT 'offen', rohdaten TEXT NOT NULL DEFAULT '{}',
+            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+        );
+        CREATE TABLE _migrations (id TEXT PRIMARY KEY, applied_at TEXT);
+    """)
+    conn.execute("INSERT INTO kontakte (id, vorname, nachname) VALUES (1, 'Anna', 'Muster')")
+
+    migrations.run(conn)
+
+    spalten = {row["name"] for row in conn.execute("PRAGMA table_info(kontakte)")}
+    assert "apple_uid" in spalten
+    assert conn.execute("SELECT apple_uid FROM kontakte WHERE id = 1").fetchone()["apple_uid"] is None
+
+
+def test_kontakte_apple_uid_migration_auf_frischem_schema_ohne_fehler():
+    # schema.sql enthaelt die Spalte apple_uid bereits (fuer frische Installationen) -
+    # migrations.run() darf hier trotzdem nicht mit "duplicate column name" scheitern
+    # (siehe db/migrations.py._kontakte_apple_uid).
+    conn = _frisches_schema_ohne_migrationen()
+    migrations.run(conn)
+    migrations.run(conn)  # idempotent
+
+    spalten = {row["name"] for row in conn.execute("PRAGMA table_info(kontakte)")}
+    assert "apple_uid" in spalten

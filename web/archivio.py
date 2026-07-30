@@ -8,7 +8,7 @@ einem manuellen Bestaetigungsschritt."""
 from __future__ import annotations
 
 from typing import List
-from urllib.parse import quote_plus
+from urllib.parse import quote_plus, urlencode
 
 from fastapi import APIRouter, Form, Query, Request, Response
 from fastapi.responses import RedirectResponse
@@ -24,6 +24,7 @@ from web.contacts import (
     _funktion_optionen,
     _parse_kontakt_form,
     _telefon_typ_optionen,
+    _validiere_pflichtfelder,
 )
 from web.shared import templates
 
@@ -32,6 +33,16 @@ router = APIRouter()
 
 def _signatur_db_pfad() -> str:
     return settings.get("archivio.signatur_db_path", "") or ""
+
+
+def _archivio_liste_url(postfaecher: List[str]) -> str:
+    """Baut die Ruecksprung-URL zur Archivio-Import-Seite, die den aktuell aktiven
+    Postfach-Filter beibehaelt statt ihn nach jeder Aktion (Uebernehmen/Ablehnen/
+    Bearbeiten) zu verlieren (Nutzer-Feedback: Filter musste sonst nach jeder
+    einzelnen Aktion neu gesetzt werden)."""
+    if not postfaecher:
+        return "/archivio-import"
+    return "/archivio-import?" + urlencode([("postfaecher", p) for p in postfaecher])
 
 
 def _hole_kandidaten_oder_leer(conn, postfaecher: List[str]):
@@ -123,7 +134,7 @@ async def archivio_uebernehmen(request: Request):
             _kandidat_uebernehmen(conn, daten)
     finally:
         conn.close()
-    return RedirectResponse(url="/archivio-import", status_code=303)
+    return RedirectResponse(url=_archivio_liste_url(postfaecher), status_code=303)
 
 
 @router.post("/archivio-import/uebernehmen-einzeln")
@@ -142,7 +153,7 @@ async def archivio_uebernehmen_einzeln(request: Request, email: str = Form(...))
                 break
     finally:
         conn.close()
-    return RedirectResponse(url="/archivio-import", status_code=303)
+    return RedirectResponse(url=_archivio_liste_url(postfaecher), status_code=303)
 
 
 @router.post("/archivio-import/uebernehmen-ausgewaehlte")
@@ -160,7 +171,7 @@ async def archivio_uebernehmen_ausgewaehlte(request: Request):
                 _kandidat_uebernehmen(conn, daten)
     finally:
         conn.close()
-    return RedirectResponse(url="/archivio-import", status_code=303)
+    return RedirectResponse(url=_archivio_liste_url(postfaecher), status_code=303)
 
 
 @router.get("/archivio-import/bulk-bearbeiten-flyover")
@@ -222,7 +233,7 @@ async def archivio_bulk_bearbeiten_speichern(request: Request):
                 _kandidat_uebernehmen(conn, daten)
     finally:
         conn.close()
-    return RedirectResponse(url="/archivio-import", status_code=303)
+    return RedirectResponse(url=_archivio_liste_url(postfaecher), status_code=303)
 
 
 @router.get("/archivio-import/bearbeiten-flyover")
@@ -251,29 +262,50 @@ def archivio_bearbeiten_flyover(request: Request, email: str, postfaecher: List[
     pseudo_kontakt["projekte"] = [{"id": o["id"]} for o in ordner if o["name"] in gruppen_namen]
 
     absender_email = daten.get("absender_email", "") or ""
+    postfach_query = "".join(f"&postfaecher={quote_plus(p)}" for p in postfaecher)
 
     return templates.TemplateResponse("archivio_bearbeiten_modal.html", {
         "request": request, "kontakt": pseudo_kontakt, "ordner": ordner, "funktionen": funktionen,
         "telefon_typen": telefon_typen, "email_typen": email_typen,
-        "action": f"/archivio-import/uebernehmen-bearbeitet?absender_email={quote_plus(absender_email)}",
-        "modal": True, "zurueck_ordner_id": "",
+        "action": f"/archivio-import/uebernehmen-bearbeitet?absender_email={quote_plus(absender_email)}{postfach_query}",
+        "modal": True, "zurueck_ordner_id": "", "hx_target": "archivio-modal-inhalt",
     })
 
 
 @router.post("/archivio-import/uebernehmen-bearbeitet")
-async def archivio_uebernehmen_bearbeitet(request: Request, absender_email: str = ""):
+async def archivio_uebernehmen_bearbeitet(
+    request: Request, absender_email: str = "", postfaecher: List[str] = Query(default=[])
+):
     """Uebernimmt einen Kandidaten mit den vom Nutzer im Bearbeiten-Formular
     korrigierten Werten direkt in kontakte - im Gegensatz zu den anderen
     Uebernehmen-Routen wird der Kandidat NICHT erneut aus der Archivio-DB geholt
     (der Nutzer hat die Werte ja gerade bewusst geaendert), sondern direkt aus den
     abgeschickten Formulardaten aufgebaut (gleiche Hilfsfunktion _parse_kontakt_form
-    wie beim Kontakt-Bearbeiten)."""
+    wie beim Kontakt-Bearbeiten). Wird per htmx abgeschickt (siehe hx_target im
+    Bearbeiten-Formular): bei fehlenden Pflichtfeldern wird das Modal mit rot
+    markierten Feldern neu eingeschwenkt statt die Seite zu verlassen; bei Erfolg
+    sorgt HX-Redirect fuer einen echten Seitenwechsel (der Postfach-Filter bleibt
+    dabei erhalten, siehe _archivio_liste_url)."""
     form = await request.form()
     daten = _parse_kontakt_form(form)
     ordner_ids = {int(o) for o in form.getlist("ordner_ids")}
 
     conn = get_connection()
     try:
+        fehlende_felder = _validiere_pflichtfelder(daten, list(ordner_ids))
+        if fehlende_felder:
+            ordner = queries.list_projekte(conn)
+            pseudo_kontakt = dict(daten)
+            pseudo_kontakt["projekte"] = [{"id": oid} for oid in ordner_ids]
+            postfach_query = "".join(f"&postfaecher={quote_plus(p)}" for p in postfaecher)
+            return templates.TemplateResponse("archivio_bearbeiten_modal.html", {
+                "request": request, "kontakt": pseudo_kontakt, "ordner": ordner,
+                "funktionen": _funktion_optionen(conn),
+                "telefon_typen": _telefon_typ_optionen(conn), "email_typen": _email_typ_optionen(conn),
+                "action": f"/archivio-import/uebernehmen-bearbeitet?absender_email={quote_plus(absender_email)}{postfach_query}",
+                "modal": True, "zurueck_ordner_id": "", "hx_target": "archivio-modal-inhalt",
+                "fehlende_felder": fehlende_felder,
+            })
         ordner = queries.list_projekte(conn)
         daten["gruppen_als_ordner"] = [o["name"] for o in ordner if o["id"] in ordner_ids]
         vorschlag_id = queries.create_vorschlag(conn, daten, quelle="archivio")
@@ -283,7 +315,10 @@ async def archivio_uebernehmen_bearbeitet(request: Request, absender_email: str 
             markiere_status(_signatur_db_pfad(), absender_email, "uebernommen")
     finally:
         conn.close()
-    return RedirectResponse(url="/archivio-import", status_code=303)
+    ziel_url = _archivio_liste_url(postfaecher)
+    if request.headers.get("HX-Request") == "true":
+        return Response(status_code=200, headers={"HX-Redirect": ziel_url})
+    return RedirectResponse(url=ziel_url, status_code=303)
 
 
 @router.post("/archivio-import/ablehnen")
@@ -302,7 +337,7 @@ async def archivio_ablehnen(request: Request, email: str = Form(...)):
                 break
     finally:
         conn.close()
-    return RedirectResponse(url="/archivio-import", status_code=303)
+    return RedirectResponse(url=_archivio_liste_url(postfaecher), status_code=303)
 
 
 @router.post("/archivio-import/ablehnen-ausgewaehlte")
@@ -319,4 +354,4 @@ async def archivio_ablehnen_ausgewaehlte(request: Request):
                 _kandidat_ablehnen(conn, daten)
     finally:
         conn.close()
-    return RedirectResponse(url="/archivio-import", status_code=303)
+    return RedirectResponse(url=_archivio_liste_url(postfaecher), status_code=303)

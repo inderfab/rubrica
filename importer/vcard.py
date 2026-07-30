@@ -63,6 +63,7 @@ def _parse_kontakt(vcard) -> dict:
     vorname, nachname = _parse_name(vcard)
     firma = vcard.org.value[0] if hasattr(vcard, "org") and vcard.org.value else ""
     rolle = vcard.title.value if hasattr(vcard, "title") else ""
+    apple_uid = vcard.uid.value if hasattr(vcard, "uid") else None
 
     telefonnummern = [
         {"typ": _telefon_typ_normalisieren(_typ_von(tel)), "nummer": tel.value.strip()}
@@ -103,6 +104,7 @@ def _parse_kontakt(vcard) -> dict:
         "emails": emails,
         "adressen": adressen,
         "urls": urls,
+        "apple_uid": apple_uid,
     }
 
 
@@ -188,6 +190,38 @@ def finde_match(conn: sqlite3.Connection, kontakt: dict) -> int | None:
     return None
 
 
+def _finde_match_fuer_import(conn: sqlite3.Connection, kontakt: dict) -> int | None:
+    """Matching NUR fuer den automatischen, unbeaufsichtigten Kontakte.app-Import
+    (importiere() unten) - bewusst strenger als das allgemeine finde_match() oben,
+    das von der manuellen Kontakt-Neuanlage und den Mail-Vorschlaegen genutzt wird
+    und dort VOR einem Zusammenfuehren immer eine sichtbare Rueckfrage zeigt.
+    Regression (Nutzer-Meldung): zwei verschiedene echte Personen mit gemeinsamem
+    Festnetzanschluss (z.B. Ehepaar am selben Wohnsitz) wurden ueber den
+    Telefon-Abgleich in finde_match() faelschlich als derselbe Kontakt erkannt und
+    ohne Rueckfrage zusammengefuehrt (Name der einen Person landete auf dem
+    Kontakt-Datensatz mit der E-Mail der anderen). Reihenfolge hier bewusst nur:
+    1) exakte Apple-UID (vCard-UID, stabil ueber wiederholte Importe desselben
+       Adressbuchs hinweg - der einzige wirklich zuverlaessige Wiedererkennungs-
+       Anker), 2) exakte E-Mail (eine persoenliche Mailadresse gehoert praktisch
+       nie zwei verschiedenen Personen). Telefonnummer und blosser Namensabgleich
+       werden hier NIE als alleiniges Kriterium verwendet."""
+    apple_uid = kontakt.get("apple_uid")
+    if apple_uid:
+        row = conn.execute("SELECT id FROM kontakte WHERE apple_uid = ? LIMIT 1", (apple_uid,)).fetchone()
+        if row:
+            return row["id"]
+
+    for mail in kontakt.get("emails", []):
+        row = conn.execute(
+            "SELECT kontakt_id FROM emails WHERE lower(email) = lower(?) LIMIT 1",
+            (mail["email"],),
+        ).fetchone()
+        if row:
+            return row["kontakt_id"]
+
+    return None
+
+
 def importiere(conn: sqlite3.Connection, inhalt: str, gruppen_als_ordner: bool = True) -> list[int]:
     """Parst eine .vcf-Datei und legt jeden Kontakt direkt an bzw. mergt ihn in einen
     erkannten bestehenden Kontakt (keine Review-Queue mehr, siehe docs/konzept.md
@@ -200,7 +234,7 @@ def importiere(conn: sqlite3.Connection, inhalt: str, gruppen_als_ordner: bool =
     kontakt_ids = []
     for kontakt in kontakte:
         gruppen = kontakt.pop("gruppen", [])
-        kontakt_id = finde_match(conn, kontakt)
+        kontakt_id = _finde_match_fuer_import(conn, kontakt)
         if gruppen_als_ordner and gruppen:
             kontakt["gruppen_als_ordner"] = gruppen
         vorschlag_id = queries.create_vorschlag(conn, kontakt, kontakt_id=kontakt_id, quelle="import")
