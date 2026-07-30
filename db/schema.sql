@@ -112,4 +112,10 @@ CREATE INDEX IF NOT EXISTS idx_urls_kontakt            ON urls(kontakt_id);
 CREATE INDEX IF NOT EXISTS idx_kontakte_projekte_proj  ON kontakte_projekte(projekt_id);
 CREATE INDEX IF NOT EXISTS idx_vorschlaege_status      ON vorschlaege(status);
 CREATE INDEX IF NOT EXISTS idx_kontakte_nachname       ON kontakte(nachname);
-CREATE INDEX IF NOT EXISTS idx_kontakte_apple_uid      ON kontakte(apple_uid);
+-- idx_kontakte_apple_uid wird bewusst NICHT hier angelegt, sondern erst in der
+-- Migration _kontakte_apple_uid (db/migrations.py): init_schema() fuehrt dieses
+-- schema.sql IMMER zuerst aus, auch gegen eine bereits bestehende Installation, bei
+-- der die Spalte "kontakte.apple_uid" noch fehlt (CREATE TABLE IF NOT EXISTS ist dort
+-- ein no-op) - ein Index auf eine zu diesem Zeitpunkt noch nicht existierende Spalte
+-- liess den Server beim Start mit "no such column: apple_uid" abstuerzen, bevor die
+-- nachfolgende Migration die Spalte ueberhaupt ergaenzen konnte.
