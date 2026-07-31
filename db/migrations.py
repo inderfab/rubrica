@@ -55,6 +55,31 @@ _MIGRATIONS: list[tuple[str, str]] = [
         DROP TABLE vorschlaege_alt_2026_07_28;
         """,
     ),
+    (
+        "2026-07-31_vorschlaege_kontakte_app_quelle",
+        """
+        -- Fuegt 'kontakte_app' als erlaubte quelle hinzu - dritte Erfassungs-Quelle neben
+        -- manueller Neuanlage und Mail-Eingang: Kontakte, die direkt in Kontakte.app angelegt
+        -- wurden, werden ueber CardDAV erkannt (siehe kontakte_app_intake.py) und landen hier
+        -- als Vorschlag statt automatisch uebernommen zu werden.
+        ALTER TABLE vorschlaege RENAME TO vorschlaege_alt_2026_07_31;
+
+        CREATE TABLE vorschlaege (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            kontakt_id INTEGER REFERENCES kontakte(id) ON DELETE CASCADE,
+            quelle     TEXT    NOT NULL DEFAULT 'import' CHECK (quelle IN ('import', 'archivio', 'mail', 'kontakte_app')),
+            status     TEXT    NOT NULL DEFAULT 'offen' CHECK (status IN ('offen', 'bestaetigt', 'abgelehnt')),
+            rohdaten   TEXT    NOT NULL DEFAULT '{}',
+            message_id TEXT,
+            created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+        );
+
+        INSERT INTO vorschlaege (id, kontakt_id, quelle, status, rohdaten, message_id, created_at)
+            SELECT id, kontakt_id, quelle, status, rohdaten, message_id, created_at FROM vorschlaege_alt_2026_07_31;
+
+        DROP TABLE vorschlaege_alt_2026_07_31;
+        """,
+    ),
 ]
 
 

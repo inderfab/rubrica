@@ -76,18 +76,21 @@ CREATE TABLE IF NOT EXISTS kontakte_projekte (
 
 -- Vorschlaege: interner Zwischenschritt fuer Import- und Archivio-Treffer, wird sofort
 -- bestaetigt (keine Review-Queue mehr, siehe docs/konzept.md 2026-07-14) - dient danach
--- nur noch der Nachvollziehbarkeit und der Dublettenerkennung (Archivio). Ausnahme quelle='mail'
--- (siehe mail_intake.py): bleibt bewusst auf 'offen' stehen, bis im Buero manuell bestaetigt wird
--- (web/mail_vorschlaege.py) - ein von aussen erreichbares Postfach ist ein weniger vertrauenswuerdiger
--- Kanal als ein Import/eine Archivio-Mail, die vom Buero-Rechner selbst ausgeht.
+-- nur noch der Nachvollziehbarkeit und der Dublettenerkennung (Archivio). Ausnahme quelle IN
+-- ('mail', 'kontakte_app') (siehe mail_intake.py / kontakte_app_intake.py): bleibt bewusst
+-- auf 'offen' stehen, bis im Buero manuell bestaetigt wird (web/vorschlaege.py) - ein von
+-- aussen erreichbares Postfach bzw. eine direkt in Kontakte.app angelegte vCard sind ein
+-- weniger vertrauenswuerdiger Kanal als ein Import/eine Archivio-Mail, die vom
+-- Buero-Rechner selbst ausgehen.
 -- kontakt_id gesetzt = moeglicher Duplikat-Treffer auf bestehenden Kontakt, sonst NULL = komplett neuer Kontakt.
 -- status getrennt von kontakte.status: offen | bestaetigt | abgelehnt.
 -- Kein Vorschlag darf kontakte je destruktiv veraendern - queries.merge_kontakt ergaenzt nur.
--- message_id: nur fuer quelle='mail' gesetzt (Dublettenschutz gegen erneutes Verarbeiten derselben Mail).
+-- message_id: fuer quelle='mail' die Message-ID, fuer quelle='kontakte_app' der Radicale-
+-- Ressourcenname (Praefix "kontakte-app:") - jeweils Dublettenschutz gegen erneutes Verarbeiten.
 CREATE TABLE IF NOT EXISTS vorschlaege (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     kontakt_id INTEGER REFERENCES kontakte(id) ON DELETE CASCADE,
-    quelle     TEXT    NOT NULL DEFAULT 'import' CHECK (quelle IN ('import', 'archivio', 'mail')),
+    quelle     TEXT    NOT NULL DEFAULT 'import' CHECK (quelle IN ('import', 'archivio', 'mail', 'kontakte_app')),
     status     TEXT    NOT NULL DEFAULT 'offen' CHECK (status IN ('offen', 'bestaetigt', 'abgelehnt')),
     rohdaten   TEXT    NOT NULL DEFAULT '{}',
     message_id TEXT,

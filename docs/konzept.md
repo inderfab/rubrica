@@ -182,17 +182,48 @@ Feldumfang bewusst an der tatsächlichen Nutzung im bestehenden Apple-Adressbuch
   IMAP-Postfach (z. B. `rubrica@musterfirma.ch`, in den Einstellungen konfigurierbar) kann per "Kontakt
   senden" aus Kontakte.app (vCard-Anhang) oder schlicht als Freitext (Name/Telefon/Mail) adressiert werden.
 - Anders als Import/Archivio bleibt ein Mail-Vorschlag bewusst auf `vorschlaege.status = 'offen'` stehen,
-  bis er manuell auf einer eigenen Seite (`/mail-vorschlaege`) bestätigt oder abgelehnt wird — ein von
-  außen erreichbares Postfach ist ein weniger vertrauenswürdiger Kanal als die anderen beiden Wege, die
-  vom Büro-Rechner selbst ausgehen. `VORSCHLAEGE.quelle = 'mail'` (Migration ergänzt diesen Wert plus eine
-  `message_id`-Spalte für den Dublettenschutz derselben Mail).
+  bis er manuell auf der gemeinsamen Vorschläge-Seite (`/vorschlaege`, siehe 5.9) bestätigt oder abgelehnt
+  wird — ein von außen erreichbares Postfach ist ein weniger vertrauenswürdiger Kanal als die anderen beiden
+  Wege, die vom Büro-Rechner selbst ausgehen. `VORSCHLAEGE.quelle = 'mail'` (Migration ergänzt diesen Wert
+  plus eine `message_id`-Spalte für den Dublettenschutz derselben Mail).
 - Nur lesend gegenüber dem Postfach: IMAP `SELECT` readonly + `FETCH BODY.PEEK[]`, kein
   `STORE`/`EXPUNGE`/`DELETE` (`mail_intake.py`, angelehnt an die Mail-Scan-Logik der Referenzimplementierung
   Archivio, siehe `CLAUDE.md` für den Pfad). vCard-Anhang hat Vorrang vor dem Mailtext; ohne Anhang wird der
   Text wie eine Signatur geparst (dieselbe Heuristik wie beim "Aus Signatur übernehmen"-Feld,
   `importer/signatur.py`).
 - Abruf 1× täglich automatisch (Hintergrund-Thread in `web/main.py`, analog zum Updater-Check der
-  Menubar-App) sowie manuell über einen "Jetzt prüfen"-Knopf in den Einstellungen.
+  Menubar-App) sowie manuell über den "Jetzt prüfen"-Knopf auf `/vorschlaege`.
+
+### 5.9 Vorschläge aus direkter Kontakte.app-Neuanlage (viertes Erfassungsgleis)
+- **Umgesetzt (2026-07-31):** Radicales `owner_only`-Rechtemodell (siehe `sync/radicale.py`) kann nicht
+  zwischen Rubricas eigenem Push und einem beliebigen, über dasselbe CardDAV-Konto verbundenen Mac
+  unterscheiden — jeder verbundene Mac kann technisch direkt in derselben Collection schreiben (Auslöser:
+  ein unerwarteter Ordner "Neue Liste" tauchte in Kontakte.app auf, ohne dass Rubrica ihn kannte). Statt das
+  nur zu unterbinden, wird es als bewusster vierter Erfassungskanal genutzt: direkt in Kontakte.app angelegte
+  Kontakte werden erkannt und landen — wie Mail-Vorschläge — als offener Eintrag zur Ergänzung/Freigabe im
+  Büro, bevor sie an alle Geräte zurückgepusht werden.
+- **`kontakte_app_intake.py`** (Struktur an `mail_intake.py` gespiegelt) scannt Radicale per PROPFIND nach
+  vCard-Ressourcen, deren Name nicht Rubricas eigenem Muster (`kontakt-N.vcf`/`projekt-N.vcf`) entspricht —
+  jede so gefundene vCard stammt zwangsläufig direkt von einem Mac-Client. Fremde Gruppen-Neuanlagen (wie
+  "Neue Liste") werden bewusst NICHT übernommen, nur Kontakte. Dies ist die einzige bewusste Ausnahme von
+  "Radicale wird nie gelesen, nur beschrieben" — geschrieben wird dabei nichts aus eigenem Antrieb, das
+  Löschen der fremden vCard erfolgt erst nach expliziter Bestätigung im Büro.
+- **Ordner-Erkennung ("wenn möglich"):** jede eigene `projekt-N.vcf` wird auf
+  `X-ADDRESSBOOKSERVER-MEMBER`-Einträge gescannt, die auf die Apple-UID des fremden Kontakts zeigen —
+  Treffer landen als `erkannte_ordner_ids` auf dem Vorschlag und werden beim Übernehmen ergänzend
+  zugewiesen. Race bewusst in Kauf genommen: ein `push_projekt()` desselben Ordners zwischen
+  Mitgliedschaft-Setzen in Kontakte.app und dem nächsten Scan überschreibt die Mitgliederliste aus Rubricas
+  eigener Tabelle und macht die frische Mitgliedschaft für diesen Scan unsichtbar.
+- `VORSCHLAEGE.quelle = 'kontakte_app'` (Migration `2026-07-31_vorschlaege_kontakte_app_quelle`, gleiches
+  RENAME→CREATE→INSERT…SELECT→DROP-Verfahren wie bei der `'mail'`-Erweiterung), bleibt ebenfalls auf
+  `status = 'offen'` stehen.
+- **Seite umbenannt/zusammengelegt:** `/mail-vorschlaege` → `/vorschlaege` (`web/vorschlaege.py`) zeigt jetzt
+  beide Quellen gemeinsam (`queries.list_vorschlaege()` akzeptiert dafür eine Liste von `quelle`-Werten).
+  Der "Jetzt prüfen"-Knopf ruft beide Intake-Module nacheinander auf. Beim Übernehmen eines
+  `kontakte_app`-Vorschlags wird nach dem Push der eigenen `kontakt-N.vcf` zusätzlich die ursprüngliche
+  fremde vCard aus Radicale gelöscht, damit der Kontakt nicht doppelt in Kontakte.app auftaucht.
+- Abruf 1× täglich automatisch (derselbe Hintergrund-Thread wie 5.8, jetzt `_vorschlaege_ueberwachung`)
+  sowie manuell über den "Jetzt prüfen"-Knopf auf `/vorschlaege`.
 
 ## 6. Vorgeschlagener Tech-Stack
 

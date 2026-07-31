@@ -187,8 +187,8 @@ PFLICHTFELDER_LABELS = {
 
 def _validiere_pflichtfelder(daten: dict, ordner_ids: list) -> dict:
     """Prueft die beim Kontakt-Anlegen/-Bearbeiten sowie beim Uebernehmen von
-    Vorschlaegen (Mail-Eingang, Archivio-Import - siehe web/mail_vorschlaege.py,
-    web/archivio.py) einheitlich geforderten Pflichtfelder. Gibt ein Dict
+    Vorschlaegen (Mail-Eingang, Kontakte.app-Neuzugaenge, Archivio-Import - siehe
+    web/vorschlaege.py, web/archivio.py) einheitlich geforderten Pflichtfelder. Gibt ein Dict
     {feldname: True} fuer jedes fehlende Feld zurueck, das die gemeinsamen
     Formular-Templates (_kontakt_felder.html, _kontakt_bearbeiten_form.html) zum
     roten Hervorheben der jeweiligen Eingabe nutzen."""

@@ -445,12 +445,14 @@ def postfach_zuordnen(conn: sqlite3.Connection, postfach: str, projekt_id: "int 
             )
 
 
-def list_vorschlaege(conn: sqlite3.Connection, status: str = "offen", quelle: str | None = None) -> list[dict]:
+def list_vorschlaege(conn: sqlite3.Connection, status: str = "offen",
+                      quelle: "str | list[str] | None" = None) -> list[dict]:
     sql = "SELECT * FROM vorschlaege WHERE status = ?"
     params: list = [status]
     if quelle:
-        sql += " AND quelle = ?"
-        params.append(quelle)
+        quellen = [quelle] if isinstance(quelle, str) else list(quelle)
+        sql += f" AND quelle IN ({', '.join('?' for _ in quellen)})"
+        params.extend(quellen)
     sql += " ORDER BY created_at"
     rows = conn.execute(sql, params).fetchall()
     result = []
@@ -505,7 +507,7 @@ def create_vorschlag(conn: sqlite3.Connection, rohdaten: dict, kontakt_id: int |
 
 def update_vorschlag_rohdaten(conn: sqlite3.Connection, vorschlag_id: int, rohdaten: dict) -> None:
     """Ersetzt die rohdaten eines noch offenen Vorschlags - genutzt beim Bearbeiten
-    vor der Uebernahme (z.B. Mail-Vorschlaege, siehe web/mail_vorschlaege.py), damit
+    vor der Uebernahme (z.B. Mail-/Kontakte.app-Vorschlaege, siehe web/vorschlaege.py), damit
     dieselbe vorschlag_id (und damit derselbe Datensatz) bestaetigt wird, statt einen
     zusaetzlichen Vorschlag anzulegen und den urspruenglichen offen zu lassen."""
     with conn:

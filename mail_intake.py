@@ -3,7 +3,7 @@ firma.ch) - so koennen Mitarbeitende von unterwegs eine vCard teilen (Kontakte.a
 "Kontakt senden") oder schlicht Name + Telefonnummer/Mailadresse als Text an diese
 Adresse schicken. Nie automatisch uebernommen: jede gefundene Nachricht erzeugt
 einen offenen Eintrag in vorschlaege, der erst im Buero manuell bestaetigt wird
-(siehe web/mail_vorschlaege.py) - ein von aussen erreichbares Postfach ist ein
+(siehe web/vorschlaege.py) - ein von aussen erreichbares Postfach ist ein
 weniger vertrauenswuerdiger Kanal als Import/Archivio, die vom Buero-Rechner selbst
 ausgehen.
 

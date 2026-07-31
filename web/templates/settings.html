@@ -77,7 +77,9 @@
         <p class="empty" style="padding:0 0 0.5rem">
             Damit gibt Rubrica Kontakte/Ordner an Radicale weiter, das sie wiederum an Apple Kontakte
             ausliefert (Einweg-Sync, nie umgekehrt). Sync ist immer aktiv - kein separater An/Aus-Schalter,
-            sonst funktioniert das Löschen/Ändern in Kontakte.app nicht mehr.
+            sonst funktioniert das Löschen/Ändern in Kontakte.app nicht mehr. Wird auf einem verbundenen
+            Mac direkt ein neuer Kontakt in Kontakte.app angelegt, wird das erkannt und erscheint als
+            offener Vorschlag unter <a href="/vorschlaege">Vorschläge</a> - nie automatisch übernommen.
         </p>
 
         <div class="grid-2">
@@ -165,7 +167,7 @@
             Ein dediziertes Postfach (z. B. rubrica@musterfirma.ch), an das Mitarbeitende von unterwegs
             eine vCard ("Kontakt senden" in Kontakte.app) oder einfach Name/Telefon/Mail als Text schicken
             können. Wird 1× täglich automatisch sowie manuell geprüft; jede gefundene Nachricht erzeugt
-            einen offenen Vorschlag zur Bestätigung im Büro (siehe „Mail-Vorschläge"). Leer lassen, um die
+            einen offenen Vorschlag zur Bestätigung im Büro (siehe „Vorschläge"). Leer lassen, um die
             Funktion zu deaktivieren.
         </p>
         <div class="grid-2">
@@ -191,7 +193,7 @@
         <div class="actions" style="justify-content:flex-start; gap:0.5rem; margin-top:0.5rem">
             <button type="submit" formaction="/einstellungen/mail-test" class="secondary">Verbindung testen</button>
             <button type="submit" formaction="/einstellungen/mail-pruefen" class="secondary">Jetzt prüfen</button>
-            <a href="/mail-vorschlaege" class="btn secondary">Mail-Vorschläge ansehen →</a>
+            <a href="/vorschlaege" class="btn secondary">Vorschläge ansehen →</a>
         </div>
     </fieldset>
 
