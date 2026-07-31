@@ -120,24 +120,59 @@ def test_push_projekt_sendet_mitgliederliste(tmp_db, monkeypatch):
     assert f"kontakt-{k2}".encode() in body
 
 
-def test_push_projekt_ueberspringt_z_ordner(tmp_db, monkeypatch):
+def test_push_projekt_loescht_statt_pusht_bei_z_ordner(tmp_db, monkeypatch):
     """Z-Ordner (z.B. "Z1_Weihnachten 2013") werden nie als Apple-Gruppe
-    synchronisiert - siehe radicale._ist_z_ordner (Nutzer-Vorgabe)."""
+    synchronisiert - siehe radicale._ist_z_ordner (Nutzer-Vorgabe). push_projekt()
+    sendet dafuer aktiv ein DELETE statt nur zu ueberspringen (siehe
+    test_push_projekt_ordner_umbenannt_ins_archiv_entfernt_alte_vcard_sofort fuer den
+    Regressionsgrund) - ein 404 auf eine nie gepushte vCard gilt in _delete() bereits
+    als Erfolg, daher hier unschaedlich."""
     projekt_id = queries.get_or_create_projekt(tmp_db, "Z1_Archiv")
 
     empfangen = []
 
     def handler(request: httpx.Request) -> httpx.Response:
         empfangen.append(request)
-        return httpx.Response(201)
+        return httpx.Response(404)
 
     mock_client = httpx.Client(transport=httpx.MockTransport(handler), base_url="https://test/addressbook/")
     monkeypatch.setattr(radicale, "_client", lambda: mock_client)
 
     ergebnis = radicale.push_projekt(tmp_db, projekt_id)
 
-    assert ergebnis is True  # kein Fehler, einfach nichts zu tun
-    assert empfangen == []
+    assert ergebnis is True
+    assert len(empfangen) == 1
+    assert empfangen[0].method == "DELETE"
+    assert empfangen[0].url.path == f"/addressbook/projekt-{projekt_id}.vcf"
+
+
+def test_push_projekt_ordner_umbenannt_ins_archiv_entfernt_alte_vcard_sofort(tmp_db, monkeypatch):
+    # Regression (Nutzer-Feedback): ein Ordner, der VOR der Umbenennung mit Z-Praefix
+    # bereits unter dem alten Namen an Radicale gepusht war, blieb auf den
+    # synchronisierten Geraeten sichtbar - push_projekt() gab bei einem Z-Ordner bisher
+    # nur "True" zurueck, ohne die alte vCard tatsaechlich zu entfernen.
+    projekt_id = queries.get_or_create_projekt(tmp_db, "Weihnachtsessen 2013")
+
+    empfangen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        empfangen.append((request.method, request.url.path))
+        return httpx.Response(201 if request.method == "PUT" else 204)
+
+    mock_client = httpx.Client(transport=httpx.MockTransport(handler), base_url="https://test/addressbook/")
+    monkeypatch.setattr(radicale, "_client", lambda: mock_client)
+
+    # Zuerst normal gepusht (wie vor der Umbenennung).
+    radicale.push_projekt(tmp_db, projekt_id, client=mock_client)
+    assert ("PUT", f"/addressbook/projekt-{projekt_id}.vcf") in empfangen
+
+    # Jetzt umbenennen (Nutzer-Aktion: Ordner mit Z-Praefix ins Archiv verschieben).
+    queries.rename_projekt(tmp_db, projekt_id, "Z1_Weihnachtsessen 2013")
+    empfangen.clear()
+    ergebnis = radicale.push_projekt(tmp_db, projekt_id, client=mock_client)
+
+    assert ergebnis is True
+    assert ("DELETE", f"/addressbook/projekt-{projekt_id}.vcf") in empfangen
 
 
 def test_delete_projekt_sendet_delete(monkeypatch):

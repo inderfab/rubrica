@@ -263,7 +263,14 @@ def push_projekt(conn: sqlite3.Connection, projekt_id: int,
         return False
     projekt = dict(row)
     if _ist_z_ordner(projekt["name"]):
-        return True
+        # Aktiv loeschen statt nur zu ueberspringen: Regression (Nutzer-Feedback) - ein
+        # Ordner, der VOR der Umbenennung ins Archiv (Z-Praefix) bereits unter dem alten
+        # Namen an Radicale gepusht war, blieb dort sonst unveraendert liegen, bis der
+        # naechste manuelle Vollabgleich (sync_alle) die verwaiste vCard entfernte. Ein
+        # reiner "return True" ohne Aktion propagiert die Umbenennung nicht sofort - eine
+        # aktive DELETE-Anfrage schon (404 auf eine nie gepushte Z-Ordner-vCard gilt in
+        # _delete() bereits als Erfolg, daher unschaedlich fuer schon immer Z-benannte Ordner).
+        return _delete(f"projekt-{projekt_id}.vcf", client=client)
     mitglieder_ids = [
         r["kontakt_id"] for r in conn.execute(
             "SELECT kontakt_id FROM kontakte_projekte WHERE projekt_id = ? ORDER BY kontakt_id", (projekt_id,)
