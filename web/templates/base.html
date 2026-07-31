@@ -19,7 +19,7 @@
                 {% if archivio_konfiguriert() %}
                 <a href="/archivio-import" class="{{ 'aktiv' if pfad.startswith('/archivio-import') else '' }}">Archivio-Import</a>
                 {% endif %}
-                {% if mail_konfiguriert() %}
+                {% if vorschlaege_konfiguriert() %}
                 <a href="/vorschlaege" class="{{ 'aktiv' if pfad.startswith('/vorschlaege') else '' }}">Vorschläge</a>
                 {% endif %}
                 <a href="/export" class="{{ 'aktiv' if pfad.startswith('/export') else '' }}">Export</a>

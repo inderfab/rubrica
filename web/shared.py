@@ -138,6 +138,21 @@ def _mail_konfiguriert() -> bool:
 templates.env.globals["mail_konfiguriert"] = _mail_konfiguriert
 
 
+def _vorschlaege_konfiguriert() -> bool:
+    """Steuert den Nav-Punkt "Vorschläge": sichtbar sobald mindestens eine der
+    beiden Quellen aktiv ist (Mail-Eingang ODER Radicale-Sync, ueber den
+    Kontakte.app-Neuzugaenge erkannt werden - siehe kontakte_app_intake.py).
+    Bewusst nicht mehr nur an mail_konfiguriert() gekoppelt: Radicale-Sync ist in
+    der Praxis quasi immer aktiv (kein An/Aus-Schalter), waehrend Mail-Eingang
+    optional bleibt - ohne diese Erweiterung waere die Seite ohne konfiguriertes
+    Mail-Postfach ueber die Navigation gar nicht erreichbar gewesen."""
+    import kontakte_app_intake
+    return _mail_konfiguriert() or kontakte_app_intake.konfiguriert()
+
+
+templates.env.globals["vorschlaege_konfiguriert"] = _vorschlaege_konfiguriert
+
+
 def _archivio_konfiguriert() -> bool:
     """Prueft nicht nur, ob ein Pfad eingetragen ist, sondern ob dort tatsaechlich eine
     Datei liegt - ein veralteter/falscher Pfad soll den Nav-Punkt nicht anzeigen."""
