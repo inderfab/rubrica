@@ -229,11 +229,10 @@
       <p class="hero-slogan">Ein Adressbuch fürs ganze Büro.<br>Auf jedem Mac, jedem iPhone.</p>
 
       <ul class="hero-features">
-        <li><span class="hero-check">✓</span>Alle Kontakte an einem Ort statt in fünfzehn privaten Adressbüchern</li>
-        <li><span class="hero-check">✓</span>Synchronisiert direkt in Apple Kontakte – auf jedem Mac, iPhone und iPad</li>
-        <li><span class="hero-check">✓</span>Erfassen wo es passt: im Browser, in Kontakte.app oder per Mail von unterwegs</li>
-        <li><span class="hero-check">✓</span>Nichts wird überschrieben – Neues wird erst nach Freigabe übernommen</li>
-        <li><span class="hero-check">✓</span>Projektlisten als PDF, Excel oder vCard exportieren</li>
+        <li><span class="hero-check">✓</span>Alle Kontakte zentral verwaltet – synchronisiert direkt auf jeden Mac, jedes iPhone und iPad im Büro</li>
+        <li><span class="hero-check">✓</span>Erfassen von überall: in Apple Kontakte, im Browser oder per Mail von unterwegs</li>
+        <li><span class="hero-check">✓</span>Kontrollierte Freigabe: Was von unterwegs oder anderen Geräten hereinkommt, wird geprüft, bevor es an alle geht – bestehende Angaben bleiben dabei unangetastet</li>
+        <li><span class="hero-check">✓</span>Projektadresslisten auf Knopfdruck – als PDF, Excel oder vCard</li>
         <li><span class="hero-check">✓</span>Vollständig lokal im Büro – keine Cloud, keine Abos</li>
       </ul>
 
@@ -270,11 +269,11 @@
     <section class="features">
       <div class="feature">
         <h3>Erfassen, wo es gerade passt</h3>
-        <p>Im Browser, direkt in Kontakte.app auf einer beliebigen Station – oder unterwegs per Mail an ein eigenes Postfach. Auch eine weitergeleitete Mailsignatur genügt.</p>
+        <p>Drei Wege: im Browser mit vollem Formular, direkt in Kontakte.app auf einer beliebigen Station, oder per Mail an ein eigenes Postfach. Dorthin genügt eine weitergeleitete Visitenkarte oder Mailsignatur – Rubrica liest Name, Firma, Telefon und Adresse selbst heraus.</p>
       </div>
       <div class="feature">
         <h3>Vorschläge statt Chaos</h3>
-        <p>Alles, was von aussen kommt, landet zuerst als Vorschlag. Im Büro werden fehlende Angaben ergänzt und der Kontakt freigegeben – erst dann geht er an alle Geräte.</p>
+        <p>Alles, was von unterwegs per Mail oder direkt in Kontakte.app hereinkommt, landet zuerst als Vorschlag. Im Büro werden fehlende Angaben ergänzt und der Kontakt freigegeben – erst dann geht er an alle Geräte. Im Browser erfasste Kontakte sind dagegen sofort da.</p>
       </div>
       <div class="feature">
         <h3>Ordner statt Zettelwirtschaft</h3>
@@ -282,7 +281,7 @@
       </div>
       <div class="feature">
         <h3>Keine Dubletten</h3>
-        <p>Beim Import erkennt Rubrica bereits vorhandene Personen und ergänzt nur, was fehlt. Zusammengeführt wird nie ohne Rückfrage.</p>
+        <p>Erkennt Rubrica dieselbe Person, werden nur fehlende Angaben ergänzt – bestehende Daten bleiben unangetastet. Welche Kontakte zusammengeführt wurden, lässt sich jederzeit nachvollziehen.</p>
       </div>
       <div class="feature">
         <h3>Projektlisten auf Knopfdruck</h3>
@@ -309,25 +308,24 @@
       btn.textContent = 'Wird geladen…';
       btn.disabled = true;
 
+      // Download direkt anstossen statt ueber einen versteckten iframe mit Timeout:
+      // der Browser laedt die .pkg herunter, ohne die Seite zu verlassen.
       fetch('https://api.github.com/repos/inderfab/rubrica/releases/latest')
         .then(function(r) { return r.json(); })
         .then(function(data) {
           var asset = (data.assets || []).find(function(a) {
             return a.name.indexOf('rubrica-server') !== -1 && a.name.endsWith('.pkg');
           });
-          var downloadUrl = asset
+          window.location.href = asset
             ? asset.browser_download_url
             : 'https://github.com/inderfab/rubrica/releases/latest';
-          var iframe = document.createElement('iframe');
-          iframe.style.display = 'none';
-          iframe.src = downloadUrl;
-          document.body.appendChild(iframe);
-          setTimeout(function() {
-            window.location.href = 'docs.html#installation';
-          }, 1500);
+          btn.textContent = 'Herunterladen';
+          btn.disabled = false;
         })
         .catch(function() {
-          window.location.href = 'docs.html#installation';
+          window.location.href = 'https://github.com/inderfab/rubrica/releases/latest';
+          btn.textContent = 'Herunterladen';
+          btn.disabled = false;
         });
     }
   </script>

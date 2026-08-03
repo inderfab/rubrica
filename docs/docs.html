@@ -357,6 +357,13 @@
                 <strong>Verbindung testen</strong>. Er prüft unabhängig von Kontakte.app, ob der Server
                 erreichbar ist und die Zugangsdaten stimmen.
             </p>
+            <div class="hinweis">
+                <strong>Unterwegs:</strong> Einmal im Büronetz eingerichtet, bleiben alle Kontakte auf
+                iPhone und Mac dauerhaft verfügbar — auch ausserhalb des Büros. Sie werden lokal auf dem
+                Gerät gehalten und gleichen sich automatisch wieder ab, sobald das Gerät zurück im Büronetz
+                ist. Fehlermeldungen sind dabei nicht zu erwarten; die Synchronisation läuft still im
+                Hintergrund.
+            </div>
         </div>
 
         <div class="anleitung-abschnitt" id="weitere-macs">
@@ -372,7 +379,9 @@
             <p>
                 Für iPhone und iPad gilt dasselbe: <strong>Einstellungen → Apps → Kontakte → Kontaktaccounts
                 → Account hinzufügen → Andere → CardDAV-Account</strong>. Voraussetzung ist, dass sich das
-                Gerät im selben Netzwerk wie der Server-Mac befindet.
+                Gerät dabei im selben Netzwerk wie der Server-Mac befindet — die <strong>Ersteinrichtung</strong>
+                ist nur im Büro-WLAN möglich. Danach funktioniert der Zugriff auf die Kontakte auch unterwegs
+                (siehe Hinweis oben).
             </p>
         </div>
 
@@ -398,6 +407,11 @@
                 vorhanden, werden nur leere Felder ergänzt. Welche Kontakte dabei als Dublette
                 zusammengeführt wurden, lässt sich auf der Import-Seite jederzeit nachvollziehen.
             </div>
+            <p>
+                Importierte Kontakte sind sofort da — sie laufen nicht über die
+                <a href="#vorschlaege">Vorschläge</a>. Ein Import wird ja bewusst am Büro-Rechner
+                angestossen und ist damit bereits eine Freigabe.
+            </p>
         </div>
 
         <div class="anleitung-abschnitt" id="mail-eingang">
@@ -417,6 +431,12 @@
                 Postfach einmal täglich automatisch und liest dabei ausschliesslich mit — es wird dort nie
                 etwas verschoben oder gelöscht.
             </p>
+            <div class="hinweis">
+                Solche Kontakte werden <strong>nie direkt angelegt</strong>, sondern landen immer zuerst
+                unter <a href="#vorschlaege">Vorschläge</a>. Ein Postfach, das von überall erreichbar ist,
+                gilt als weniger vertrauenswürdiger Kanal als die Erfassung im Büro — deshalb der
+                Zwischenschritt.
+            </div>
         </div>
 
         <div class="anleitung-abschnitt" id="kontakte">
@@ -426,12 +446,13 @@
                 lassen sich auf zwei Arten anlegen:
             </p>
             <ul>
-                <li><strong>Im Browser</strong> über <strong>+ Neuer Kontakt</strong>. Dort kann auch eine
-                    komplette Mailsignatur eingefügt werden — Rubrica liest Name, Firma, Telefon und Adresse
+                <li><strong>Im Browser</strong> über <strong>+ Neuer Kontakt</strong>. Der Kontakt ist sofort
+                    angelegt und geht direkt an alle Geräte — ohne Zwischenschritt. Dort kann auch eine
+                    komplette Mailsignatur eingefügt werden: Rubrica liest Name, Firma, Telefon und Adresse
                     selbstständig heraus.</li>
                 <li><strong>Direkt in Kontakte.app</strong> auf einer beliebigen Station. Solche Neuanlagen
-                    erscheinen in Rubrica als <a href="#vorschlaege">Vorschlag</a> und werden erst nach
-                    Freigabe übernommen.</li>
+                    erscheinen in Rubrica zuerst als <a href="#vorschlaege">Vorschlag</a> und gehen erst nach
+                    Freigabe an alle Geräte.</li>
             </ul>
             <h3>Pflichtfelder</h3>
             <p>
@@ -439,6 +460,11 @@
                 Funktion, eine Telefonnummer, eine E-Mail-Adresse, eine Adresse sowie mindestens einen
                 Ordner. Fehlt etwas, wird das Feld rot markiert.
             </p>
+            <div class="hinweis">
+                Beim <a href="#import">Import</a> gelten die Pflichtfelder bewusst nicht — sonst liesse sich
+                ein gewachsenes Adressbuch gar nicht erst übernehmen. Unvollständige Kontakte lassen sich
+                über den Filter <strong>Unvollständige Kontakte</strong> jederzeit gezielt nacharbeiten.
+            </div>
             <h3>Funktion und Rolle</h3>
             <p>
                 Die <strong>Funktion</strong> beschreibt den Beruf (Architektin, Bauleiter, Sanitärplaner),
@@ -483,8 +509,16 @@
                     angelegt wurden.</li>
                 <li><strong>Mail</strong> — was an das Mail-Eingang-Postfach geschickt wurde.</li>
             </ul>
+            <div class="hinweis">
+                <strong>Nur diese beiden Wege landen hier.</strong> Im Browser angelegte Kontakte und
+                importierte Adressbücher werden direkt übernommen und erscheinen sofort unter
+                <a href="/kontakte">Kontakte</a> — sie tauchen bewusst nie in den Vorschlägen auf. Der
+                Grund: was vom Büro-Rechner selbst ausgeht, ist bereits geprüft. Was von aussen kommt —
+                ein von überall erreichbares Postfach oder ein beliebiger verbundener Mac — bekommt
+                zuerst diesen Zwischenschritt.
+            </div>
             <p>
-                Nichts davon wird automatisch übernommen. Zu jedem Eintrag gibt es drei Möglichkeiten:
+                Zu jedem Eintrag gibt es drei Möglichkeiten:
             </p>
             <ul>
                 <li><strong>Übernehmen</strong> — der Kontakt wird angelegt und an alle Geräte verteilt.</li>
@@ -494,8 +528,13 @@
             </ul>
             <p>
                 Erkennt Rubrica eine mögliche Dublette, wird das in der Liste angezeigt und vor dem
-                Zusammenführen nachgefragt. Wurde ein Kontakt bereits einem Ordner zugewiesen, übernimmt
-                Rubrica diese Zuordnung mit.
+                Zusammenführen nachgefragt. Zusammengeführt wird dabei nie zerstörend: bestehende Angaben
+                bleiben stehen, ergänzt werden nur leere Felder.
+            </p>
+            <p>
+                Wird ein direkt in Kontakte.app angelegter Kontakt dort einer Gruppe zugeordnet, erkennt
+                Rubrica das und schlägt den entsprechenden Ordner gleich mit vor — die Zuordnung muss also
+                nicht von Hand nachgetragen werden.
             </p>
             <p>
                 Die Prüfung läuft einmal täglich automatisch; der Knopf <strong>Jetzt prüfen</strong> stösst
