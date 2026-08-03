@@ -10,3 +10,12 @@ logs/
 dist/
 .DS_Store
 .pytest_cache/
+
+# Interne Doku: bleibt ausschliesslich lokal auf dem Entwicklungsrechner.
+# Enthaelt reale Namen, Adressen und Betriebsdetails und darf nie nach GitHub -
+# das Repository ist oeffentlich. Die weitergebbare technische Dokumentation
+# steht in docs/konzept.md.
+docs/CHANGELOG-INTERN.md
+
+# Arbeitsdateien/Notizen, die versehentlich im Repo landen koennten
+cgpt-debug.rtfd/

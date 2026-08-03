@@ -369,6 +369,8 @@ Radicale-Anbindung, launchd-Plists und `.pkg`-Build (Phase 2 ff.) werden zu gege
 ---
 
 Ein fortlaufender, datierter Entwicklungs-Changelog mit vollständiger Umsetzungshistorie liegt in
-`docs/CHANGELOG-INTERN.md` — **nicht Teil dieses Dokuments**, da er reale Namen, Maschinennamen, Pfade und
-Kontaktzahlen aus der produktiven Nutzung enthält und deshalb nie an andere Büros weitergegeben werden darf.
+`docs/CHANGELOG-INTERN.md` — **nicht Teil dieses Repositories**: die Datei enthält reale Namen,
+Maschinennamen, Pfade und Kontaktzahlen aus der produktiven Nutzung, liegt deshalb ausschliesslich lokal
+auf dem Entwicklungsrechner und ist in `.gitignore` eingetragen. Verweise auf sie im Code und in diesem
+Dokument sind bewusst erhalten, gehen aber ins Leere, wenn das Repository geklont wird.
 

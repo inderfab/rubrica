@@ -75,3 +75,49 @@ def test_interne_doku_wird_nicht_von_github_pages_veroeffentlicht():
     reale Namen/Pfade aus dem Betrieb und darf dort nie mit ausgeliefert werden."""
     config = (WURZEL / "docs" / "_config.yml").read_text(encoding="utf-8")
     assert "CHANGELOG-INTERN.md" in config
+
+
+def test_interne_doku_ist_nicht_von_git_getrackt():
+    """Das Repository ist oeffentlich. docs/CHANGELOG-INTERN.md enthaelt reale
+    Namen, Adressen und Betriebsdetails und wurde bewusst aus der Git-History
+    entfernt - sie darf nur lokal existieren. Dieser Test schlaegt an, falls sie
+    (z.B. per 'git add -f' oder geaenderter .gitignore) je wieder eingecheckt wird."""
+    getrackt = subprocess.run(
+        ["git", "ls-files", "docs/CHANGELOG-INTERN.md"],
+        cwd=WURZEL, capture_output=True, text=True,
+    ).stdout.strip()
+    assert getrackt == "", (
+        "docs/CHANGELOG-INTERN.md ist von Git getrackt - sie enthaelt reale "
+        "Personendaten und darf nie in ein oeffentliches Repository."
+    )
+
+
+def test_keine_realen_personendaten_im_getrackten_bestand():
+    """Breite Absicherung gegen erneutes Einschleppen von Echtdaten (Bueroname,
+    Klarnamen, Kundendomains, Dev-Pfade) - die 2026-08-03 aus der gesamten
+    Git-History entfernt wurden."""
+    verboten = [
+        "strut", "indergand", "geotest.ch", "atelier-nu", "sking.ch",
+        "luperto", "gilgen.com", "avs-systeme", "plotjet", "Müllhaupt",
+        "Brändli", "Goldiger", "Neuwiesenstrasse",
+    ]
+    dateien = subprocess.run(
+        ["git", "ls-files"], cwd=WURZEL, capture_output=True, text=True,
+    ).stdout.split()
+    # Diese Datei selbst enthaelt die Suchbegriffe naturgemaess in der Liste oben.
+    selbst = Path(__file__).relative_to(WURZEL).as_posix()
+    treffer = []
+    for name in dateien:
+        if name == selbst:
+            continue
+        pfad = WURZEL / name
+        if not pfad.is_file():
+            continue
+        try:
+            inhalt = pfad.read_text(encoding="utf-8", errors="ignore").lower()
+        except OSError:
+            continue
+        for wort in verboten:
+            if wort.lower() in inhalt:
+                treffer.append(f"{name}: {wort}")
+    assert not treffer, "Echtdaten im getrackten Bestand: " + ", ".join(treffer)
