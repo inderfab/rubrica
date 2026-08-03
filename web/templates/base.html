@@ -24,6 +24,7 @@
                 {% endif %}
                 <a href="/export" class="{{ 'aktiv' if pfad.startswith('/export') else '' }}">Export</a>
                 <a href="/einstellungen" class="{{ 'aktiv' if pfad.startswith('/einstellungen') else '' }}">Einstellungen</a>
+                <a href="/anleitung" class="{{ 'aktiv' if pfad.startswith('/anleitung') else '' }}">Anleitung</a>
             </nav>
             {% set neue_version = update_verfuegbar() %}
             {% if neue_version %}

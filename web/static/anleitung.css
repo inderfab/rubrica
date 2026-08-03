@@ -1,0 +1,159 @@
+/* Anleitung – gemeinsame Darstellung fuer die Server-Seite (/anleitung) UND die
+   statische Website (docs/docs.html, wird von scripts/build-website.py aus
+   derselben Quelle erzeugt). Alles bewusst unter .anleitung geschachtelt, damit
+   diese Regeln nie in die uebrige App-Oberflaeche (style.css) durchschlagen. */
+
+.anleitung {
+    display: flex;
+    gap: 3rem;
+    align-items: flex-start;
+    line-height: 1.7;
+}
+
+.anleitung-nav {
+    flex-shrink: 0;
+    width: 210px;
+}
+
+.anleitung-nav ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    position: sticky;
+    top: 1.5rem;
+}
+
+.anleitung-nav li { margin-bottom: 2px; }
+
+.anleitung-nav a {
+    display: block;
+    padding: 5px 0 5px 12px;
+    font-size: 0.87rem;
+    color: #777;
+    text-decoration: none;
+    border-left: 2px solid transparent;
+}
+
+.anleitung-nav a:hover { color: #111; border-left-color: #ddd; }
+
+.anleitung-nav .nav-titel {
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #aaa;
+    padding: 1.2rem 0 0.3rem 12px;
+}
+
+.anleitung-nav .nav-titel:first-child { padding-top: 0; }
+
+.anleitung-inhalt {
+    flex: 1;
+    min-width: 0;
+    max-width: 760px;
+}
+
+.anleitung-abschnitt {
+    padding-bottom: 2.5rem;
+    margin-bottom: 2.5rem;
+    border-bottom: 1px solid #e8e8e8;
+}
+
+.anleitung-abschnitt:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+
+.anleitung-inhalt h2 {
+    font-size: 1.4rem;
+    font-weight: 700;
+    letter-spacing: -0.4px;
+    margin: 0 0 1rem;
+}
+
+.anleitung-inhalt h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 1.6rem 0 0.5rem;
+}
+
+.anleitung-inhalt p {
+    margin: 0 0 0.8rem;
+    color: #333;
+}
+
+.anleitung-inhalt ul,
+.anleitung-inhalt ol {
+    padding-left: 1.3rem;
+    margin: 0 0 0.8rem;
+    color: #333;
+}
+
+.anleitung-inhalt li { margin-bottom: 0.35rem; }
+
+/* Nummerierte Schrittfolge mit Kreis-Ziffern */
+.schritte {
+    list-style: none;
+    padding: 0;
+    counter-reset: schritt;
+}
+
+.schritte > li {
+    counter-increment: schritt;
+    display: flex;
+    gap: 0.9rem;
+    margin-bottom: 0.9rem;
+    align-items: flex-start;
+}
+
+.schritte > li::before {
+    content: counter(schritt);
+    flex-shrink: 0;
+    width: 25px;
+    height: 25px;
+    background: #111;
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 1px;
+}
+
+.hinweis {
+    background: #f7f7f7;
+    border-left: 3px solid #111;
+    padding: 0.8rem 1.1rem;
+    border-radius: 0 6px 6px 0;
+    margin: 1.2rem 0;
+    font-size: 0.9rem;
+    color: #444;
+}
+
+.hinweis strong { color: #111; }
+
+.hinweis.warnung { border-left-color: #f0b429; background: #fff9ec; }
+
+.anleitung-inhalt code {
+    background: #f0f0f0;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.85em;
+    font-family: "SF Mono", Menlo, Monaco, monospace;
+}
+
+@media (max-width: 860px) {
+    .anleitung { flex-direction: column; gap: 1.5rem; }
+    .anleitung-nav { width: 100%; }
+    .anleitung-nav ul { position: static; display: flex; flex-wrap: wrap; gap: 4px; }
+    .anleitung-nav .nav-titel { display: none; }
+    .anleitung-nav a {
+        border: 1px solid #e0e0e0;
+        border-left-width: 1px;
+        border-radius: 4px;
+        padding: 5px 11px;
+    }
+}

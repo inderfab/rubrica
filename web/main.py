@@ -20,6 +20,7 @@ from web.imports import router as imports_router
 from web.export import router as export_router
 from web.archivio import router as archivio_router
 from web.vorschlaege import router as vorschlaege_router
+from web.anleitung import router as anleitung_router
 from web.settings import router as settings_router
 from web.setup import router as setup_router
 from web.shared import _setup_erforderlich
@@ -72,6 +73,7 @@ app.include_router(imports_router)
 app.include_router(export_router)
 app.include_router(archivio_router)
 app.include_router(vorschlaege_router)
+app.include_router(anleitung_router)
 app.include_router(settings_router)
 app.include_router(setup_router)
 

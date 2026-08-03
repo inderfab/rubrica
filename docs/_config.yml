@@ -1,0 +1,11 @@
+# GitHub-Pages-Konfiguration fuer die oeffentliche Website (docs/).
+#
+# WICHTIG: docs/ enthaelt neben der Website auch interne Dokumentation. Ohne diese
+# Ausschlussliste wuerde GitHub Pages sie unter einer sauberen, direkt aufrufbaren
+# URL mitveroeffentlichen (z.B. /CHANGELOG-INTERN.html) - CHANGELOG-INTERN.md
+# enthaelt reale Namen, Maschinennamen und Pfade aus dem produktiven Betrieb und
+# ist ausdruecklich nicht zur Weitergabe bestimmt (siehe Kopf der Datei).
+# Neue interne Dateien unter docs/ hier ebenfalls eintragen.
+exclude:
+  - CHANGELOG-INTERN.md
+  - konzept.md

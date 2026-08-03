@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Anleitung – Rubrica{% endblock %}
+{% block content %}
+<link rel="stylesheet" href="/static/anleitung.css?v={{ app_version }}">
+<h1>Anleitung</h1>
+{# Inhalt bewusst aus einer gemeinsamen Datei: dieselbe Quelle speist die
+   oeffentliche Website (docs/docs.html, erzeugt von scripts/build-website.py). #}
+{% include "_anleitung_inhalt.html" %}
+{% endblock %}

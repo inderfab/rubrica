@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Anleitung – Rubrica</title>
+  <!-- ACHTUNG: Diese Datei wird von scripts/build-website.py erzeugt.
+       Nicht von Hand bearbeiten - der Inhalt steht in
+       web/templates/_anleitung_inhalt.html (gemeinsame Quelle mit der App). -->
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      background: #fff;
+      color: #111;
+      line-height: 1.7;
+    }
+
+    header {
+      padding: 28px 48px;
+      border-bottom: 1px solid #e8e8e8;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .wordmark {
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      font-size: 18px;
+      font-weight: 600;
+      letter-spacing: -0.3px;
+      color: #111;
+      text-decoration: none;
+    }
+    .wordmark svg { display: block; }
+    .back-link { font-size: 13px; color: #999; text-decoration: none; }
+    .back-link:hover { color: #111; }
+
+    .page {
+      max-width: 1060px;
+      margin: 0 auto;
+      padding: 60px 24px 120px;
+    }
+
+    footer {
+      border-top: 1px solid #e8e8e8;
+      padding: 32px 48px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      color: #999;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    footer a { color: #999; text-decoration: none; }
+    footer a:hover { color: #111; }
+
+    .anleitung-inhalt a { color: #111; }
+
+    @media (max-width: 740px) {
+      header { padding: 20px 24px; }
+      .page { padding: 40px 20px 80px; }
+      footer { padding: 24px; flex-direction: column; align-items: flex-start; }
+    }
+
+/* ── aus web/static/anleitung.css ── */
+/* Anleitung – gemeinsame Darstellung fuer die Server-Seite (/anleitung) UND die
+   statische Website (docs/docs.html, wird von scripts/build-website.py aus
+   derselben Quelle erzeugt). Alles bewusst unter .anleitung geschachtelt, damit
+   diese Regeln nie in die uebrige App-Oberflaeche (style.css) durchschlagen. */
+
+.anleitung {
+    display: flex;
+    gap: 3rem;
+    align-items: flex-start;
+    line-height: 1.7;
+}
+
+.anleitung-nav {
+    flex-shrink: 0;
+    width: 210px;
+}
+
+.anleitung-nav ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    position: sticky;
+    top: 1.5rem;
+}
+
+.anleitung-nav li { margin-bottom: 2px; }
+
+.anleitung-nav a {
+    display: block;
+    padding: 5px 0 5px 12px;
+    font-size: 0.87rem;
+    color: #777;
+    text-decoration: none;
+    border-left: 2px solid transparent;
+}
+
+.anleitung-nav a:hover { color: #111; border-left-color: #ddd; }
+
+.anleitung-nav .nav-titel {
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #aaa;
+    padding: 1.2rem 0 0.3rem 12px;
+}
+
+.anleitung-nav .nav-titel:first-child { padding-top: 0; }
+
+.anleitung-inhalt {
+    flex: 1;
+    min-width: 0;
+    max-width: 760px;
+}
+
+.anleitung-abschnitt {
+    padding-bottom: 2.5rem;
+    margin-bottom: 2.5rem;
+    border-bottom: 1px solid #e8e8e8;
+}
+
+.anleitung-abschnitt:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+
+.anleitung-inhalt h2 {
+    font-size: 1.4rem;
+    font-weight: 700;
+    letter-spacing: -0.4px;
+    margin: 0 0 1rem;
+}
+
+.anleitung-inhalt h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 1.6rem 0 0.5rem;
+}
+
+.anleitung-inhalt p {
+    margin: 0 0 0.8rem;
+    color: #333;
+}
+
+.anleitung-inhalt ul,
+.anleitung-inhalt ol {
+    padding-left: 1.3rem;
+    margin: 0 0 0.8rem;
+    color: #333;
+}
+
+.anleitung-inhalt li { margin-bottom: 0.35rem; }
+
+/* Nummerierte Schrittfolge mit Kreis-Ziffern */
+.schritte {
+    list-style: none;
+    padding: 0;
+    counter-reset: schritt;
+}
+
+.schritte > li {
+    counter-increment: schritt;
+    display: flex;
+    gap: 0.9rem;
+    margin-bottom: 0.9rem;
+    align-items: flex-start;
+}
+
+.schritte > li::before {
+    content: counter(schritt);
+    flex-shrink: 0;
+    width: 25px;
+    height: 25px;
+    background: #111;
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 1px;
+}
+
+.hinweis {
+    background: #f7f7f7;
+    border-left: 3px solid #111;
+    padding: 0.8rem 1.1rem;
+    border-radius: 0 6px 6px 0;
+    margin: 1.2rem 0;
+    font-size: 0.9rem;
+    color: #444;
+}
+
+.hinweis strong { color: #111; }
+
+.hinweis.warnung { border-left-color: #f0b429; background: #fff9ec; }
+
+.anleitung-inhalt code {
+    background: #f0f0f0;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.85em;
+    font-family: "SF Mono", Menlo, Monaco, monospace;
+}
+
+@media (max-width: 860px) {
+    .anleitung { flex-direction: column; gap: 1.5rem; }
+    .anleitung-nav { width: 100%; }
+    .anleitung-nav ul { position: static; display: flex; flex-wrap: wrap; gap: 4px; }
+    .anleitung-nav .nav-titel { display: none; }
+    .anleitung-nav a {
+        border: 1px solid #e0e0e0;
+        border-left-width: 1px;
+        border-radius: 4px;
+        padding: 5px 11px;
+    }
+}
+  </style>
+</head>
+<body>
+
+  <header>
+    <a class="wordmark" href="index.html">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-linecap="round" stroke-linejoin="round" width="22" height="22">
+        <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20" stroke-width="2"/>
+        <path d="M9 7h6" stroke-width="2"/>
+        <path d="M9 11h6" stroke-width="2"/>
+      </svg>
+      Rubrica
+    </a>
+    <a class="back-link" href="index.html">← Zurück</a>
+  </header>
+
+  <div class="page">
+<!-- Anleitung: EINZIGE Quelle fuer den Inhalt, gemeinsam genutzt von
+     web/templates/anleitung.html (Server, Reiter "Anleitung") UND der statischen
+     Website docs/docs.html (wird von scripts/build-website.py hieraus erzeugt).
+     Darum bewusst OHNE Jinja-Syntax und ohne Seitenrahmen (kein header/footer,
+     kein extends) - beide Seiten legen ihren eigenen Rahmen darum. Wer den Text
+     aendert, aendert ihn hier und fuehrt danach scripts/build-website.py aus. -->
+<div class="anleitung">
+
+    <nav class="anleitung-nav">
+        <ul>
+            <li class="nav-titel">Einstieg</li>
+            <li><a href="#installation">Installation</a></li>
+            <li><a href="#erster-start">Erster Start</a></li>
+            <li class="nav-titel">Einrichten</li>
+            <li><a href="#carddav">Kontakte.app verbinden</a></li>
+            <li><a href="#weitere-macs">Weitere Macs</a></li>
+            <li><a href="#import">Bestehende Kontakte</a></li>
+            <li><a href="#mail-eingang">Mail-Eingang</a></li>
+            <li class="nav-titel">Täglicher Gebrauch</li>
+            <li><a href="#kontakte">Kontakte pflegen</a></li>
+            <li><a href="#ordner">Ordner</a></li>
+            <li><a href="#vorschlaege">Vorschläge</a></li>
+            <li><a href="#export">Export</a></li>
+            <li class="nav-titel">Betrieb</li>
+            <li><a href="#backup">Backup &amp; Updates</a></li>
+            <li><a href="#hilfe">Wenn etwas klemmt</a></li>
+        </ul>
+    </nav>
+
+    <article class="anleitung-inhalt">
+
+        <div class="anleitung-abschnitt" id="installation">
+            <h2>Installation</h2>
+            <p>
+                Rubrica läuft auf <strong>einem</strong> Mac im Büro (z.&nbsp;B. dem iMac, der ohnehin immer
+                läuft). Alle anderen Macs greifen über den Browser und über Apple Kontakte darauf zu — dort
+                muss nichts installiert werden.
+            </p>
+            <ol class="schritte">
+                <li><span>Doppelklick auf die heruntergeladene <code>.pkg</code>-Datei.</span></li>
+                <li><span>Auf <strong>Fortfahren</strong> und dann <strong>Installieren</strong> klicken.</span></li>
+                <li><span>Mac-Passwort eingeben und bestätigen.</span></li>
+                <li><span>Erscheinende Berechtigungsdialoge jeweils mit <strong>Erlauben</strong> bestätigen.</span></li>
+                <li><span>Nach dem Abschluss startet Rubrica automatisch und öffnet die Oberfläche im Browser.</span></li>
+            </ol>
+            <p>
+                Rubrica läuft danach dauerhaft im Hintergrund und meldet sich mit einem kleinen Symbol in der
+                Menüleiste. Über dieses Symbol lässt sich die Oberfläche jederzeit öffnen, der Server neu
+                starten oder beenden.
+            </p>
+            <div class="hinweis">
+                <strong>Nach einem Neustart des Macs</strong> startet Rubrica von selbst wieder — es ist als
+                Hintergrunddienst eingerichtet und muss nicht manuell geöffnet werden.
+            </div>
+        </div>
+
+        <div class="anleitung-abschnitt" id="erster-start">
+            <h2>Erster Start</h2>
+            <p>
+                Beim ersten Öffnen führt ein Einrichtungs-Assistent in sieben Schritten durch alles Nötige:
+                Firmenangaben und Logo für den Export, die CardDAV-Verbindung zu Apple Kontakte, der Import
+                bestehender Adressbücher sowie die optionalen Anbindungen an Archivio und ein
+                Mail-Postfach.
+            </p>
+            <p>
+                Die Oberfläche ist danach im ganzen Büronetz erreichbar unter
+                <code>http://&lt;Name-des-Servers&gt;.local:8001</code> — die exakte Adresse steht in den
+                Einstellungen. Am besten als Lesezeichen auf allen Arbeitsstationen ablegen.
+            </p>
+            <div class="hinweis">
+                Der Assistent erscheint nur, solange noch keine Kontakte erfasst sind. Alle Einstellungen
+                lassen sich später jederzeit unter <strong>Einstellungen</strong> ändern.
+            </div>
+        </div>
+
+        <div class="anleitung-abschnitt" id="carddav">
+            <h2>Kontakte.app verbinden (CardDAV)</h2>
+            <p>
+                Das ist der wichtigste Schritt: Damit erscheinen alle Kontakte und Ordner aus Rubrica
+                automatisch in Apple Kontakte — auf jedem Mac, jedem iPhone und jedem iPad im Büro.
+            </p>
+
+            <h3>Schritt 1 — Zertifikat vertrauen</h3>
+            <p>
+                Rubrica liefert die Kontakte verschlüsselt aus und benutzt dafür ein selbst erzeugtes
+                Zertifikat. Dieses muss auf jedem Gerät einmalig als vertrauenswürdig markiert werden.
+            </p>
+            <ol class="schritte">
+                <li><span>In Rubrica unter <strong>Einstellungen</strong> auf <strong>Zertifikat herunterladen</strong> klicken.</span></li>
+                <li><span>Die geladene Datei per Doppelklick öffnen — der Schlüsselbund öffnet sich.</span></li>
+                <li><span>Den Eintrag doppelklicken, den Bereich <strong>Vertrauen</strong> aufklappen und auf <strong>Immer vertrauen</strong> stellen.</span></li>
+                <li><span>Fenster schliessen und mit dem Mac-Passwort bestätigen.</span></li>
+            </ol>
+
+            <h3>Schritt 2 — Konto in Kontakte.app anlegen</h3>
+            <ol class="schritte">
+                <li><span>Kontakte.app öffnen → <strong>Einstellungen → Accounts → Account hinzufügen → Anderer Account → CardDAV-Account</strong>.</span></li>
+                <li><span>Als Accounttyp <strong>Manuell</strong> wählen.</span></li>
+                <li><span>Benutzername, Passwort und Serveradresse aus den Rubrica-Einstellungen eintragen.</span></li>
+                <li><span>Auf <strong>Anmelden</strong> klicken — die Kontakte erscheinen nach kurzer Zeit.</span></li>
+            </ol>
+            <div class="hinweis warnung">
+                <strong>Wichtig:</strong> Unbedingt den Modus <strong>„Manuell"</strong> verwenden, nicht
+                „Erweitert". Bei der Serveradresse nur den Namen eintragen — <strong>ohne Port und ohne
+                Pfad</strong>. Eine abweichende Eingabe an dieser Stelle ist mit Abstand die häufigste
+                Ursache dafür, dass die Synchronisation stillschweigend nicht funktioniert.
+            </div>
+
+            <h3>Schritt 3 — Verbindung prüfen</h3>
+            <p>
+                Im Einrichtungs-Assistenten und in den Einstellungen gibt es einen Knopf
+                <strong>Verbindung testen</strong>. Er prüft unabhängig von Kontakte.app, ob der Server
+                erreichbar ist und die Zugangsdaten stimmen.
+            </p>
+        </div>
+
+        <div class="anleitung-abschnitt" id="weitere-macs">
+            <h2>Weitere Macs einrichten</h2>
+            <p>
+                Auf jeder weiteren Arbeitsstation sind nur zwei Dinge nötig — eine Installation ist
+                <em>nicht</em> erforderlich:
+            </p>
+            <ol class="schritte">
+                <li><span>Das Zertifikat einmalig vertrauen (siehe <a href="#carddav">Kontakte.app verbinden</a>).</span></li>
+                <li><span>Das CardDAV-Konto in Kontakte.app anlegen — mit denselben Zugangsdaten wie auf dem Server-Mac.</span></li>
+            </ol>
+            <p>
+                Für iPhone und iPad gilt dasselbe: <strong>Einstellungen → Apps → Kontakte → Kontaktaccounts
+                → Account hinzufügen → Andere → CardDAV-Account</strong>. Voraussetzung ist, dass sich das
+                Gerät im selben Netzwerk wie der Server-Mac befindet.
+            </p>
+        </div>
+
+        <div class="anleitung-abschnitt" id="import">
+            <h2>Bestehende Kontakte übernehmen</h2>
+            <p>
+                Unter <strong>Import</strong> stehen zwei Wege zur Verfügung:
+            </p>
+            <h3>Direkt aus Kontakte.app</h3>
+            <p>
+                Übernimmt alle Kontakte und Gruppen des Adressbuchs, das auf dem Server-Mac angemeldet ist —
+                Gruppen werden dabei zu Ordnern. Bei grossen Adressbüchern dauert das einige Minuten; der
+                Fortschritt wird laufend angezeigt.
+            </p>
+            <h3>Als Datei von anderen Macs</h3>
+            <p>
+                In Kontakte.app auf dem jeweiligen Mac: <strong>Ablage → Exportieren → vCard exportieren</strong>.
+                Die entstandene <code>.vcf</code>-Datei auf der Import-Seite ins Feld ziehen. Mehrere Dateien
+                gleichzeitig sind möglich.
+            </p>
+            <div class="hinweis">
+                <strong>Nichts wird überschrieben.</strong> Erkennt Rubrica eine Person als bereits
+                vorhanden, werden nur leere Felder ergänzt. Welche Kontakte dabei als Dublette
+                zusammengeführt wurden, lässt sich auf der Import-Seite jederzeit nachvollziehen.
+            </div>
+        </div>
+
+        <div class="anleitung-abschnitt" id="mail-eingang">
+            <h2>Mail-Eingang (optional)</h2>
+            <p>
+                Für Kontakte von unterwegs lässt sich ein eigenes Postfach hinterlegen, zum Beispiel
+                <code>rubrica@firma.ch</code>. Was an diese Adresse geschickt wird, landet als Vorschlag in
+                Rubrica:
+            </p>
+            <ul>
+                <li>eine weitergeleitete Visitenkarte („Kontakt senden" aus Kontakte.app),</li>
+                <li>oder schlicht Name, Telefonnummer und E-Mail als Text — auch eine weitergeleitete
+                    Mailsignatur genügt.</li>
+            </ul>
+            <p>
+                Eingerichtet wird das unter <strong>Einstellungen → Mail-Eingang</strong>. Rubrica prüft das
+                Postfach einmal täglich automatisch und liest dabei ausschliesslich mit — es wird dort nie
+                etwas verschoben oder gelöscht.
+            </p>
+        </div>
+
+        <div class="anleitung-abschnitt" id="kontakte">
+            <h2>Kontakte pflegen</h2>
+            <p>
+                Unter <strong>Kontakte</strong> stehen alle Einträge mit Suche und Filter. Neue Kontakte
+                lassen sich auf zwei Arten anlegen:
+            </p>
+            <ul>
+                <li><strong>Im Browser</strong> über <strong>+ Neuer Kontakt</strong>. Dort kann auch eine
+                    komplette Mailsignatur eingefügt werden — Rubrica liest Name, Firma, Telefon und Adresse
+                    selbstständig heraus.</li>
+                <li><strong>Direkt in Kontakte.app</strong> auf einer beliebigen Station. Solche Neuanlagen
+                    erscheinen in Rubrica als <a href="#vorschlaege">Vorschlag</a> und werden erst nach
+                    Freigabe übernommen.</li>
+            </ul>
+            <h3>Pflichtfelder</h3>
+            <p>
+                Damit die Daten brauchbar bleiben, verlangt Rubrica beim Speichern Vor- und Nachname,
+                Funktion, eine Telefonnummer, eine E-Mail-Adresse, eine Adresse sowie mindestens einen
+                Ordner. Fehlt etwas, wird das Feld rot markiert.
+            </p>
+            <h3>Funktion und Rolle</h3>
+            <p>
+                Die <strong>Funktion</strong> beschreibt den Beruf (Architektin, Bauleiter, Sanitärplaner),
+                die <strong>Rolle</strong> die Aufgabe im konkreten Projekt (Bauherrschaft, Unternehmer).
+                Beide Listen lassen sich unter <strong>Einstellungen</strong> zentral umbenennen und
+                bereinigen.
+            </p>
+            <h3>Mehrere auf einmal bearbeiten</h3>
+            <p>
+                Über die Auswahlkästchen links lassen sich mehrere Kontakte markieren und danach gemeinsam
+                bearbeiten, einem Ordner zuweisen oder löschen.
+            </p>
+        </div>
+
+        <div class="anleitung-abschnitt" id="ordner">
+            <h2>Ordner</h2>
+            <p>
+                Ordner gruppieren Kontakte — typischerweise pro Projekt oder Themenbereich. In Apple Kontakte
+                erscheinen sie als Gruppen. Ein Kontakt kann in beliebig vielen Ordnern liegen.
+            </p>
+            <p>
+                Kontakte lassen sich per Ziehgriff <code>⠿</code> direkt aus der Liste auf einen Ordner
+                ziehen. Ordner können sowohl im Browser als auch direkt in Kontakte.app angelegt werden.
+            </p>
+            <div class="hinweis">
+                <strong>Archiv:</strong> Ordner, deren Name mit <code>Z</code> beginnt (z.&nbsp;B.
+                <code>Z_Bürofest 2019</code>), gelten als abgeschlossen. Sie bleiben im Browser vollständig
+                nutzbar, werden aber nicht mehr an Apple Kontakte ausgeliefert — so bleiben die Gruppen auf
+                den Geräten übersichtlich. Ein Ordner lässt sich jederzeit durch Umbenennen ins Archiv
+                verschieben oder wieder zurückholen.
+            </div>
+        </div>
+
+        <div class="anleitung-abschnitt" id="vorschlaege">
+            <h2>Vorschläge</h2>
+            <p>
+                Unter <strong>Vorschläge</strong> sammelt Rubrica alles, was von aussen hereinkommt und noch
+                nicht freigegeben ist. Zwei Quellen laufen hier zusammen:
+            </p>
+            <ul>
+                <li><strong>Kontakte.app</strong> — Kontakte und Ordner, die direkt auf einem verbundenen Mac
+                    angelegt wurden.</li>
+                <li><strong>Mail</strong> — was an das Mail-Eingang-Postfach geschickt wurde.</li>
+            </ul>
+            <p>
+                Nichts davon wird automatisch übernommen. Zu jedem Eintrag gibt es drei Möglichkeiten:
+            </p>
+            <ul>
+                <li><strong>Übernehmen</strong> — der Kontakt wird angelegt und an alle Geräte verteilt.</li>
+                <li><strong>Bearbeiten</strong> — fehlende Pflichtfelder ergänzen und danach übernehmen.
+                    Das ist der Normalfall bei unterwegs erfassten Kontakten.</li>
+                <li><strong>Ablehnen</strong> — der Vorschlag verschwindet, ohne etwas anzulegen.</li>
+            </ul>
+            <p>
+                Erkennt Rubrica eine mögliche Dublette, wird das in der Liste angezeigt und vor dem
+                Zusammenführen nachgefragt. Wurde ein Kontakt bereits einem Ordner zugewiesen, übernimmt
+                Rubrica diese Zuordnung mit.
+            </p>
+            <p>
+                Die Prüfung läuft einmal täglich automatisch; der Knopf <strong>Jetzt prüfen</strong> stösst
+                sie jederzeit von Hand an.
+            </p>
+        </div>
+
+        <div class="anleitung-abschnitt" id="export">
+            <h2>Export</h2>
+            <p>
+                Unter <strong>Export</strong> lässt sich ein Ordner als Kontaktliste ausgeben — in drei
+                Formaten, einzeln oder gemeinsam als ZIP-Archiv:
+            </p>
+            <ul>
+                <li><strong>PDF</strong> — gestaltete Liste mit Firmenlogo, nach Funktion sortiert und nach
+                    Firma gruppiert. Für den Projektordner oder die Bauherrschaft.</li>
+                <li><strong>CSV</strong> — für Excel, mit getrennten Spalten je Kategorie.</li>
+                <li><strong>vCard</strong> — eine <code>.vcf</code>-Datei, die sich bei Externen per
+                    Doppelklick ins Adressbuch übernehmen lässt.</li>
+            </ul>
+            <p>
+                Welche Felder im PDF erscheinen und welches Logo verwendet wird, lässt sich unter
+                <strong>Einstellungen</strong> festlegen.
+            </p>
+        </div>
+
+        <div class="anleitung-abschnitt" id="backup">
+            <h2>Backup &amp; Updates</h2>
+            <h3>Backup</h3>
+            <p>
+                Rubrica sichert die Datenbank nach jeder Änderung automatisch in einen frei wählbaren Ordner
+                — sinnvollerweise auf das NAS oder einen anderen Ort, der ins reguläre Backup läuft.
+                Einzustellen unter <strong>Einstellungen → Backup</strong>.
+            </p>
+            <h3>Updates</h3>
+            <p>
+                Rubrica prüft selbstständig, ob eine neue Version vorliegt. Ist eine verfügbar, erscheint ein
+                Hinweis in der Seitenleiste und im Menüleisten-Symbol; die Installation erfolgt dort per
+                Klick. Die Daten bleiben dabei vollständig erhalten.
+            </p>
+        </div>
+
+        <div class="anleitung-abschnitt" id="hilfe">
+            <h2>Wenn etwas klemmt</h2>
+
+            <h3>In Kontakte.app erscheinen keine Kontakte</h3>
+            <p>
+                Fast immer liegt es am CardDAV-Konto. Zu prüfen: Wurde der Modus <strong>Manuell</strong>
+                verwendet? Steht in der Serveradresse wirklich nur der Name, ohne Port und ohne Pfad? Wurde
+                das Zertifikat auf diesem Gerät als vertrauenswürdig markiert? Der Knopf
+                <strong>Verbindung testen</strong> in den Einstellungen grenzt ein, ob das Problem am Server
+                oder am Gerät liegt.
+            </p>
+
+            <h3>Änderungen kommen nicht auf allen Geräten an</h3>
+            <p>
+                Apple Kontakte holt Änderungen in Intervallen ab, nicht in Echtzeit — etwas Geduld genügt
+                meist. Bleibt es dabei, hilft <strong>Einstellungen → Jetzt alles neu synchronisieren</strong>.
+                Damit wird der gesamte Bestand neu übertragen und Verwaistes bereinigt. Bei vielen Kontakten
+                dauert das einige Minuten.
+            </p>
+
+            <h3>Ein Kontakt taucht doppelt auf</h3>
+            <p>
+                Beide Einträge im Browser öffnen, den vollständigeren behalten und den anderen löschen. Die
+                Löschung wird an alle Geräte weitergegeben. Rubrica führt Dubletten nie eigenmächtig
+                zusammen — beim Import und bei Vorschlägen wird immer vorher nachgefragt.
+            </p>
+
+            <h3>Die Oberfläche ist nicht erreichbar</h3>
+            <p>
+                Prüfen, ob der Server-Mac läuft und das Rubrica-Symbol in dessen Menüleiste sichtbar ist.
+                Über dieses Symbol lässt sich der Server neu starten. Danach die Seite im Browser neu laden.
+            </p>
+        </div>
+
+    </article>
+</div>
+  </div>
+
+  <footer>
+    <span>Rubrica</span>
+    <span>© 2026 Rubrica</span>
+  </footer>
+
+</body>
+</html>
