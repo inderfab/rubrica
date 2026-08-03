@@ -71,7 +71,7 @@ def test_erkennt_fremde_vcard_als_vorschlag(tmp_db, monkeypatch):
     assert not any(vv["rohdaten"].get("kontakte_app_vcf_name") == "kontakt-1.vcf" for vv in vorschlaege)
 
 
-def test_ignoriert_fremde_gruppen_neuanlage(tmp_db, monkeypatch):
+def test_erkennt_fremde_gruppe_als_ordner_vorschlag(tmp_db, monkeypatch):
     def handler(request: httpx.Request) -> httpx.Response:
         if request.method == "PROPFIND":
             return httpx.Response(207, text=_propfind_xml(["GRUPPE-1-FREMD.vcf"]))
@@ -85,8 +85,32 @@ def test_ignoriert_fremde_gruppen_neuanlage(tmp_db, monkeypatch):
 
     ergebnis = kontakte_app_intake.pruefe_kontakte_app_neuzugaenge(tmp_db)
 
-    assert ergebnis["neu"] == 0
-    assert queries.list_vorschlaege(tmp_db, quelle="kontakte_app") == []
+    assert ergebnis["neu"] == 1
+    vorschlaege = queries.list_vorschlaege(tmp_db, quelle="kontakte_app")
+    assert len(vorschlaege) == 1
+    v = vorschlaege[0]
+    assert v["rohdaten"]["typ"] == "ordner"
+    assert v["rohdaten"]["name"] == "Neue Liste"
+    assert v["rohdaten"]["apple_gruppe_uid"] == "GRUPPE-1-FREMD"
+    assert v["rohdaten"]["kontakte_app_vcf_name"] == "GRUPPE-1-FREMD.vcf"
+    assert v["message_id"] == "kontakte-app:GRUPPE-1-FREMD.vcf"
+
+
+def test_bestaetige_ordner_vorschlag_legt_ordner_an_und_verknuepft_bekannte_mitglieder(tmp_db):
+    bekannter_id = queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster",
+                                                     "apple_uid": "ANNA-UID"})
+    vorschlag_id = queries.create_vorschlag(tmp_db, {
+        "typ": "ordner", "name": "Neue Liste", "apple_gruppe_uid": "GRUPPE-1-FREMD",
+        "mitglieder_uids": ["ANNA-UID", "UNBEKANNT-UID"], "kontakte_app_vcf_name": "GRUPPE-1-FREMD.vcf",
+    }, quelle="kontakte_app")
+    vorschlag = queries.get_vorschlag(tmp_db, vorschlag_id)
+
+    projekt_id = kontakte_app_intake.bestaetige_ordner_vorschlag(tmp_db, vorschlag)
+
+    ordner = queries.list_projekte(tmp_db)
+    assert any(o["id"] == projekt_id and o["name"] == "Neue Liste" for o in ordner)
+    kontakt = queries.get_kontakt(tmp_db, bekannter_id)
+    assert [p["id"] for p in kontakt["projekte"]] == [projekt_id]
 
 
 def test_erkennt_ordner_mitgliedschaft_aus_eigener_projekt_vcard(tmp_db, monkeypatch):
@@ -183,4 +207,4 @@ def test_pruefe_und_beschreibe_fasst_ergebnis_zusammen(tmp_db, monkeypatch):
 
     text = kontakte_app_intake.pruefe_und_beschreibe(tmp_db)
     assert "1 neue Kontakte.app-Einträge geprüft" in text
-    assert "1 neue Kontaktvorschläge angelegt" in text
+    assert "1 neue Vorschläge angelegt" in text

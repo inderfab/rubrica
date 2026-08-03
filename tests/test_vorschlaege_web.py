@@ -164,3 +164,46 @@ def test_uebernehmen_weist_erkannte_ordner_zu_und_loescht_fremde_vcard(tmp_db, m
     assert len(kontakte) == 1
     assert [p["id"] for p in kontakte[0]["projekte"]] == [projekt_id]
     assert "/a/ABC-123-FREMD.vcf" in geloescht
+
+
+def test_seite_zeigt_ordner_vorschlag(tmp_db):
+    queries.create_vorschlag(tmp_db, {
+        "typ": "ordner", "name": "Neue Liste", "apple_gruppe_uid": "GRUPPE-1",
+        "mitglieder_uids": ["A", "B"], "kontakte_app_vcf_name": "GRUPPE-1.vcf",
+    }, quelle="kontakte_app")
+
+    r = _client().get("/vorschlaege")
+    assert r.status_code == 200
+    assert "Neue Liste" in r.text
+    assert "2 Mitglied(er) erkannt" in r.text
+
+
+def test_uebernehmen_ordner_vorschlag_legt_ordner_an_und_loescht_fremde_vcard(tmp_db, monkeypatch):
+    bekannter_id = queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster",
+                                                     "apple_uid": "ANNA-UID"})
+    vorschlag_id = queries.create_vorschlag(tmp_db, {
+        "typ": "ordner", "name": "Neue Liste", "apple_gruppe_uid": "GRUPPE-1",
+        "mitglieder_uids": ["ANNA-UID"], "kontakte_app_vcf_name": "GRUPPE-1.vcf",
+    }, quelle="kontakte_app")
+
+    geloescht = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "DELETE":
+            geloescht.append(request.url.path)
+            return httpx.Response(204)
+        return httpx.Response(201)
+
+    monkeypatch.setattr(radicale, "_client", lambda: httpx.Client(
+        transport=httpx.MockTransport(handler), base_url="https://test/a/"
+    ))
+
+    r = _client().post(f"/vorschlaege/{vorschlag_id}/uebernehmen", follow_redirects=False)
+    assert r.status_code == 303
+
+    ordner = queries.list_projekte(tmp_db)
+    assert any(o["name"] == "Neue Liste" for o in ordner)
+    kontakt = queries.get_kontakt(tmp_db, bekannter_id)
+    assert len(kontakt["projekte"]) == 1
+    assert "/a/GRUPPE-1.vcf" in geloescht
+    assert queries.get_vorschlag(tmp_db, vorschlag_id)["status"] == "bestaetigt"

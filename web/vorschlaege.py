@@ -1,10 +1,12 @@
-"""Review-Seite fuer Kontaktvorschlaege aus zwei Quellen: dem Mail-Eingang (siehe
-mail_intake.py) und direkt in Kontakte.app angelegten Kontakten (siehe
+"""Review-Seite fuer Vorschlaege aus zwei Quellen: dem Mail-Eingang (siehe
+mail_intake.py) und direkt in Kontakte.app angelegten Kontakten/Ordnern (siehe
 kontakte_app_intake.py). Im Gegensatz zu Import-/Archivio-Vorschlaegen bleiben diese
 bewusst auf 'offen' stehen, bis sie hier manuell bestaetigt oder abgelehnt werden -
 ein von aussen erreichbares Postfach bzw. eine direkt in Kontakte.app angelegte
 vCard sind ein weniger vertrauenswuerdiger Kanal als Import/Archivio, die vom
-Buero-Rechner selbst ausgehen."""
+Buero-Rechner selbst ausgehen. Ein Vorschlag mit rohdaten.typ == "ordner" ist ein
+in Kontakte.app neu angelegter Ordner statt eines Kontakts (siehe
+kontakte_app_intake.bestaetige_ordner_vorschlag)."""
 from __future__ import annotations
 
 from urllib.parse import quote
@@ -70,11 +72,17 @@ def vorschlag_uebernehmen(vorschlag_id: int):
     conn = get_connection()
     try:
         vorschlag = queries.get_vorschlag(conn, vorschlag_id)
-        ordner_ids = vorschlag["rohdaten"].get("erkannte_ordner_ids") if vorschlag else None
-        kontakt_id = queries.bestaetige_vorschlag(conn, vorschlag_id, ordner_ids=ordner_ids)
-        radicale.push_kontakt_mit_ordnern(conn, kontakt_id)
-        if vorschlag:
+        if vorschlag and vorschlag["rohdaten"].get("typ") == "ordner":
+            projekt_id = kontakte_app_intake.bestaetige_ordner_vorschlag(conn, vorschlag)
+            queries.set_vorschlag_status(conn, vorschlag_id, "bestaetigt")
+            radicale.push_projekt(conn, projekt_id)
             _nach_bestaetigung_aufraeumen(vorschlag)
+        else:
+            ordner_ids = vorschlag["rohdaten"].get("erkannte_ordner_ids") if vorschlag else None
+            kontakt_id = queries.bestaetige_vorschlag(conn, vorschlag_id, ordner_ids=ordner_ids)
+            radicale.push_kontakt_mit_ordnern(conn, kontakt_id)
+            if vorschlag:
+                _nach_bestaetigung_aufraeumen(vorschlag)
     finally:
         conn.close()
     return RedirectResponse(url="/vorschlaege", status_code=303)

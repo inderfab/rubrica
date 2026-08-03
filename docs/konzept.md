@@ -204,16 +204,29 @@ Feldumfang bewusst an der tatsächlichen Nutzung im bestehenden Apple-Adressbuch
   Büro, bevor sie an alle Geräte zurückgepusht werden.
 - **`kontakte_app_intake.py`** (Struktur an `mail_intake.py` gespiegelt) scannt Radicale per PROPFIND nach
   vCard-Ressourcen, deren Name nicht Rubricas eigenem Muster (`kontakt-N.vcf`/`projekt-N.vcf`) entspricht —
-  jede so gefundene vCard stammt zwangsläufig direkt von einem Mac-Client. Fremde Gruppen-Neuanlagen (wie
-  "Neue Liste") werden bewusst NICHT übernommen, nur Kontakte. Dies ist die einzige bewusste Ausnahme von
-  "Radicale wird nie gelesen, nur beschrieben" — geschrieben wird dabei nichts aus eigenem Antrieb, das
-  Löschen der fremden vCard erfolgt erst nach expliziter Bestätigung im Büro.
-- **Ordner-Erkennung ("wenn möglich"):** jede eigene `projekt-N.vcf` wird auf
-  `X-ADDRESSBOOKSERVER-MEMBER`-Einträge gescannt, die auf die Apple-UID des fremden Kontakts zeigen —
-  Treffer landen als `erkannte_ordner_ids` auf dem Vorschlag und werden beim Übernehmen ergänzend
-  zugewiesen. Race bewusst in Kauf genommen: ein `push_projekt()` desselben Ordners zwischen
+  jede so gefundene vCard stammt zwangsläufig direkt von einem Mac-Client. Dies ist die einzige bewusste
+  Ausnahme von "Radicale wird nie gelesen, nur beschrieben" — geschrieben wird dabei nichts aus eigenem
+  Antrieb, das Löschen der fremden vCard erfolgt erst nach expliziter Bestätigung im Büro.
+- **Ordner-Erkennung, zweiseitig ("wenn möglich"):**
+  1. Ein fremder KONTAKT, der einem bereits bestehenden Rubrica-Ordner hinzugefügt wurde: jede eigene
+     `projekt-N.vcf` wird auf `X-ADDRESSBOOKSERVER-MEMBER`-Einträge mit der Apple-UID des fremden Kontakts
+     gescannt — Treffer landen als `erkannte_ordner_ids` auf dem Kontakt-Vorschlag und werden beim
+     Übernehmen ergänzend zugewiesen.
+  2. Eine fremde GRUPPEN-Neuanlage (wie der ursprüngliche "Neue Liste"-Vorfall) wird seit 2026-07-31 selbst
+     zum Vorschlag (`rohdaten.typ = "ordner"`, erkannt per `X-ADDRESSBOOKSERVER-KIND:group`) statt wie
+     zunächst entschieden ignoriert zu werden — Nutzer-Vorgabe: Kontakte UND Ordner sollen von jeder Station
+     (Kontakte.app oder Browser) aus anlegbar sein. `kontakte_app_intake.bestaetige_ordner_vorschlag()` legt
+     den Ordner beim Bestätigen an (bzw. findet ihn über die Apple-Gruppen-UID wieder) und verknüpft jedes
+     Mitglied, das bereits als Rubrica-Kontakt existiert — ein Mitglied ohne bestätigten eigenen
+     Kontakt-Vorschlag wird NICHT nachträglich verknüpft (muss danach manuell per Drag&Drop ergänzt werden).
+  Race bewusst in Kauf genommen (Fall 1): ein `push_projekt()` desselben Ordners zwischen
   Mitgliedschaft-Setzen in Kontakte.app und dem nächsten Scan überschreibt die Mitgliederliste aus Rubricas
   eigener Tabelle und macht die frische Mitgliedschaft für diesen Scan unsichtbar.
+- **Bewusste Grenze:** nur NEUE (unbekannte) vCard-Namen werden erkannt — eine Umbenennung oder Bearbeitung
+  eines bereits von Rubrica verwalteten Ordners/Kontakts direkt in Kontakte.app wird von diesem Scan nicht
+  erfasst und von der nächsten Rubrica-Synchronisation stillschweigend wieder überschrieben. Echte
+  bidirektionale Synchronisation würde dem Prinzip "Rubrica ist alleinige Datenquelle" widersprechen und
+  wurde bewusst nicht umgesetzt.
 - `VORSCHLAEGE.quelle = 'kontakte_app'` (Migration `2026-07-31_vorschlaege_kontakte_app_quelle`, gleiches
   RENAME→CREATE→INSERT…SELECT→DROP-Verfahren wie bei der `'mail'`-Erweiterung), bleibt ebenfalls auf
   `status = 'offen'` stehen.

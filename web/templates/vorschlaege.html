@@ -9,9 +9,9 @@
 </div>
 <p class="empty">
     Kontakte, die per Mail an das Mail-Eingang-Postfach geschickt wurden (vCard-Anhang oder Name/Telefon/
-    Mail als Text, siehe <a href="/einstellungen">Einstellungen</a>) oder direkt in Kontakte.app angelegt/
-    verändert wurden. Nichts wird automatisch übernommen, erst nach Bestätigung hier landet ein Vorschlag
-    in den <a href="/kontakte">Kontakten</a>.
+    Mail als Text, siehe <a href="/einstellungen">Einstellungen</a>) oder direkt in Kontakte.app angelegte
+    Kontakte und Ordner. Nichts wird automatisch übernommen, erst nach Bestätigung hier landet ein Vorschlag
+    in den <a href="/kontakte">Kontakten</a> bzw. <a href="/ordner">Ordnern</a>.
 </p>
 {% if meldung %}
 <p style="color:#1a7f37; padding:0.5rem 0">{{ meldung }}</p>
@@ -27,6 +27,23 @@
     <tbody>
         {% for v in vorschlaege %}
         {% set k = v.rohdaten %}
+        {% if k.typ == "ordner" %}
+        <tr>
+            <td colspan="2">📁 {{ k.name }}</td>
+            <td colspan="2"></td>
+            <td>Kontakte.app</td>
+            <td>{{ k.mitglieder_uids|length }} Mitglied(er) erkannt</td>
+            <td class="actions">
+                <form method="post" action="/vorschlaege/{{ v.id }}/uebernehmen">
+                    <button type="submit">Übernehmen</button>
+                </form>
+                <form method="post" action="/vorschlaege/{{ v.id }}/ablehnen"
+                      onsubmit="return confirm('Vorschlag wirklich ablehnen?')">
+                    <button type="submit" class="secondary">Ablehnen</button>
+                </form>
+            </td>
+        </tr>
+        {% else %}
         <tr>
             <td>{{ k.vorname }} {{ k.nachname }}</td>
             <td>{{ k.firma }}</td>
@@ -64,6 +81,7 @@
                 </form>
             </td>
         </tr>
+        {% endif %}
         {% endfor %}
     </tbody>
 </table>

@@ -105,6 +105,14 @@ def get_kontakt(conn: sqlite3.Connection, kontakt_id: int) -> dict | None:
     return _kontakt_row_to_dict(conn, row)
 
 
+def kontakt_id_von_apple_uid(conn: sqlite3.Connection, apple_uid: str) -> "int | None":
+    """Fuer kontakte_app_intake.py: findet einen bereits bestehenden Rubrica-Kontakt
+    ueber seine stabile Apple-UID - genutzt beim Bestaetigen eines Ordner-Vorschlags,
+    um dessen Mitgliederliste (Apple-UIDs) gegen bereits bekannte Kontakte aufzuloesen."""
+    row = conn.execute("SELECT id FROM kontakte WHERE apple_uid = ? LIMIT 1", (apple_uid,)).fetchone()
+    return row["id"] if row else None
+
+
 def create_kontakt(conn: sqlite3.Connection, daten: dict) -> int:
     with conn:
         cur = conn.execute(
