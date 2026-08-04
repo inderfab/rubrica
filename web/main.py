@@ -55,6 +55,17 @@ def _vorschlaege_ueberwachung():
         finally:
             conn.close()
 
+        # Getrennte Verbindung und eigener Fehlerfang: der Ordner-Abgleich soll auch
+        # dann laufen, wenn der Neuzugaenge-Check oben gescheitert ist.
+        conn = connection.get_connection()
+        try:
+            if kontakte_app_intake.konfiguriert():
+                kontakte_app_intake.pruefe_ordner_mitgliedschaften(conn)
+        except Exception:
+            log.exception("Taeglicher Ordner-Mitgliedschafts-Abgleich fehlgeschlagen")
+        finally:
+            conn.close()
+
         time.sleep(_MAIL_PRUEF_INTERVALL)
 
 

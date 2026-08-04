@@ -270,13 +270,23 @@ def push_projekt(conn: sqlite3.Connection, projekt_id: int,
         # reiner "return True" ohne Aktion propagiert die Umbenennung nicht sofort - eine
         # aktive DELETE-Anfrage schon (404 auf eine nie gepushte Z-Ordner-vCard gilt in
         # _delete() bereits als Erfolg, daher unschaedlich fuer schon immer Z-benannte Ordner).
+        # Schnappschuss loeschen: die vCard existiert nicht mehr, ein Abgleich haette
+        # keinen Bezugspunkt (siehe queries.setze_gepushte_mitglieder).
+        queries.setze_gepushte_mitglieder(conn, projekt_id, None)
         return _delete(f"projekt-{projekt_id}.vcf", client=client)
     mitglieder_ids = [
         r["kontakt_id"] for r in conn.execute(
             "SELECT kontakt_id FROM kontakte_projekte WHERE projekt_id = ? ORDER BY kontakt_id", (projekt_id,)
         )
     ]
-    return _put(f"projekt-{projekt_id}.vcf", projekt_zu_gruppen_vcard(projekt, mitglieder_ids), client=client)
+    erfolg = _put(f"projekt-{projekt_id}.vcf", projekt_zu_gruppen_vcard(projekt, mitglieder_ids), client=client)
+    if erfolg:
+        # Nur nach einem BESTAETIGTEN Push festhalten, was auf dem Server steht - sonst
+        # wuerde ein fehlgeschlagener Push einen falschen Referenzpunkt setzen und der
+        # naechste Abgleich die Differenz faelschlich einem Mac-Client zuschreiben
+        # (siehe kontakte_app_intake.pruefe_ordner_mitgliedschaften).
+        queries.setze_gepushte_mitglieder(conn, projekt_id, mitglieder_ids)
+    return erfolg
 
 
 def delete_projekt(projekt_id: int) -> bool:
@@ -311,17 +321,31 @@ def push_kontakt_mit_ordnern(conn: sqlite3.Connection, kontakt_id: int,
 
 def sync_alle(conn: sqlite3.Connection) -> dict:
     """Vollabgleich zu Radicale, mit sichtbarer Rueckmeldung fuer die UI:
+      0. Liest zuerst in Kontakte.app geaenderte Ordner-Zuordnungen ein.
       1. Entfernt verwaiste vCards (in Radicale vorhanden, aber nicht mehr in der DB -
          z.B. frueher geloeschte Kontakte, deren Delete-Push damals fehlschlug).
       2. Pusht alle aktuellen Kontakte und Ordner neu.
     Gibt eine Zusammenfassung zurueck (Anzahlen + erste Fehlermeldung), damit der
-    Nutzer im Gegensatz zum sonst stillen Sync sieht, ob es geklappt hat."""
+    Nutzer im Gegensatz zum sonst stillen Sync sieht, ob es geklappt hat.
+
+    Schritt 0 muss VOR dem Pushen laufen: Schritt 2 baut jede Gruppen-vCard komplett
+    aus kontakte_projekte neu auf und wuerde eine in Kontakte.app vorgenommene, noch
+    nicht eingelesene Zuordnung sonst lautlos verwerfen - ausgerechnet der Knopf
+    "Jetzt alles neu synchronisieren" waere damit ein Datenverlust-Werkzeug."""
     global _letzter_fehler
     _letzter_fehler = ""
     client = _client()
     if client is None:
         return {"aktiv": False, "kontakte": 0, "ordner": 0, "entfernt": 0,
                 "fehler": ["Kein Radicale-Server konfiguriert (Server-Adresse leer)."]}
+
+    # Import bewusst lokal: kontakte_app_intake importiert seinerseits dieses Modul,
+    # ein Import auf Modulebene waere zirkulaer.
+    import kontakte_app_intake
+    try:
+        kontakte_app_intake.pruefe_ordner_mitgliedschaften(conn, client=client)
+    except Exception as exc:  # darf den Vollabgleich nie verhindern
+        log.warning("Ordner-Abgleich vor dem Vollabgleich fehlgeschlagen: %s", exc)
 
     # Eine Verbindung fuer den gesamten Lauf wiederverwenden: bei ~1500 Datensaetzen
     # spart das ~1500 TLS-Handshakes/Verbindungsaufbauten (der langsamste Teil des

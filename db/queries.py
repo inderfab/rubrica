@@ -429,6 +429,49 @@ def rename_projekt(conn: sqlite3.Connection, projekt_id: int, neuer_name: str) -
         conn.execute("UPDATE projekte SET name = ? WHERE id = ?", (neuer_name, projekt_id))
 
 
+def setze_gepushte_mitglieder(conn: sqlite3.Connection, projekt_id: int,
+                               kontakt_ids: "list[int] | None") -> None:
+    """Haelt fest, welche Mitglieder zuletzt erfolgreich in die Gruppen-vCard
+    gepusht wurden - Referenzpunkt fuer den Abgleich mit Kontakte.app (siehe
+    kontakte_app_intake.pruefe_ordner_mitgliedschaften). None loescht den
+    Referenzpunkt (Z-Ordner, dessen vCard entfernt wurde)."""
+    wert = None if kontakt_ids is None else json.dumps(sorted(kontakt_ids))
+    with conn:
+        conn.execute(
+            "UPDATE projekte SET zuletzt_gepushte_mitglieder = ? WHERE id = ?", (wert, projekt_id)
+        )
+
+
+def hole_gepushte_mitglieder(conn: sqlite3.Connection, projekt_id: int) -> "set[int] | None":
+    """Gegenstueck zu setze_gepushte_mitglieder. None = kein Referenzpunkt
+    vorhanden (nie gepusht, Z-Ordner, oder Ordner aus einer Installation von vor
+    dieser Spalte) - der Abgleich muss solche Ordner ueberspringen, statt die
+    Differenz einem Mac-Client zuzuschreiben."""
+    row = conn.execute(
+        "SELECT zuletzt_gepushte_mitglieder FROM projekte WHERE id = ?", (projekt_id,)
+    ).fetchone()
+    if row is None or row["zuletzt_gepushte_mitglieder"] is None:
+        return None
+    try:
+        return {int(i) for i in json.loads(row["zuletzt_gepushte_mitglieder"])}
+    except (ValueError, TypeError):
+        return None
+
+
+def setze_kontakt_projekt_zuordnungen(conn: sqlite3.Connection, projekt_id: int,
+                                       kontakt_ids: "set[int]") -> None:
+    """Setzt die Mitglieder eines Ordners auf genau diese Menge - genutzt vom
+    Mitgliedschafts-Abgleich, der die Soll-Menge selbst aus Schnappschuss,
+    Serverstand und Datenbank zusammenfuehrt. Beruehrt ausschliesslich
+    kontakte_projekte, nie die Kontaktdaten selbst."""
+    with conn:
+        conn.execute("DELETE FROM kontakte_projekte WHERE projekt_id = ?", (projekt_id,))
+        conn.executemany(
+            "INSERT OR IGNORE INTO kontakte_projekte (kontakt_id, projekt_id) VALUES (?, ?)",
+            [(kid, projekt_id) for kid in sorted(kontakt_ids)],
+        )
+
+
 def postfach_zuordnungen(conn: sqlite3.Connection) -> dict:
     """Postfach -> {projekt_id, name}, fuer alle aktuell zugeordneten Postfaecher."""
     rows = conn.execute(

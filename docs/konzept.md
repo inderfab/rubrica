@@ -238,6 +238,32 @@ Feldumfang bewusst an der tatsächlichen Nutzung im bestehenden Apple-Adressbuch
 - Abruf 1× täglich automatisch (derselbe Hintergrund-Thread wie 5.8, jetzt `_vorschlaege_ueberwachung`)
   sowie manuell über den "Jetzt prüfen"-Knopf auf `/vorschlaege`.
 
+### 5.9.1 Ordner-Zuordnungen aus Kontakte.app zurücklesen
+- **Umgesetzt (2026-08-04):** Wird ein **bestehender** Kontakt in Kontakte.app per Drag&Drop in eine
+  Gruppe geschoben oder daraus entfernt, übernimmt Rubrica das direkt — ohne Zwischenschritt über die
+  Vorschläge, da sich dabei keine Kontaktdaten ändern, sondern nur eine Zuordnung.
+- **Warum das vorher nicht nur fehlte, sondern schadete:** Die Erkennung in 5.9 übersprang bewusst alle
+  `X-ADDRESSBOOKSERVER-MEMBER`-Einträge der Form `kontakt-N` (nur fremde UIDs waren interessant). Die
+  Änderung kam also nie an — und `push_projekt()` baut die Mitgliederliste bei jedem Push komplett aus
+  `kontakte_projekte` neu auf, verwarf sie also beim nächsten Anlass wieder. Für den Nutzer sah es aus,
+  als funktioniere es kurz und falle dann zurück.
+- **Referenzpunkt statt Raten:** Neue Spalte `projekte.zuletzt_gepushte_mitglieder` (JSON) hält fest, was
+  Rubrica beim letzten **erfolgreichen** Push selbst geschrieben hat. Nur damit lässt sich „in Kontakte.app
+  entfernt" von „eigener Push ist fehlgeschlagen, die Liste ist bloss veraltet" unterscheiden — ohne diese
+  Unterscheidung würde ein Push-Fehler gültige Zuordnungen löschen.
+- **Dreiwege-Abgleich** (`kontakte_app_intake.pruefe_ordner_mitgliedschaften`): mit Schnappschuss S,
+  Serverstand R und Datenbank D gilt `soll = (D | (R−S)) − (S−R)`. Rubricas eigene Änderungen seit dem
+  Push bleiben so erhalten. Bei Konflikt (Rubrica entfernt, Client fügt hinzu) gewinnt bewusst der Client:
+  eine Zuordnung wieder zu entfernen ist harmloser, als sie zu verlieren. Danach wird der Ordner neu
+  gepusht, was zugleich den Schnappschuss aktualisiert.
+- **Übersprungen wird**, wo kein verlässlicher Bezugspunkt existiert: Ordner ohne Schnappschuss (nie
+  gepusht, Altbestand), Z-Ordner (liegen nie auf Radicale) und ein 404 auf die Gruppen-vCard. Letzteres
+  ist ausdrücklich getestet — ein fehlender Server-Eintrag darf nie als „alle Mitglieder entfernt" gelten.
+- **`sync_alle()` liest jetzt zuerst** und pusht erst danach. Andernfalls wäre ausgerechnet „Jetzt alles neu
+  synchronisieren" ein Datenverlust-Werkzeug, weil Schritt 2 jede Gruppen-vCard neu aufbaut. Die
+  bestehende Effizienz-Eigenschaft (eine Verbindung für den gesamten Lauf) bleibt gewahrt, der Abgleich
+  bekommt den offenen Client durchgereicht.
+
 ### 5.10 Anleitung — eine Quelle für App und Website
 - **Umgesetzt (2026-08-03):** Die Bedienungsanleitung existiert genau einmal, als Jinja-freies
   HTML-Fragment in `web/templates/_anleitung_inhalt.html`. Zwei Ausgabewege greifen darauf zu:

@@ -151,6 +151,115 @@ def pruefe_kontakte_app_neuzugaenge(conn) -> dict:
     return {"aktiv": True, "geprueft": geprueft, "neu": neu, "fehler": fehler}
 
 
+def _eigene_mitglieder_auf_server(client, projekt_id: int) -> "set[int] | None":
+    """Liest die kontakt_id der Mitglieder aus der Gruppen-vCard auf Radicale.
+    None, wenn die vCard nicht (mehr) existiert oder nicht lesbar ist - dann darf
+    kein Abgleich stattfinden, sonst gaelte eine fehlende Datei als "alle
+    Mitglieder entfernt"."""
+    resp = client.get(f"projekt-{projekt_id}.vcf")
+    if resp.status_code != 200:
+        return None
+    ids = set()
+    for uid in re.findall(r"X-ADDRESSBOOKSERVER-MEMBER:urn:uuid:kontakt-(\d+)", resp.text):
+        ids.add(int(uid))
+    return ids
+
+
+def pruefe_ordner_mitgliedschaften(conn, client=None) -> dict:
+    """Uebernimmt Ordner-Zuordnungen, die direkt in Kontakte.app geaendert wurden -
+    also einen bestehenden Kontakt per Drag&Drop in eine Gruppe geschoben oder
+    daraus entfernt. Ohne das bliebe eine solche Aenderung nicht nur unbemerkt,
+    sondern wuerde beim naechsten push_projekt() lautlos zurueckgesetzt, weil
+    dieses die Mitgliederliste komplett aus kontakte_projekte neu aufbaut.
+
+    Dreiwege-Abgleich pro Ordner:
+      S = Schnappschuss (was Rubrica zuletzt selbst gepusht hat)
+      R = Mitglieder laut Gruppen-vCard auf Radicale (jetzt)
+      D = Mitglieder laut Datenbank (jetzt)
+    Alles, worin R von S abweicht, kann nur von einem Mac-Client stammen:
+    R - S = dort hinzugefuegt, S - R = dort entfernt. Beides wird auf D
+    angewandt, wobei Rubricas eigene Aenderungen seit dem Push (D gegen S)
+    erhalten bleiben:  soll = (D | hinzugefuegt) - entfernt.
+    Bei einem Konflikt (Rubrica entfernt, Client fuegt hinzu) gewinnt bewusst der
+    Client - die Zuordnung wieder zu entfernen ist harmloser als sie zu verlieren.
+
+    Ordner ohne Schnappschuss (nie gepusht, Z-Ordner, Altbestand vor Einfuehrung
+    der Spalte) werden uebersprungen: fuer sie gibt es keinen verlaesslichen
+    Bezugspunkt, jede Differenz waere Spekulation.
+
+    `client`: optionale, bereits offene Verbindung (siehe sync/radicale.py::sync_alle) -
+    der Vollabgleich soll fuer den gesamten Lauf EINE Verbindung nutzen, statt hier
+    eine zweite aufzubauen."""
+    eigener = client is None
+    if eigener:
+        client = radicale._client()
+    if client is None:
+        return {"aktiv": False, "geprueft": 0, "hinzugefuegt": 0, "entfernt": 0, "fehler": 0}
+
+    geprueft = hinzugefuegt_gesamt = entfernt_gesamt = fehler = 0
+    geaenderte_projekte: list[int] = []
+    try:
+        projekte = [dict(r) for r in conn.execute("SELECT id, name FROM projekte")]
+        for projekt in projekte:
+            projekt_id = projekt["id"]
+            if radicale._ist_z_ordner(projekt["name"]):
+                continue  # nie auf Radicale, siehe sync/radicale.py::push_projekt
+            schnappschuss = queries.hole_gepushte_mitglieder(conn, projekt_id)
+            if schnappschuss is None:
+                continue
+            try:
+                server = _eigene_mitglieder_auf_server(client, projekt_id)
+            except Exception:
+                fehler += 1
+                continue
+            if server is None:
+                continue
+
+            geprueft += 1
+            hinzugefuegt = server - schnappschuss
+            entfernt = schnappschuss - server
+            if not hinzugefuegt and not entfernt:
+                continue
+
+            # Nur Kontakte uebernehmen, die es in Rubrica wirklich (noch) gibt -
+            # eine vCard kann auf einen zwischenzeitlich geloeschten Kontakt zeigen.
+            if hinzugefuegt:
+                vorhanden = {
+                    r["id"] for r in conn.execute(
+                        "SELECT id FROM kontakte WHERE id IN (%s)"
+                        % ",".join("?" * len(hinzugefuegt)),
+                        tuple(sorted(hinzugefuegt)),
+                    )
+                }
+                hinzugefuegt &= vorhanden
+
+            aktuell = {
+                r["kontakt_id"] for r in conn.execute(
+                    "SELECT kontakt_id FROM kontakte_projekte WHERE projekt_id = ?", (projekt_id,)
+                )
+            }
+            soll = (aktuell | hinzugefuegt) - entfernt
+            if soll == aktuell:
+                continue
+
+            queries.setze_kontakt_projekt_zuordnungen(conn, projekt_id, soll)
+            hinzugefuegt_gesamt += len(soll - aktuell)
+            entfernt_gesamt += len(aktuell - soll)
+            geaenderte_projekte.append(projekt_id)
+
+        # Erst nach dem Anwenden neu pushen: das schreibt den zusammengefuehrten
+        # Stand zurueck und aktualisiert zugleich den Schnappschuss, damit dieselbe
+        # Differenz beim naechsten Lauf nicht erneut angewandt wird.
+        for projekt_id in geaenderte_projekte:
+            radicale.push_projekt(conn, projekt_id, client=client)
+    finally:
+        if eigener:
+            client.close()
+
+    return {"aktiv": True, "geprueft": geprueft, "hinzugefuegt": hinzugefuegt_gesamt,
+            "entfernt": entfernt_gesamt, "fehler": fehler}
+
+
 def bestaetige_ordner_vorschlag(conn, vorschlag: dict) -> int:
     """Uebernimmt einen Ordner-Vorschlag (rohdaten.typ == "ordner"): legt den
     Ordner an bzw. findet ihn ueber die Apple-Gruppen-UID wieder
@@ -205,6 +314,16 @@ def pruefe_und_beschreibe(conn) -> str:
                 f"{ergebnis['neu']} neue Vorschläge angelegt.")
         if ergebnis["fehler"]:
             text += f" {ergebnis['fehler']} übersprungen (Fehler)."
-        return text
     except Exception as exc:
         return f"Prüfung fehlgeschlagen: {type(exc).__name__}: {exc}"
+
+    # Ordner-Zuordnungen werden direkt uebernommen (kein Vorschlag): eine
+    # verschobene Mitgliedschaft aendert keine Kontaktdaten, sie ordnet nur zu.
+    try:
+        ordner = pruefe_ordner_mitgliedschaften(conn)
+        if ordner["hinzugefuegt"] or ordner["entfernt"]:
+            text += (f" Ordner-Zuordnungen aus Kontakte.app übernommen: "
+                     f"{ordner['hinzugefuegt']} hinzugefügt, {ordner['entfernt']} entfernt.")
+    except Exception as exc:
+        text += f" Ordner-Abgleich fehlgeschlagen: {type(exc).__name__}: {exc}"
+    return text

@@ -111,9 +111,26 @@ def _projekte_apple_gruppe_uid(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_projekte_apple_gruppe_uid ON projekte(apple_gruppe_uid)")
 
 
+def _projekte_zuletzt_gepushte_mitglieder(conn: sqlite3.Connection) -> None:
+    """Referenzpunkt fuer den Mitgliedschafts-Abgleich mit Kontakte.app: haelt fest,
+    welche Mitglieder Rubrica beim letzten Push selbst in die Gruppen-vCard
+    geschrieben hat (siehe sync/radicale.py::push_projekt). Nur damit laesst sich
+    eine in Kontakte.app entfernte Mitgliedschaft von einem fehlgeschlagenen
+    eigenen Push unterscheiden - ohne diese Unterscheidung wuerde Rubrica bei einem
+    Push-Fehler gueltige Zuordnungen loeschen. Bestehende Ordner starten mit NULL
+    und werden erst nach ihrem naechsten Push abgeglichen (bewusst: fuer die
+    Vergangenheit gibt es keinen verlaesslichen Referenzpunkt). Gleiches
+    Guard-Muster wie _projekte_apple_gruppe_uid - schema.sql enthaelt die Spalte
+    fuer frische Installationen bereits."""
+    spalten = {row["name"] for row in conn.execute("PRAGMA table_info(projekte)")}
+    if "zuletzt_gepushte_mitglieder" not in spalten:
+        conn.execute("ALTER TABLE projekte ADD COLUMN zuletzt_gepushte_mitglieder TEXT")
+
+
 _PYTHON_MIGRATIONEN: list[tuple[str, "callable"]] = [
     ("2026-07-30_kontakte_apple_uid", _kontakte_apple_uid),
     ("2026-07-30_projekte_apple_gruppe_uid", _projekte_apple_gruppe_uid),
+    ("2026-08-04_projekte_zuletzt_gepushte_mitglieder", _projekte_zuletzt_gepushte_mitglieder),
 ]
 
 

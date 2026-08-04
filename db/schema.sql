@@ -64,6 +64,16 @@ CREATE TABLE IF NOT EXISTS projekte (
     -- gesetzt) - ein in Rubrica umbenannter Ordner wird beim naechsten Import trotzdem
     -- richtig wiedererkannt, siehe queries.get_or_create_projekt_von_apple_gruppe.
     apple_gruppe_uid TEXT,
+    -- JSON-Liste der kontakt_id, die Rubrica beim letzten erfolgreichen Push selbst in
+    -- diese Gruppen-vCard geschrieben hat (siehe sync/radicale.py::push_projekt).
+    -- Referenzpunkt fuer den Mitgliedschafts-Abgleich: weicht die Mitgliederliste auf
+    -- Radicale davon ab, stammt die Differenz zwangslaeufig von einem Mac-Client
+    -- (Kontakt in Kontakte.app in eine Gruppe gezogen oder daraus entfernt) - siehe
+    -- kontakte_app_intake.pruefe_ordner_mitgliedschaften. Ohne diesen Referenzpunkt
+    -- liesse sich "Client hat entfernt" nicht von "Rubricas Push ist fehlgeschlagen,
+    -- die Liste ist bloss veraltet" unterscheiden. NULL = noch nie gepusht (oder
+    -- Z-Ordner, dessen vCard aktiv geloescht wurde) -> Abgleich ueberspringt ihn.
+    zuletzt_gepushte_mitglieder TEXT,
     created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 );
 
