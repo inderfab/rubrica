@@ -238,6 +238,23 @@ Feldumfang bewusst an der tatsächlichen Nutzung im bestehenden Apple-Adressbuch
 - Abruf 1× täglich automatisch (derselbe Hintergrund-Thread wie 5.8, jetzt `_vorschlaege_ueberwachung`)
   sowie manuell über den "Jetzt prüfen"-Knopf auf `/vorschlaege`.
 
+### 5.10 Anleitung — eine Quelle für App und Website
+- **Umgesetzt (2026-08-03):** Die Bedienungsanleitung existiert genau einmal, als Jinja-freies
+  HTML-Fragment in `web/templates/_anleitung_inhalt.html`. Zwei Ausgabewege greifen darauf zu:
+  - der Reiter **Anleitung** in der App (`web/anleitung.py`, Route `/anleitung`) bindet es per
+    `{% include %}` ein;
+  - `scripts/build-website.py` legt den Rahmen der öffentlichen Website darum und erzeugt daraus
+    `docs/docs.html` (GitHub Pages). Das gemeinsame Stylesheet `web/static/anleitung.css` wird dabei
+    eingebettet, da die statische Seite keinen Zugriff auf `/static/` hat.
+- Grund für diese Konstruktion: eine zweite, von Hand gepflegte Kopie wäre nach der ersten Änderung
+  auseinandergelaufen. `tests/test_anleitung.py` erzwingt den Gleichstand — der Test schlägt fehl,
+  sobald `docs/docs.html` nicht mehr aus der aktuellen Quelle erzeugt wurde. Nach jeder Textänderung
+  daher `python3 scripts/build-website.py` ausführen.
+- Die Landing Page `docs/index.html` ist davon unabhängig und wird direkt gepflegt.
+- **Wichtig für die Auslieferung:** `scripts/build-pkg.sh` kopiert `web/` vollständig — Fragment,
+  Template, Route und CSS gehen damit automatisch ins `.pkg`. Ein eigener Copy-Eintrag ist im
+  Gegensatz zu neuen Top-Level-Modulen nicht nötig.
+
 ## 6. Vorgeschlagener Tech-Stack
 
 | Bereich | Empfehlung | Begründung |
