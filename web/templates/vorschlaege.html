@@ -84,7 +84,7 @@
             <td colspan="2">📁 {{ k.name }}</td>
             <td colspan="2"></td>
             <td>Kontakte.app</td>
-            <td>{{ k.mitglieder_uids|length }} Mitglied(er) erkannt</td>
+            <td>{{ k.mitglieder_uids|length + (k.mitglieder_kontakt_ids|default([])|length) }} Mitglied(er) erkannt</td>
             <td class="actions">
                 <form method="post" action="/vorschlaege/{{ v.id }}/uebernehmen">
                     <button type="submit">Übernehmen</button>

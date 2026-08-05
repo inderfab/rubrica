@@ -97,15 +97,21 @@ def _ordner_rohdaten(text: str, vcf_name: str) -> dict:
     Felder interessieren."""
     uid_match = re.search(r"^UID:(.+)$", text, re.MULTILINE)
     fn_match = re.search(r"^FN:(.+)$", text, re.MULTILINE)
-    mitglieder_uids = [
-        uid for uid in re.findall(r"X-ADDRESSBOOKSERVER-MEMBER:urn:uuid:([^\r\n]+)", text)
-        if not uid.startswith("kontakt-")
-    ]
+    alle_uids = re.findall(r"X-ADDRESSBOOKSERVER-MEMBER:urn:uuid:([^\r\n]+)", text)
+    # Zwei Sorten Mitglieder, beide relevant:
+    # - fremde Apple-UIDs: in Kontakte.app neu angelegte Kontakte, die selbst noch
+    #   als Vorschlag offen sind (werden erst beim Bestaetigen aufgeloest);
+    # - kontakt-N: BESTEHENDE Rubrica-Kontakte, die in den neuen Ordner gezogen
+    #   wurden. Diese wurden frueher herausgefiltert, weil die Logik nur auf fremde
+    #   Neuanlagen ausgelegt war - dadurch entstand der Ordner beim Bestaetigen leer
+    #   und die Zuordnung war weg (Nutzer-Meldung beim ersten Praxistest).
     return {
         "typ": "ordner",
         "name": (fn_match.group(1).strip() if fn_match else vcf_name),
         "apple_gruppe_uid": (uid_match.group(1).strip() if uid_match else None),
-        "mitglieder_uids": mitglieder_uids,
+        "mitglieder_uids": [u for u in alle_uids if not u.startswith("kontakt-")],
+        "mitglieder_kontakt_ids": [int(m.group(1)) for m in
+                                    (re.match(r"^kontakt-(\d+)$", u) for u in alle_uids) if m],
         "kontakte_app_vcf_name": vcf_name,
     }
 
@@ -470,14 +476,23 @@ def bestaetige_ordner_vorschlag(conn, vorschlag: dict) -> int:
     projekt_id = queries.get_or_create_projekt_von_apple_gruppe(
         conn, daten.get("apple_gruppe_uid"), daten["name"]
     )
+    zu_verknuepfen = []
     for apple_uid in daten.get("mitglieder_uids", []):
         kontakt_id = queries.kontakt_id_von_apple_uid(conn, apple_uid)
         if kontakt_id:
-            with conn:
-                conn.execute(
-                    "INSERT OR IGNORE INTO kontakte_projekte (kontakt_id, projekt_id) VALUES (?, ?)",
-                    (kontakt_id, projekt_id),
-                )
+            zu_verknuepfen.append(kontakt_id)
+    # Bestehende Rubrica-Kontakte, die in Kontakte.app in den neuen Ordner gezogen
+    # wurden - der haeufigste Fall ueberhaupt und frueher stillschweigend verloren.
+    for kontakt_id in daten.get("mitglieder_kontakt_ids", []):
+        if queries.get_kontakt(conn, kontakt_id) is not None:
+            zu_verknuepfen.append(kontakt_id)
+
+    for kontakt_id in zu_verknuepfen:
+        with conn:
+            conn.execute(
+                "INSERT OR IGNORE INTO kontakte_projekte (kontakt_id, projekt_id) VALUES (?, ?)",
+                (kontakt_id, projekt_id),
+            )
     return projekt_id
 
 

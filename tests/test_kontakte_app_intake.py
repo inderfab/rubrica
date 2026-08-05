@@ -652,3 +652,40 @@ def test_korrektur_an_offenem_vorschlag_wird_nachgezogen(tmp_db, monkeypatch):
     offene = queries.list_vorschlaege(tmp_db, quelle="kontakte_app")
     assert len(offene) == 1                      # kein zweiter Vorschlag
     assert offene[0]["rohdaten"]["nachname"] == "Muster"
+
+
+def test_neuer_ordner_mit_bestehendem_kontakt_behaelt_zuordnung(tmp_db, monkeypatch):
+    """Regression (Nutzer-Meldung beim ersten Praxistest): legt jemand in Kontakte.app
+    einen neuen Ordner an und zieht einen BESTEHENDEN Rubrica-Kontakt hinein, ging die
+    Zuordnung verloren - _ordner_rohdaten filterte alle kontakt-N-Mitglieder heraus,
+    weil die Logik nur auf fremde Neuanlagen ausgelegt war. Der Ordner entstand leer."""
+    kontakt_id = queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster"})
+    srv = {}
+
+    def handler(request):
+        pfad = request.url.path.rsplit("/", 1)[-1]
+        if request.method == "PROPFIND":
+            hrefs = "".join(f"<response><href>/a/{n}</href></response>" for n in srv)
+            return httpx.Response(207, text=f"<multistatus>{hrefs}</multistatus>")
+        if request.method == "GET":
+            return httpx.Response(200, text=srv[pfad]) if pfad in srv else httpx.Response(404)
+        if request.method == "PUT":
+            srv[pfad] = request.content.decode()
+            return httpx.Response(201)
+        return httpx.Response(204)
+
+    _mock_client(monkeypatch, handler)
+    radicale.push_kontakt(tmp_db, kontakt_id)
+
+    srv["NEUE-GRUPPE.vcf"] = (
+        "BEGIN:VCARD\r\nVERSION:3.0\r\nUID:NEUE-GRUPPE\r\nFN:Neubau Seestrasse\r\n"
+        "X-ADDRESSBOOKSERVER-KIND:group\r\n"
+        f"X-ADDRESSBOOKSERVER-MEMBER:urn:uuid:kontakt-{kontakt_id}\r\nEND:VCARD\r\n")
+
+    kontakte_app_intake.pruefe_kontakte_app_neuzugaenge(tmp_db)
+    v = queries.list_vorschlaege(tmp_db, quelle="kontakte_app")[0]
+    assert v["rohdaten"]["mitglieder_kontakt_ids"] == [kontakt_id]
+
+    projekt_id = kontakte_app_intake.bestaetige_ordner_vorschlag(tmp_db, v)
+
+    assert _mitglieder(tmp_db, projekt_id) == {kontakt_id}
