@@ -81,6 +81,15 @@ def _vorschlaege_ueberwachung():
         finally:
             conn.close()
 
+        conn = connection.get_connection()
+        try:
+            if kontakte_app_intake.konfiguriert():
+                kontakte_app_intake.pruefe_kontakt_aenderungen(conn)
+        except Exception:
+            log.exception("Aenderungserkennung fehlgeschlagen")
+        finally:
+            conn.close()
+
         time.sleep(_KONTAKTE_APP_INTERVALL)
 
 

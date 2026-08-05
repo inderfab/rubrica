@@ -27,7 +27,37 @@
     <tbody>
         {% for v in vorschlaege %}
         {% set k = v.rohdaten %}
-        {% if k.typ == "ordner" %}
+        {% if k.typ == "aenderung" %}
+        <tr>
+            <td>{{ k.vorname }} {{ k.nachname }}</td>
+            <td>{{ k.firma }}</td>
+            <td colspan="2">
+                {% for u in k.unterschiede %}
+                <div style="font-size:0.85rem; line-height:1.5">
+                    <strong>{{ u.feld }}:</strong>
+                    <span style="text-decoration:line-through; color:#999">{{ u.alt or "–" }}</span>
+                    <span style="color:#1a7f37">→ {{ u.neu or "–" }}</span>
+                </div>
+                {% endfor %}
+            </td>
+            <td>Kontakte.app</td>
+            <td>
+                <span class="tag" style="background:#eef4ff; border:1px solid #adc6ff">Änderung</span>
+            </td>
+            <td class="actions">
+                <form method="post" action="/vorschlaege/{{ v.id }}/uebernehmen">
+                    <button type="submit">Übernehmen</button>
+                </form>
+                {% if v.bestehender_kontakt %}
+                <a href="/kontakte/{{ v.bestehender_kontakt.id }}/bearbeiten" class="btn secondary">Kontakt ansehen</a>
+                {% endif %}
+                <form method="post" action="/vorschlaege/{{ v.id }}/ablehnen"
+                      onsubmit="return confirm('Änderung verwerfen?\n\nDer bisherige Stand aus Rubrica wird auf allen Geräten wiederhergestellt.')">
+                    <button type="submit" class="secondary">Verwerfen</button>
+                </form>
+            </td>
+        </tr>
+        {% elif k.typ == "ordner" %}
         <tr>
             <td colspan="2">📁 {{ k.name }}</td>
             <td colspan="2"></td>

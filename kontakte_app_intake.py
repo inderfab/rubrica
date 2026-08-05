@@ -42,6 +42,7 @@ dieses Modul das noch sehen koennte.
 """
 from __future__ import annotations
 
+import hashlib
 import re
 
 from db import queries
@@ -242,6 +243,147 @@ def pruefe_ordner_mitgliedschaften(conn, client=None) -> dict:
             "entfernt": entfernt_gesamt, "fehler": fehler}
 
 
+# Felder, die aus einer vCard verlaesslich zurueckgelesen werden koennen. Bewusst
+# NICHT enthalten: "kategorie" (die Funktion). Rubrica schreibt sie zwar als
+# CATEGORIES in die vCard, importer/vcard.py._parse_kontakt liefert dafuer aber
+# immer "" zurueck - wuerde man sie mitvergleichen, sae­he jede Aenderung so aus, als
+# haette jemand die Funktion geleert, und das Uebernehmen wuerde ein Pflichtfeld
+# loeschen. Da der Wert in Schnappschuss und Serverstand gleichermassen "" ist,
+# faellt er beim Diff ohnehin nie auf.
+_VERGLEICHSFELDER = ("vorname", "nachname", "firma", "rolle", "notizen",
+                     "telefonnummern", "emails", "adressen", "urls")
+
+_FELD_BESCHRIFTUNG = {
+    "vorname": "Vorname", "nachname": "Nachname", "firma": "Firma", "rolle": "Rolle",
+    "notizen": "Notizen", "telefonnummern": "Telefon", "emails": "E-Mail",
+    "adressen": "Adresse", "urls": "Web",
+}
+
+
+def _erste_vcard(text: str):
+    """Parst eine vCard zu einem Kontakt-Dict, oder None wenn sie unbrauchbar ist."""
+    try:
+        kontakte = parse_vcf(text)
+    except Exception:
+        return None
+    return kontakte[0] if kontakte else None
+
+
+def _lesbar(feld: str, wert) -> str:
+    """Vergleichswerte fuer die Anzeige aufbereiten - aus Listen von Dicts wird ein
+    lesbarer, stabil sortierter Text."""
+    if isinstance(wert, list):
+        teile = []
+        for eintrag in wert:
+            if not isinstance(eintrag, dict):
+                teile.append(str(eintrag))
+                continue
+            if "nummer" in eintrag:
+                teile.append(eintrag["nummer"])
+            elif "email" in eintrag:
+                teile.append(eintrag["email"])
+            elif "url" in eintrag:
+                teile.append(eintrag["url"])
+            else:  # Adresse
+                teile.append(" ".join(str(eintrag.get(k, "")) for k in
+                                      ("strasse", "plz", "ort", "land")).strip())
+        return ", ".join(t for t in teile if t)
+    return str(wert or "")
+
+
+def _feld_unterschiede(alt: dict, neu: dict) -> dict:
+    """Vergleicht zwei geparste Kontakte und liefert nur die abweichenden Felder.
+
+    Verglichen wird geparster Schnappschuss gegen geparsten Serverstand - nicht
+    gegen den Datenbankstand. Dadurch bleiben Felder, die der vCard-Parser nicht
+    zurueckliest, in beiden Seiten identisch und tauchen nie als "Aenderung" auf."""
+    unterschiede = {}
+    for feld in _VERGLEICHSFELDER:
+        a, n = alt.get(feld), neu.get(feld)
+        if isinstance(a, list) or isinstance(n, list):
+            # Reihenfolge ist in vCards nicht bedeutungstragend.
+            if sorted(map(str, a or [])) == sorted(map(str, n or [])):
+                continue
+        elif (a or "") == (n or ""):
+            continue
+        unterschiede[feld] = {
+            "feld": _FELD_BESCHRIFTUNG.get(feld, feld),
+            "alt": _lesbar(feld, a),
+            "neu": _lesbar(feld, n),
+            "wert": n,
+        }
+    return unterschiede
+
+
+def pruefe_kontakt_aenderungen(conn, client=None) -> dict:
+    """Erkennt Feldaenderungen, die jemand direkt in Kontakte.app an einem bereits
+    bestehenden Rubrica-Kontakt vorgenommen hat (z.B. eine korrigierte
+    Telefonnummer), und legt sie als Vorschlag an - uebernommen wird nichts
+    automatisch. Begruendung (Nutzer-Vorgabe): eine Aenderung ist wie eine
+    Neuanlage zu behandeln, weil sie auch versehentlich passiert sein kann; im
+    Browser sieht man sie dann und kann sie uebernehmen oder verwerfen.
+
+    Vergleichsstand ist die zuletzt von Rubrica selbst gepushte vCard
+    (kontakte.zuletzt_gepushte_vcard). Kontakte ohne diesen Stand werden
+    uebersprungen - ohne Referenzpunkt waere jede Abweichung Spekulation.
+
+    Dublettenschutz laeuft ueber einen Inhalts-Hash: solange dieselbe Aenderung
+    unbestaetigt auf dem Server steht, entsteht bei jedem Lauf derselbe
+    message_id-Wert und damit kein zweiter Vorschlag. Eine spaetere, andere
+    Aenderung am selben Kontakt erzeugt dagegen einen neuen."""
+    eigener = client is None
+    if eigener:
+        client = radicale._client()
+    if client is None:
+        return {"aktiv": False, "geprueft": 0, "neu": 0, "fehler": 0}
+
+    geprueft = neu = fehler = 0
+    try:
+        for eintrag in queries.kontakte_mit_gepushter_vcard(conn):
+            kontakt_id = eintrag["id"]
+            try:
+                resp = client.get(f"kontakt-{kontakt_id}.vcf")
+            except Exception:
+                fehler += 1
+                continue
+            if resp.status_code != 200:
+                continue  # nicht (mehr) vorhanden - kein Rueckschluss moeglich
+            if resp.text.strip() == (eintrag["vcard"] or "").strip():
+                continue  # unveraendert
+
+            geprueft += 1
+            alt = _erste_vcard(eintrag["vcard"] or "")
+            jetzt = _erste_vcard(resp.text)
+            if alt is None or jetzt is None:
+                fehler += 1
+                continue
+
+            unterschiede = _feld_unterschiede(alt, jetzt)
+            if not unterschiede:
+                # Nur Formatierung/Reihenfolge abweichend - kein echter Inhaltswechsel.
+                continue
+
+            rumpf = "|".join(f"{f}={d['neu']}" for f, d in sorted(unterschiede.items()))
+            message_id = f"kontakte-app-aenderung:{kontakt_id}:{hashlib.sha1(rumpf.encode()).hexdigest()[:12]}"
+            if queries.vorschlag_existiert_fuer_message_id(conn, message_id):
+                continue
+
+            queries.create_vorschlag(conn, {
+                "typ": "aenderung",
+                "vorname": jetzt.get("vorname", ""),
+                "nachname": jetzt.get("nachname", ""),
+                "firma": jetzt.get("firma", ""),
+                "unterschiede": list(unterschiede.values()),
+                "geaenderte_felder": {f: d["wert"] for f, d in unterschiede.items()},
+            }, kontakt_id=kontakt_id, quelle="kontakte_app", message_id=message_id)
+            neu += 1
+    finally:
+        if eigener:
+            client.close()
+
+    return {"aktiv": True, "geprueft": geprueft, "neu": neu, "fehler": fehler}
+
+
 def bestaetige_ordner_vorschlag(conn, vorschlag: dict) -> int:
     """Uebernimmt einen Ordner-Vorschlag (rohdaten.typ == "ordner"): legt den
     Ordner an bzw. findet ihn ueber die Apple-Gruppen-UID wieder
@@ -262,6 +404,33 @@ def bestaetige_ordner_vorschlag(conn, vorschlag: dict) -> int:
                     (kontakt_id, projekt_id),
                 )
     return projekt_id
+
+
+def bestaetige_aenderungs_vorschlag(conn, vorschlag: dict) -> int:
+    """Uebernimmt eine in Kontakte.app vorgenommene Feldaenderung. Angewandt werden
+    NUR die als abweichend erkannten Felder - der bestehende Kontakt wird nicht
+    durch die geparste vCard ersetzt. Sonst gingen Felder verloren, die eine vCard
+    nicht zurueckliefert, allen voran die Funktion (siehe _VERGLEICHSFELDER).
+    Gibt die kontakt_id zurueck."""
+    kontakt_id = vorschlag["kontakt_id"]
+    bestehend = queries.get_kontakt(conn, kontakt_id)
+    if bestehend is None:
+        raise ValueError(f"Kontakt {kontakt_id} existiert nicht mehr")
+
+    daten = dict(bestehend)
+    daten.update(vorschlag["rohdaten"].get("geaenderte_felder", {}))
+    queries.update_kontakt(conn, kontakt_id, daten)
+    return kontakt_id
+
+
+def verwerfe_aenderungs_vorschlag(conn, vorschlag: dict) -> int:
+    """Verwirft eine Feldaenderung und stellt Rubricas Stand auf allen Geraeten
+    wieder her. Der Push ist hier zwingend, nicht optional: ohne ihn bliebe die
+    abgelehnte Aenderung auf dem Server stehen und waere weiterhin auf allen
+    Geraeten sichtbar - abgelehnt waere sie dann nur in Rubricas Datenbank."""
+    kontakt_id = vorschlag["kontakt_id"]
+    radicale.push_kontakt(conn, kontakt_id)
+    return kontakt_id
 
 
 def loesche_fremde_vcard(name: str) -> bool:
@@ -308,4 +477,12 @@ def pruefe_und_beschreibe(conn) -> str:
                      f"{ordner['hinzugefuegt']} hinzugefügt, {ordner['entfernt']} entfernt.")
     except Exception as exc:
         text += f" Ordner-Abgleich fehlgeschlagen: {type(exc).__name__}: {exc}"
+
+    # Feldaenderungen dagegen NICHT automatisch - sie kommen als Vorschlag.
+    try:
+        aenderungen = pruefe_kontakt_aenderungen(conn)
+        if aenderungen["neu"]:
+            text += f" {aenderungen['neu']} geänderte Kontakte gefunden."
+    except Exception as exc:
+        text += f" Änderungserkennung fehlgeschlagen: {type(exc).__name__}: {exc}"
     return text

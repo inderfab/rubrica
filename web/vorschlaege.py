@@ -82,7 +82,13 @@ def vorschlag_uebernehmen(vorschlag_id: int):
     conn = get_connection()
     try:
         vorschlag = queries.get_vorschlag(conn, vorschlag_id)
-        if vorschlag and vorschlag["rohdaten"].get("typ") == "ordner":
+        if vorschlag and vorschlag["rohdaten"].get("typ") == "aenderung":
+            kontakt_id = kontakte_app_intake.bestaetige_aenderungs_vorschlag(conn, vorschlag)
+            queries.set_vorschlag_status(conn, vorschlag_id, "bestaetigt")
+            # Push aktualisiert zugleich den Vergleichsstand, damit dieselbe
+            # Aenderung nicht erneut als Vorschlag auftaucht.
+            radicale.push_kontakt_mit_ordnern(conn, kontakt_id)
+        elif vorschlag and vorschlag["rohdaten"].get("typ") == "ordner":
             projekt_id = kontakte_app_intake.bestaetige_ordner_vorschlag(conn, vorschlag)
             queries.set_vorschlag_status(conn, vorschlag_id, "bestaetigt")
             radicale.push_projekt(conn, projekt_id)
@@ -110,6 +116,11 @@ def vorschlag_ablehnen(vorschlag_id: int):
     try:
         vorschlag = queries.get_vorschlag(conn, vorschlag_id)
         queries.set_vorschlag_status(conn, vorschlag_id, "abgelehnt")
+        if vorschlag and vorschlag["rohdaten"].get("typ") == "aenderung":
+            # Hier wird nichts geloescht, sondern Rubricas Stand wiederhergestellt -
+            # sonst bliebe die verworfene Aenderung auf allen Geraeten sichtbar.
+            kontakte_app_intake.verwerfe_aenderungs_vorschlag(conn, vorschlag)
+            vorschlag = None  # kein vCard-Loeschen fuer diesen Typ
     finally:
         conn.close()
     if vorschlag:

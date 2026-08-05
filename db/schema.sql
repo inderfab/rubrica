@@ -16,6 +16,13 @@ CREATE TABLE IF NOT EXISTS kontakte (
     -- der zuverlaessigste Wiedererkennungs-Anker bei erneutem Import desselben Adressbuchs,
     -- siehe importer/vcard.py._finde_match_fuer_import. NULL bei manuell angelegten Kontakten.
     apple_uid  TEXT,
+    -- Die vCard, die Rubrica beim letzten erfolgreichen Push selbst geschrieben hat
+    -- (siehe sync/radicale.py::push_kontakt). Referenzpunkt fuer die Erkennung von
+    -- Feldaenderungen, die jemand direkt in Kontakte.app vorgenommen hat: weicht die
+    -- vCard auf Radicale davon ab, stammt die Aenderung zwangslaeufig von einem
+    -- Mac-Client (siehe kontakte_app_intake.pruefe_kontakt_aenderungen). NULL = noch
+    -- nie gepusht -> Aenderungserkennung ueberspringt den Kontakt.
+    zuletzt_gepushte_vcard TEXT,
     created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
     updated_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 );

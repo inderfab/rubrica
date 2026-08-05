@@ -441,3 +441,116 @@ def test_hintergrund_takt_ist_getrennt():
     from web import main
     assert main._KONTAKTE_APP_INTERVALL == 5 * 60
     assert main._MAIL_INTERVALL == 24 * 60 * 60
+
+
+# ── Feldaenderungen an bestehenden Kontakten (in Kontakte.app korrigiert) ─────
+
+def _kontakt_mit_push(tmp_db, monkeypatch, **felder):
+    """Legt einen Kontakt an und pusht ihn, damit ein Vergleichsstand existiert."""
+    daten = {"vorname": "Anna", "nachname": "Muster", "kategorie": "Architektin",
+             "telefonnummern": [{"typ": "Direkt", "nummer": "044 111 11 11"}],
+             "emails": [{"typ": "Direkt", "email": "anna@beispiel.ch"}]}
+    daten.update(felder)
+    kontakt_id = queries.create_kontakt(tmp_db, daten)
+    _mock_client(monkeypatch, lambda request: httpx.Response(201))
+    radicale.push_kontakt(tmp_db, kontakt_id)
+    return kontakt_id
+
+
+def test_geaenderte_telefonnummer_wird_als_vorschlag_erfasst(tmp_db, monkeypatch):
+    kontakt_id = _kontakt_mit_push(tmp_db, monkeypatch)
+    gepusht = queries.hole_gepushte_vcard(tmp_db, kontakt_id)
+    assert gepusht is not None
+    geaendert = gepusht.replace("+41 44 111 11 11", "+41 44 222 22 22")
+
+    def handler(request):
+        if request.method == "GET":
+            return httpx.Response(200, text=geaendert)
+        return httpx.Response(201)
+
+    _mock_client(monkeypatch, handler)
+    ergebnis = kontakte_app_intake.pruefe_kontakt_aenderungen(tmp_db)
+
+    assert ergebnis["neu"] == 1
+    v = queries.list_vorschlaege(tmp_db, quelle="kontakte_app")[0]
+    assert v["rohdaten"]["typ"] == "aenderung"
+    assert v["kontakt_id"] == kontakt_id
+    felder = {u["feld"]: u for u in v["rohdaten"]["unterschiede"]}
+    assert "Telefon" in felder
+    assert "111 11 11" in felder["Telefon"]["alt"]
+    assert "222 22 22" in felder["Telefon"]["neu"]
+
+
+def test_uebernehmen_behaelt_die_funktion(tmp_db, monkeypatch):
+    """Regressionsschutz: Rubrica schreibt die Funktion als CATEGORIES in die vCard,
+    der Parser liest sie aber nie zurueck. Wuerde beim Uebernehmen die geparste vCard
+    den Kontakt ersetzen, waere die Funktion - ein Pflichtfeld - danach leer."""
+    kontakt_id = _kontakt_mit_push(tmp_db, monkeypatch)
+    gepusht = queries.hole_gepushte_vcard(tmp_db, kontakt_id)
+    geaendert = gepusht.replace("+41 44 111 11 11", "+41 44 222 22 22")
+
+    def handler(request):
+        if request.method == "GET":
+            return httpx.Response(200, text=geaendert)
+        return httpx.Response(201)
+
+    _mock_client(monkeypatch, handler)
+    kontakte_app_intake.pruefe_kontakt_aenderungen(tmp_db)
+    v = queries.list_vorschlaege(tmp_db, quelle="kontakte_app")[0]
+    kontakte_app_intake.bestaetige_aenderungs_vorschlag(tmp_db, v)
+
+    kontakt = queries.get_kontakt(tmp_db, kontakt_id)
+    assert kontakt["kategorie"] == "Architektin"     # NICHT geleert
+    assert "222 22 22" in kontakt["telefonnummern"][0]["nummer"]
+    assert kontakt["vorname"] == "Anna"
+
+
+def test_unveraenderte_vcard_erzeugt_keinen_vorschlag(tmp_db, monkeypatch):
+    kontakt_id = _kontakt_mit_push(tmp_db, monkeypatch)
+    gepusht = queries.hole_gepushte_vcard(tmp_db, kontakt_id)
+
+    def handler(request):
+        if request.method == "GET":
+            return httpx.Response(200, text=gepusht)
+        return httpx.Response(201)
+
+    _mock_client(monkeypatch, handler)
+    ergebnis = kontakte_app_intake.pruefe_kontakt_aenderungen(tmp_db)
+
+    assert ergebnis["neu"] == 0
+    assert queries.list_vorschlaege(tmp_db, quelle="kontakte_app") == []
+
+
+def test_dieselbe_aenderung_erzeugt_nur_einen_vorschlag(tmp_db, monkeypatch):
+    """Der Lauf alle fuenf Minuten darf nicht bei jedem Durchgang denselben
+    Vorschlag erneut anlegen, solange die Aenderung offen auf dem Server steht."""
+    kontakt_id = _kontakt_mit_push(tmp_db, monkeypatch)
+    geaendert = queries.hole_gepushte_vcard(tmp_db, kontakt_id).replace(
+        "+41 44 111 11 11", "+41 44 222 22 22")
+
+    def handler(request):
+        if request.method == "GET":
+            return httpx.Response(200, text=geaendert)
+        return httpx.Response(201)
+
+    _mock_client(monkeypatch, handler)
+    kontakte_app_intake.pruefe_kontakt_aenderungen(tmp_db)
+    kontakte_app_intake.pruefe_kontakt_aenderungen(tmp_db)
+
+    assert len(queries.list_vorschlaege(tmp_db, quelle="kontakte_app")) == 1
+
+
+def test_ohne_vergleichsstand_wird_nichts_erkannt(tmp_db, monkeypatch):
+    """Altbestand aus einer Installation vor dieser Spalte: ohne Referenzpunkt
+    waere jede Abweichung Spekulation."""
+    queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster"})
+    _mock_client(monkeypatch, lambda request: httpx.Response(200, text="BEGIN:VCARD\r\nEND:VCARD\r\n"))
+    ergebnis = kontakte_app_intake.pruefe_kontakt_aenderungen(tmp_db)
+    assert ergebnis["geprueft"] == 0 and ergebnis["neu"] == 0
+
+
+def test_fehlgeschlagener_push_setzt_keinen_vergleichsstand(tmp_db, monkeypatch):
+    kontakt_id = queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster"})
+    _mock_client(monkeypatch, lambda request: httpx.Response(500))
+    radicale.push_kontakt(tmp_db, kontakt_id)
+    assert queries.hole_gepushte_vcard(tmp_db, kontakt_id) is None

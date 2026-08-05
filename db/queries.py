@@ -429,6 +429,33 @@ def rename_projekt(conn: sqlite3.Connection, projekt_id: int, neuer_name: str) -
         conn.execute("UPDATE projekte SET name = ? WHERE id = ?", (neuer_name, projekt_id))
 
 
+def setze_gepushte_vcard(conn: sqlite3.Connection, kontakt_id: int, vcard: str) -> None:
+    """Haelt die zuletzt erfolgreich gepushte vCard fest - Referenzpunkt fuer die
+    Erkennung von Feldaenderungen aus Kontakte.app (siehe
+    kontakte_app_intake.pruefe_kontakt_aenderungen). Bewusst OHNE updated_at-
+    Aktualisierung: das ist kein inhaltlicher Wechsel am Kontakt."""
+    with conn:
+        conn.execute("UPDATE kontakte SET zuletzt_gepushte_vcard = ? WHERE id = ?", (vcard, kontakt_id))
+
+
+def hole_gepushte_vcard(conn: sqlite3.Connection, kontakt_id: int) -> "str | None":
+    row = conn.execute(
+        "SELECT zuletzt_gepushte_vcard FROM kontakte WHERE id = ?", (kontakt_id,)
+    ).fetchone()
+    return row["zuletzt_gepushte_vcard"] if row else None
+
+
+def kontakte_mit_gepushter_vcard(conn: sqlite3.Connection) -> list:
+    """Alle Kontakte, fuer die ein Vergleichsstand existiert - nur diese kommen fuer
+    die Aenderungserkennung in Frage."""
+    return [
+        {"id": r["id"], "vcard": r["zuletzt_gepushte_vcard"]}
+        for r in conn.execute(
+            "SELECT id, zuletzt_gepushte_vcard FROM kontakte WHERE zuletzt_gepushte_vcard IS NOT NULL"
+        )
+    ]
+
+
 def setze_gepushte_mitglieder(conn: sqlite3.Connection, projekt_id: int,
                                kontakt_ids: "list[int] | None") -> None:
     """Haelt fest, welche Mitglieder zuletzt erfolgreich in die Gruppen-vCard

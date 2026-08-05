@@ -127,10 +127,22 @@ def _projekte_zuletzt_gepushte_mitglieder(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE projekte ADD COLUMN zuletzt_gepushte_mitglieder TEXT")
 
 
+def _kontakte_zuletzt_gepushte_vcard(conn: sqlite3.Connection) -> None:
+    """Referenzpunkt fuer die Erkennung von Feldaenderungen aus Kontakte.app: haelt
+    die vCard fest, die Rubrica beim letzten Push selbst geschrieben hat (siehe
+    sync/radicale.py::push_kontakt). Bestehende Kontakte starten mit NULL und werden
+    erst nach ihrem naechsten Push ueberwacht - fuer die Vergangenheit gibt es keinen
+    verlaesslichen Vergleichsstand. Gleiches Guard-Muster wie _kontakte_apple_uid."""
+    spalten = {row["name"] for row in conn.execute("PRAGMA table_info(kontakte)")}
+    if "zuletzt_gepushte_vcard" not in spalten:
+        conn.execute("ALTER TABLE kontakte ADD COLUMN zuletzt_gepushte_vcard TEXT")
+
+
 _PYTHON_MIGRATIONEN: list[tuple[str, "callable"]] = [
     ("2026-07-30_kontakte_apple_uid", _kontakte_apple_uid),
     ("2026-07-30_projekte_apple_gruppe_uid", _projekte_apple_gruppe_uid),
     ("2026-08-04_projekte_zuletzt_gepushte_mitglieder", _projekte_zuletzt_gepushte_mitglieder),
+    ("2026-08-05_kontakte_zuletzt_gepushte_vcard", _kontakte_zuletzt_gepushte_vcard),
 ]
 
 

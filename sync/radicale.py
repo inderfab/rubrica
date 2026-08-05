@@ -295,7 +295,15 @@ def push_kontakt(conn: sqlite3.Connection, kontakt_id: int,
     kontakt = queries.get_kontakt(conn, kontakt_id)
     if kontakt is None:
         return False
-    return _put(f"kontakt-{kontakt_id}.vcf", kontakt_zu_vcard(kontakt), client=client)
+    vcard = kontakt_zu_vcard(kontakt)
+    erfolg = _put(f"kontakt-{kontakt_id}.vcf", vcard, client=client)
+    if erfolg:
+        # Nur nach bestaetigtem Push festhalten - ein fehlgeschlagener Push wuerde sonst
+        # einen Vergleichsstand setzen, den es auf dem Server gar nicht gibt, und die
+        # naechste Aenderungserkennung schriebe die Differenz faelschlich einem
+        # Mac-Client zu (siehe kontakte_app_intake.pruefe_kontakt_aenderungen).
+        queries.setze_gepushte_vcard(conn, kontakt_id, vcard)
+    return erfolg
 
 
 def delete_kontakt(kontakt_id: int) -> bool:
@@ -416,6 +424,13 @@ def sync_alle(conn: sqlite3.Connection) -> dict:
         kontakte_app_intake.pruefe_ordner_mitgliedschaften(conn, client=client)
     except Exception as exc:  # darf den Vollabgleich nie verhindern
         log.warning("Ordner-Abgleich vor dem Vollabgleich fehlgeschlagen: %s", exc)
+    try:
+        # Ebenfalls zwingend VOR dem Pushen: Schritt 2 ueberschreibt jede Kontakt-vCard
+        # mit dem Datenbankstand und wuerde eine in Kontakte.app vorgenommene, noch
+        # nicht erfasste Feldaenderung sonst spurlos verwerfen.
+        kontakte_app_intake.pruefe_kontakt_aenderungen(conn, client=client)
+    except Exception as exc:
+        log.warning("Aenderungserkennung vor dem Vollabgleich fehlgeschlagen: %s", exc)
 
     # Eine Verbindung fuer den gesamten Lauf wiederverwenden: bei ~1500 Datensaetzen
     # spart das ~1500 TLS-Handshakes/Verbindungsaufbauten (der langsamste Teil des

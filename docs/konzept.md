@@ -289,6 +289,31 @@ Feldumfang bewusst an der tatsächlichen Nutzung im bestehenden Apple-Adressbuch
   dort korrigierte Telefonnummer wird beim nächsten Push dieses Kontakts überschrieben. Beides ist eine
   Folge des Einweg-Prinzips für Kontaktdaten (5.9) und wäre der nächste Ausbauschritt.
 
+### 5.9.3 Feldänderungen aus Kontakte.app als Vorschlag
+- **Umgesetzt (2026-08-05):** Wird ein bestehender Kontakt direkt in Kontakte.app bearbeitet (z. B. eine
+  korrigierte Telefonnummer), erkennt Rubrica das und legt es als Vorschlag an — **nicht** automatisch
+  übernommen. Nutzer-Begründung: eine Änderung ist wie eine Neuanlage zu behandeln, weil sie auch
+  versehentlich passiert sein kann; im Browser sieht man sie dann und entscheidet.
+- **Zielbild der Arbeitsteilung:** Mitarbeitende arbeiten in Kontakte.app (anlegen, korrigieren, in Ordner
+  schieben), Admins im Browser. Anlegen und Korrigieren laufen über die Freigabe, Ordner-Zuordnungen wirken
+  direkt (5.9.1).
+- **Referenzpunkt** ist die zuletzt gepushte vCard (`kontakte.zuletzt_gepushte_vcard`), gesetzt nur nach
+  bestätigtem Push — dieselbe Konstruktion wie bei den Ordnern (5.9.1).
+- **Verglichen wird geparster Schnappschuss gegen geparsten Serverstand**, nicht gegen den Datenbankstand,
+  und angewandt werden nur die abweichenden Felder. Grund ist eine konkrete Falle: Rubrica schreibt die
+  Funktion als `CATEGORIES` in die vCard, `importer/vcard.py::_parse_kontakt` liefert dafür aber immer `""`
+  zurück. Würde man die geparste vCard einfach anwenden, wäre die Funktion — ein Pflichtfeld — danach leer.
+  Durch den Diff ist der Wert auf beiden Seiten gleich und wird nie angefasst; ein Test sichert das ab.
+- **Verwerfen pusht Rubricas Stand zurück.** Ohne das bliebe die abgelehnte Änderung auf dem Server stehen
+  und wäre weiterhin auf allen Geräten sichtbar — abgelehnt wäre sie dann nur in Rubricas Datenbank.
+- **Dublettenschutz über einen Inhalts-Hash** (`kontakte-app-aenderung:<id>:<hash>`): der Lauf alle fünf
+  Minuten erzeugt für dieselbe offene Änderung keinen zweiten Vorschlag, eine spätere andere Änderung am
+  selben Kontakt dagegen schon.
+- **`sync_alle()` erkennt Änderungen ebenfalls vor dem Pushen** (Schritt 0) — sonst würde ausgerechnet
+  „Jetzt alles neu synchronisieren" jede noch nicht erfasste Korrektur überschreiben.
+- **Weiterhin offen:** kein `If-Match`/ETag; bearbeiten zwei Personen denselben Kontakt gleichzeitig, gewinnt
+  der letzte Schreiber. Vom Nutzer als seltener Fall eingestuft und bewusst zurückgestellt.
+
 ### 5.10 Anleitung — eine Quelle für App und Website
 - **Umgesetzt (2026-08-03):** Die Bedienungsanleitung existiert genau einmal, als Jinja-freies
   HTML-Fragment in `web/templates/_anleitung_inhalt.html`. Zwei Ausgabewege greifen darauf zu:
