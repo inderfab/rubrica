@@ -689,3 +689,62 @@ def test_neuer_ordner_mit_bestehendem_kontakt_behaelt_zuordnung(tmp_db, monkeypa
     projekt_id = kontakte_app_intake.bestaetige_ordner_vorschlag(tmp_db, v)
 
     assert _mitglieder(tmp_db, projekt_id) == {kontakt_id}
+
+
+def test_alle_vcard_felder_werden_als_aenderung_erkannt(tmp_db, monkeypatch):
+    """Nutzer-Vorgabe: in Kontakte.app soll sich JEDES Feld aendern lassen und jede
+    Aenderung als Vorschlag ankommen. Deckt alle Feldarten ab, die eine vCard traegt,
+    inklusive einer reinen Umkategorisierung (Direkt -> Privat)."""
+    kontakt_id = queries.create_kontakt(tmp_db, {
+        "vorname": "Anna", "nachname": "Muster", "firma": "Alt AG", "rolle": "Bauleiterin",
+        "kategorie": "Architektin", "notizen": "alte Notiz",
+        "telefonnummern": [{"typ": "Direkt", "nummer": "044 111 11 11"}],
+        "emails": [{"typ": "Direkt", "email": "alt@beispiel.ch"}],
+        "adressen": [{"typ": "arbeit", "strasse": "Altweg 1", "plz": "8000", "ort": "Zürich",
+                      "region": "", "land": ""}],
+        "urls": [{"typ": "homepage", "url": "www.alt.ch"}]})
+    _mock_client(monkeypatch, lambda request: httpx.Response(201))
+    radicale.push_kontakt(tmp_db, kontakt_id)
+    basis = queries.hole_gepushte_vcard(tmp_db, kontakt_id)
+
+    faelle = [
+        ("Firma", "ORG:Alt AG", "ORG:Neu AG"),
+        ("Rolle", "TITLE:Bauleiterin", "TITLE:Projektleiterin"),
+        ("Notizen", "NOTE:alte Notiz", "NOTE:neue Notiz"),
+        ("E-Mail", "alt@beispiel.ch", "neu@beispiel.ch"),
+        ("Adresse", "Altweg 1", "Neuweg 9"),
+        ("Web", "www.alt.ch", "www.neu.ch"),
+        ("Vorname", "N:Muster;Anna", "N:Muster;Anita"),
+        ("Telefon", "TEL;TYPE=DIREKT", "TEL;TYPE=PRIVAT"),
+    ]
+    for feld, alt, neu in faelle:
+        for v in queries.list_vorschlaege(tmp_db, quelle="kontakte_app"):
+            queries.set_vorschlag_status(tmp_db, v["id"], "abgelehnt")
+        geaendert = basis.replace(alt, neu)
+        assert geaendert != basis, f"{feld}: Testdaten greifen nicht"
+        _mock_client(monkeypatch, lambda r, t=geaendert: (
+            httpx.Response(200, text=t) if r.method == "GET" else httpx.Response(201)))
+
+        ergebnis = kontakte_app_intake.pruefe_kontakt_aenderungen(tmp_db)
+
+        assert ergebnis["neu"] == 1, f"{feld} wurde nicht als Aenderung erkannt"
+        offen = queries.list_vorschlaege(tmp_db, quelle="kontakte_app")[0]
+        assert feld in [u["feld"] for u in offen["rohdaten"]["unterschiede"]], \
+            f"{feld} fehlt in der Gegenueberstellung"
+
+
+def test_umkategorisierung_ist_in_der_anzeige_erkennbar(tmp_db, monkeypatch):
+    """Ohne die Kategorie im Anzeigetext staende bei einer reinen Umstellung
+    (Direkt -> Privat) links und rechts derselbe Wert - die Gegenueberstellung
+    saehe aus wie ein Fehler."""
+    kontakt_id = _kontakt_mit_push(tmp_db, monkeypatch)
+    geaendert = queries.hole_gepushte_vcard(tmp_db, kontakt_id).replace(
+        "TEL;TYPE=DIREKT", "TEL;TYPE=PRIVAT")
+
+    _mock_client(monkeypatch, lambda r: (
+        httpx.Response(200, text=geaendert) if r.method == "GET" else httpx.Response(201)))
+    kontakte_app_intake.pruefe_kontakt_aenderungen(tmp_db)
+
+    u = queries.list_vorschlaege(tmp_db, quelle="kontakte_app")[0]["rohdaten"]["unterschiede"][0]
+    assert u["alt"] != u["neu"]
+    assert "Direkt" in u["alt"] and "Privat" in u["neu"]

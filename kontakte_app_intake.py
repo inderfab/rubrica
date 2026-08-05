@@ -341,14 +341,19 @@ def _lesbar(feld: str, wert) -> str:
                 teile.append(str(eintrag))
                 continue
             if "nummer" in eintrag:
-                teile.append(eintrag["nummer"])
+                text = eintrag["nummer"]
             elif "email" in eintrag:
-                teile.append(eintrag["email"])
+                text = eintrag["email"]
             elif "url" in eintrag:
-                teile.append(eintrag["url"])
+                text = eintrag["url"]
             else:  # Adresse
-                teile.append(" ".join(str(eintrag.get(k, "")) for k in
-                                      ("strasse", "plz", "ort", "land")).strip())
+                text = " ".join(str(eintrag.get(k, "")) for k in
+                                ("strasse", "plz", "ort", "land")).strip()
+            # Kategorie mitzeigen: sonst steht bei einer reinen Umkategorisierung
+            # (z.B. Direkt -> Privat) links und rechts derselbe Wert und die
+            # Gegenueberstellung wirkt wie ein Fehler.
+            typ = (eintrag.get("typ") or "").strip()
+            teile.append(f"{typ}: {text}" if typ and text else text)
         return ", ".join(t for t in teile if t)
     return str(wert or "")
 
