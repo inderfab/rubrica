@@ -33,11 +33,21 @@ router = APIRouter()
 _QUELLEN = ["mail", "kontakte_app"]
 
 
-def _nach_bestaetigung_aufraeumen(vorschlag: dict) -> None:
-    """Loescht bei quelle='kontakte_app' die urspruengliche fremde vCard aus
-    Radicale, nachdem Rubrica den Kontakt unter eigener UID (kontakt-N.vcf)
-    gepusht hat - sonst bliebe der Kontakt doppelt (einmal als Rubricas eigene
-    vCard, einmal als die urspruengliche fremde) in Kontakte.app sichtbar."""
+def _fremde_vcard_entfernen(vorschlag: dict) -> None:
+    """Entfernt bei quelle='kontakte_app' die urspruengliche, direkt in Kontakte.app
+    angelegte vCard aus Radicale. Noetig in BEIDEN Ausgaengen:
+
+    - beim Bestaetigen, weil Rubrica den Eintrag danach unter eigener UID
+      (kontakt-N.vcf bzw. projekt-N.vcf) pusht - sonst staende er doppelt in
+      Kontakte.app;
+    - beim Ablehnen, weil die vCard sonst als Karteileiche im gemeinsamen
+      Adressbuch liegen bliebe: auf allen verbundenen Geraeten sichtbar, von
+      Rubrica nicht verwaltet, in keinem Export enthalten - und nie wieder
+      angeboten, da der Dublettenschutz (queries.vorschlag_existiert_fuer_message_id)
+      nur nach der message_id fragt und den Status bewusst ignoriert.
+
+    Fuer quelle='mail' gibt es keine vCard auf Radicale, der Aufruf ist dort ein
+    No-op."""
     if vorschlag["quelle"] != "kontakte_app":
         return
     name = vorschlag["rohdaten"].get("kontakte_app_vcf_name")
@@ -76,13 +86,13 @@ def vorschlag_uebernehmen(vorschlag_id: int):
             projekt_id = kontakte_app_intake.bestaetige_ordner_vorschlag(conn, vorschlag)
             queries.set_vorschlag_status(conn, vorschlag_id, "bestaetigt")
             radicale.push_projekt(conn, projekt_id)
-            _nach_bestaetigung_aufraeumen(vorschlag)
+            _fremde_vcard_entfernen(vorschlag)
         else:
             ordner_ids = vorschlag["rohdaten"].get("erkannte_ordner_ids") if vorschlag else None
             kontakt_id = queries.bestaetige_vorschlag(conn, vorschlag_id, ordner_ids=ordner_ids)
             radicale.push_kontakt_mit_ordnern(conn, kontakt_id)
             if vorschlag:
-                _nach_bestaetigung_aufraeumen(vorschlag)
+                _fremde_vcard_entfernen(vorschlag)
     finally:
         conn.close()
     return RedirectResponse(url="/vorschlaege", status_code=303)
@@ -90,11 +100,20 @@ def vorschlag_uebernehmen(vorschlag_id: int):
 
 @router.post("/vorschlaege/{vorschlag_id}/ablehnen")
 def vorschlag_ablehnen(vorschlag_id: int):
+    """Ablehnen entfernt bei quelle='kontakte_app' zusaetzlich die urspruengliche
+    vCard aus dem gemeinsamen Adressbuch - der Eintrag verschwindet damit auch in
+    Kontakte.app auf allen Geraeten. Ohne das bliebe er als Karteileiche liegen
+    (siehe _fremde_vcard_entfernen). Wer den Kontakt privat behalten will, muss
+    ihn vorher in Kontakte.app in ein eigenes Konto verschieben - darauf weist
+    die Rueckfrage im Formular hin (vorschlaege.html)."""
     conn = get_connection()
     try:
+        vorschlag = queries.get_vorschlag(conn, vorschlag_id)
         queries.set_vorschlag_status(conn, vorschlag_id, "abgelehnt")
     finally:
         conn.close()
+    if vorschlag:
+        _fremde_vcard_entfernen(vorschlag)
     return RedirectResponse(url="/vorschlaege", status_code=303)
 
 
@@ -164,7 +183,7 @@ async def vorschlag_uebernehmen_bearbeitet(request: Request, vorschlag_id: int):
         kontakt_id = queries.bestaetige_vorschlag(conn, vorschlag_id, ordner_ids=list(ordner_ids))
         radicale.push_kontakt_mit_ordnern(conn, kontakt_id)
         if vorschlag:
-            _nach_bestaetigung_aufraeumen(vorschlag)
+            _fremde_vcard_entfernen(vorschlag)
     finally:
         conn.close()
     if request.headers.get("HX-Request") == "true":

@@ -207,3 +207,96 @@ def test_uebernehmen_ordner_vorschlag_legt_ordner_an_und_loescht_fremde_vcard(tm
     assert len(kontakt["projekte"]) == 1
     assert "/a/GRUPPE-1.vcf" in geloescht
     assert queries.get_vorschlag(tmp_db, vorschlag_id)["status"] == "bestaetigt"
+
+
+def test_ablehnen_entfernt_fremde_vcard_aus_dem_adressbuch(tmp_db, monkeypatch):
+    """Regression (Nutzer-Meldung): ein abgelehnter Kontakte.app-Vorschlag blieb als
+    Karteileiche im gemeinsamen Adressbuch liegen - auf allen Geraeten sichtbar, von
+    Rubrica nicht verwaltet und nie wieder angeboten, weil der Dublettenschutz nur
+    nach der message_id fragt und den Status ignoriert."""
+    vorschlag_id = queries.create_vorschlag(
+        tmp_db, {"vorname": "Chris", "nachname": "Contact", "telefonnummern": [], "emails": [],
+                 "kontakte_app_vcf_name": "ABC-123-FREMD.vcf"},
+        quelle="kontakte_app", message_id="kontakte-app:ABC-123-FREMD.vcf",
+    )
+
+    geloescht = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "DELETE":
+            geloescht.append(request.url.path)
+            return httpx.Response(204)
+        return httpx.Response(201)
+
+    monkeypatch.setattr(radicale, "_client", lambda: httpx.Client(
+        transport=httpx.MockTransport(handler), base_url="https://test/a/"
+    ))
+
+    r = _client().post(f"/vorschlaege/{vorschlag_id}/ablehnen", follow_redirects=False)
+    assert r.status_code == 303
+    assert "/a/ABC-123-FREMD.vcf" in geloescht
+    assert queries.get_vorschlag(tmp_db, vorschlag_id)["status"] == "abgelehnt"
+    assert queries.list_kontakte(tmp_db) == []
+
+
+def test_ablehnen_entfernt_abgelehnten_ordner_aus_dem_adressbuch(tmp_db, monkeypatch):
+    vorschlag_id = queries.create_vorschlag(tmp_db, {
+        "typ": "ordner", "name": "Neue Liste", "apple_gruppe_uid": "GRUPPE-1",
+        "mitglieder_uids": [], "kontakte_app_vcf_name": "GRUPPE-1.vcf",
+    }, quelle="kontakte_app", message_id="kontakte-app:GRUPPE-1.vcf")
+
+    geloescht = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "DELETE":
+            geloescht.append(request.url.path)
+            return httpx.Response(204)
+        return httpx.Response(201)
+
+    monkeypatch.setattr(radicale, "_client", lambda: httpx.Client(
+        transport=httpx.MockTransport(handler), base_url="https://test/a/"
+    ))
+
+    _client().post(f"/vorschlaege/{vorschlag_id}/ablehnen", follow_redirects=False)
+
+    assert "/a/GRUPPE-1.vcf" in geloescht
+    assert queries.list_projekte(tmp_db) == []
+
+
+def test_ablehnen_eines_mail_vorschlags_loescht_nichts_auf_radicale(tmp_db, monkeypatch):
+    """Mail-Vorschlaege haben keine vCard auf Radicale - hier darf nie eine
+    Loeschanfrage rausgehen (sonst wuerde ein zufaellig gleich benannter Eintrag
+    getroffen)."""
+    vorschlag_id = queries.create_vorschlag(
+        tmp_db, {"vorname": "Anna", "nachname": "Muster", "telefonnummern": [], "emails": []},
+        quelle="mail", message_id="<abc@example.com>",
+    )
+
+    anfragen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        anfragen.append(request.method)
+        return httpx.Response(204)
+
+    monkeypatch.setattr(radicale, "_client", lambda: httpx.Client(
+        transport=httpx.MockTransport(handler), base_url="https://test/a/"
+    ))
+
+    _client().post(f"/vorschlaege/{vorschlag_id}/ablehnen", follow_redirects=False)
+
+    assert anfragen == []
+    assert queries.get_vorschlag(tmp_db, vorschlag_id)["status"] == "abgelehnt"
+
+
+def test_ablehnen_rueckfrage_nennt_die_folge_nur_bei_kontakte_app(tmp_db):
+    """Das Loeschen auf allen Geraeten darf keine Ueberraschung sein - bei
+    Mail-Vorschlaegen waere derselbe Hinweis dagegen schlicht falsch."""
+    queries.create_vorschlag(
+        tmp_db, {"vorname": "Chris", "nachname": "Contact", "telefonnummern": [], "emails": [],
+                 "kontakte_app_vcf_name": "ABC.vcf"}, quelle="kontakte_app")
+    queries.create_vorschlag(
+        tmp_db, {"vorname": "Anna", "nachname": "Muster", "telefonnummern": [], "emails": []},
+        quelle="mail")
+
+    text = _client().get("/vorschlaege").text
+    assert text.count("auch in Kontakte.app auf allen Geräten entfernt") == 1

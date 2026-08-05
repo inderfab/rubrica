@@ -38,7 +38,7 @@
                     <button type="submit">Übernehmen</button>
                 </form>
                 <form method="post" action="/vorschlaege/{{ v.id }}/ablehnen"
-                      onsubmit="return confirm('Vorschlag wirklich ablehnen?')">
+                      onsubmit="return confirm('Ordner „{{ k.name }}“ ablehnen?\n\nEr wird damit auch in Kontakte.app auf allen Geräten entfernt. Soll er dort erhalten bleiben, vorher in ein eigenes Konto verschieben.')">
                     <button type="submit" class="secondary">Ablehnen</button>
                 </form>
             </td>
@@ -76,7 +76,7 @@
                     Bearbeiten
                 </button>
                 <form method="post" action="/vorschlaege/{{ v.id }}/ablehnen"
-                      onsubmit="return confirm('Vorschlag wirklich ablehnen?')">
+                      onsubmit="return confirm('Vorschlag „{{ k.vorname }} {{ k.nachname }}“ ablehnen?{% if v.quelle == "kontakte_app" %}\n\nDer Kontakt wird damit auch in Kontakte.app auf allen Geräten entfernt. Soll er dort erhalten bleiben, vorher in ein eigenes Konto verschieben.{% endif %}')">
                     <button type="submit" class="secondary">Ablehnen</button>
                 </form>
             </td>
