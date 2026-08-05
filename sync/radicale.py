@@ -236,6 +236,60 @@ def _remote_vcf_namen(client: "httpx.Client | None" = None) -> list:
             client.close()
 
 
+def gruppen_mitglieder_auf_server(projekt_id: int,
+                                   client: "httpx.Client | None" = None) -> "set[int] | None":
+    """Liest die kontakt_id der Mitglieder aus der Gruppen-vCard auf Radicale.
+    None, wenn die vCard nicht existiert, nicht lesbar ist oder kein Client
+    vorhanden ist - der Aufrufer darf daraus NIE "keine Mitglieder" ableiten,
+    sonst gilt ein fehlgeschlagener Abruf als "alle entfernt"."""
+    if client is None:
+        return None
+    try:
+        resp = client.get(f"projekt-{projekt_id}.vcf")
+    except httpx.HTTPError as exc:
+        log.warning("Gruppen-vCard projekt-%s konnte nicht gelesen werden: %s", projekt_id, exc)
+        return None
+    if resp.status_code != 200:
+        return None
+    return {int(i) for i in re.findall(r"X-ADDRESSBOOKSERVER-MEMBER:urn:uuid:kontakt-(\d+)", resp.text)}
+
+
+def _zusammengefuehrte_mitglieder(conn: sqlite3.Connection, projekt_id: int,
+                                   db_ids: set, client: "httpx.Client | None") -> set:
+    """Fuehrt den Datenbankstand mit dem zusammen, was seit dem letzten eigenen Push
+    auf dem Server passiert ist (jemand hat in Kontakte.app einen Kontakt in diese
+    Gruppe gezogen oder daraus entfernt).
+
+    Ohne dieses Lesen-vor-Schreiben ueberschreibt jeder Push die Gruppen-vCard blind
+    mit dem Datenbankstand - eine noch nicht eingelesene Aenderung eines Kollegen ist
+    dann unwiederbringlich weg, und zwar lautlos. Das trat nachweislich auf: Kollege
+    fuegt B hinzu, jemand anderes fuegt im Browser C hinzu, B verschwindet.
+
+    Der Schnappschuss (projekte.zuletzt_gepushte_mitglieder) trennt dabei "vom Client
+    geaendert" von "unser eigener Stand": alles, worin der Server vom Schnappschuss
+    abweicht, kann nur von aussen kommen. Ohne Schnappschuss (nie gepusht, Altbestand)
+    bleibt es beim reinen Datenbankstand - jede andere Annahme waere Spekulation."""
+    schnappschuss = queries.hole_gepushte_mitglieder(conn, projekt_id)
+    if schnappschuss is None:
+        return db_ids
+    server = gruppen_mitglieder_auf_server(projekt_id, client=client)
+    if server is None:
+        return db_ids
+
+    hinzugefuegt = server - schnappschuss
+    entfernt = schnappschuss - server
+    if hinzugefuegt:
+        # Die vCard kann auf einen zwischenzeitlich geloeschten Kontakt zeigen.
+        vorhanden = {
+            r["id"] for r in conn.execute(
+                "SELECT id FROM kontakte WHERE id IN (%s)" % ",".join("?" * len(hinzugefuegt)),
+                tuple(sorted(hinzugefuegt)),
+            )
+        }
+        hinzugefuegt &= vorhanden
+    return (db_ids | hinzugefuegt) - entfernt
+
+
 def push_kontakt(conn: sqlite3.Connection, kontakt_id: int,
                  client: "httpx.Client | None" = None) -> bool:
     kontakt = queries.get_kontakt(conn, kontakt_id)
@@ -274,19 +328,35 @@ def push_projekt(conn: sqlite3.Connection, projekt_id: int,
         # keinen Bezugspunkt (siehe queries.setze_gepushte_mitglieder).
         queries.setze_gepushte_mitglieder(conn, projekt_id, None)
         return _delete(f"projekt-{projekt_id}.vcf", client=client)
-    mitglieder_ids = [
+    db_ids = {
         r["kontakt_id"] for r in conn.execute(
-            "SELECT kontakt_id FROM kontakte_projekte WHERE projekt_id = ? ORDER BY kontakt_id", (projekt_id,)
+            "SELECT kontakt_id FROM kontakte_projekte WHERE projekt_id = ?", (projekt_id,)
         )
-    ]
-    erfolg = _put(f"projekt-{projekt_id}.vcf", projekt_zu_gruppen_vcard(projekt, mitglieder_ids), client=client)
-    if erfolg:
-        # Nur nach einem BESTAETIGTEN Push festhalten, was auf dem Server steht - sonst
-        # wuerde ein fehlgeschlagener Push einen falschen Referenzpunkt setzen und der
-        # naechste Abgleich die Differenz faelschlich einem Mac-Client zuschreiben
-        # (siehe kontakte_app_intake.pruefe_ordner_mitgliedschaften).
-        queries.setze_gepushte_mitglieder(conn, projekt_id, mitglieder_ids)
-    return erfolg
+    }
+    # Lesen vor Schreiben: erst zusammenfuehren, was seit dem letzten eigenen Push von
+    # einem Mac-Client kam, dann schreiben (siehe _zusammengefuehrte_mitglieder).
+    eigener = client is None
+    if eigener:
+        client = _client()
+    try:
+        soll = _zusammengefuehrte_mitglieder(conn, projekt_id, db_ids, client)
+        if soll != db_ids:
+            # Datenbank an den zusammengefuehrten Stand angleichen, sonst wuerde der
+            # naechste Push die fremde Aenderung erneut verwerfen.
+            queries.setze_kontakt_projekt_zuordnungen(conn, projekt_id, soll)
+        mitglieder_ids = sorted(soll)
+        erfolg = _put(f"projekt-{projekt_id}.vcf",
+                       projekt_zu_gruppen_vcard(projekt, mitglieder_ids), client=client)
+        if erfolg:
+            # Nur nach einem BESTAETIGTEN Push festhalten, was auf dem Server steht - sonst
+            # wuerde ein fehlgeschlagener Push einen falschen Referenzpunkt setzen und der
+            # naechste Abgleich die Differenz faelschlich einem Mac-Client zuschreiben
+            # (siehe kontakte_app_intake.pruefe_ordner_mitgliedschaften).
+            queries.setze_gepushte_mitglieder(conn, projekt_id, mitglieder_ids)
+        return erfolg
+    finally:
+        if eigener and client is not None:
+            client.close()
 
 
 def delete_projekt(projekt_id: int) -> bool:

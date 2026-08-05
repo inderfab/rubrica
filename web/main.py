@@ -27,31 +27,46 @@ from web.shared import _setup_erforderlich
 
 log = logging.getLogger(__name__)
 
-_MAIL_PRUEF_INTERVALL = 24 * 60 * 60
+# Bewusst zwei verschiedene Takte im selben Thread:
+# - Kontakte.app haengt an der eigenen Radicale-Instanz auf Loopback. Bei bis zu 20
+#   verbundenen Geraeten sollen dort angelegte Kontakte und verschobene Ordner-
+#   Zuordnungen zeitnah in Rubrica ankommen, nicht erst am naechsten Tag.
+# - Der Mail-Eingang geht an ein fremdes IMAP-Postfach ueber das Internet. Das alle
+#   fuenf Minuten anzufassen waere unnoetige Last und koennte in Verbindungslimits
+#   laufen - hier bleibt es beim Tagesrhythmus.
+_KONTAKTE_APP_INTERVALL = 5 * 60
+_MAIL_INTERVALL = 24 * 60 * 60
 
 
 def _vorschlaege_ueberwachung():
-    """Prueft 1x taeglich Mail-Eingang (mail_intake.py) und Kontakte.app-Neuzugaenge
-    (kontakte_app_intake.py) im Hintergrund - zusaetzlich zum manuellen "Jetzt
-    pruefen"-Knopf auf der Vorschlaege-Seite. Kurze Anfangswartezeit, damit der
-    Server zuerst vollstaendig hochgefahren ist."""
+    """Hintergrund-Ueberwachung beider Erfassungsquellen - zusaetzlich zum manuellen
+    "Jetzt pruefen"-Knopf auf der Vorschlaege-Seite. Kurze Anfangswartezeit, damit der
+    Server zuerst vollstaendig hochgefahren ist.
+
+    Der Ordner-Abgleich hier ist die Absicherung fuer den Normalfall, dass niemand den
+    betroffenen Ordner in Rubrica anfasst; gegen Datenverlust schuetzt bereits
+    push_projekt selbst (Lesen vor Schreiben, siehe sync/radicale.py)."""
     time.sleep(60)
+    letzte_mail_pruefung = None
     while True:
-        conn = connection.get_connection()
-        try:
-            if mail_intake.konfiguriert():
-                mail_intake.pruefe_mail_eingang(conn)
-        except Exception:
-            log.exception("Taeglicher Mail-Eingang-Check fehlgeschlagen")
-        finally:
-            conn.close()
+        jetzt = time.monotonic()
+        if letzte_mail_pruefung is None or jetzt - letzte_mail_pruefung >= _MAIL_INTERVALL:
+            letzte_mail_pruefung = jetzt
+            conn = connection.get_connection()
+            try:
+                if mail_intake.konfiguriert():
+                    mail_intake.pruefe_mail_eingang(conn)
+            except Exception:
+                log.exception("Taeglicher Mail-Eingang-Check fehlgeschlagen")
+            finally:
+                conn.close()
 
         conn = connection.get_connection()
         try:
             if kontakte_app_intake.konfiguriert():
                 kontakte_app_intake.pruefe_kontakte_app_neuzugaenge(conn)
         except Exception:
-            log.exception("Taeglicher Kontakte.app-Check fehlgeschlagen")
+            log.exception("Kontakte.app-Check fehlgeschlagen")
         finally:
             conn.close()
 
@@ -62,11 +77,11 @@ def _vorschlaege_ueberwachung():
             if kontakte_app_intake.konfiguriert():
                 kontakte_app_intake.pruefe_ordner_mitgliedschaften(conn)
         except Exception:
-            log.exception("Taeglicher Ordner-Mitgliedschafts-Abgleich fehlgeschlagen")
+            log.exception("Ordner-Mitgliedschafts-Abgleich fehlgeschlagen")
         finally:
             conn.close()
 
-        time.sleep(_MAIL_PRUEF_INTERVALL)
+        time.sleep(_KONTAKTE_APP_INTERVALL)
 
 
 @asynccontextmanager

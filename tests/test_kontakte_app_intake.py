@@ -396,3 +396,48 @@ def test_fehlgeschlagener_push_setzt_keinen_schnappschuss(tmp_db, monkeypatch):
     radicale.push_projekt(tmp_db, projekt_id)
 
     assert queries.hole_gepushte_mitglieder(tmp_db, projekt_id) is None
+
+
+def test_gleichzeitige_aenderung_geht_nicht_verloren(tmp_db, monkeypatch):
+    """Regression (Nutzer-Frage zu 20 verbundenen Geraeten): Kollege zieht in
+    Kontakte.app B in einen Ordner, kurz darauf fuegt jemand im Browser C zum selben
+    Ordner hinzu - BEVOR der Hintergrund-Scan lief. Vor dem Lesen-vor-Schreiben in
+    push_projekt ueberschrieb dieser Push die Gruppen-vCard blind mit dem
+    Datenbankstand, B war damit lautlos und unwiederbringlich weg."""
+    A = queries.create_kontakt(tmp_db, {"vorname": "A", "nachname": "Alt"})
+    B = queries.create_kontakt(tmp_db, {"vorname": "B", "nachname": "VomMac"})
+    C = queries.create_kontakt(tmp_db, {"vorname": "C", "nachname": "VomBrowser"})
+    projekt_id = queries.get_or_create_projekt(tmp_db, "Baustelle")
+    queries.set_kontakt_projekte(tmp_db, A, [projekt_id])
+
+    server = {"mitglieder": [A]}
+
+    def handler(request):
+        if request.method == "GET" and request.url.path.endswith(f"projekt-{projekt_id}.vcf"):
+            return httpx.Response(200, text=_gruppen_vcard(projekt_id, server["mitglieder"]))
+        if request.method == "PUT":
+            import re as _re
+            server["mitglieder"] = [
+                int(x) for x in _re.findall(r"urn:uuid:kontakt-(\d+)", request.content.decode())
+            ]
+            return httpx.Response(201)
+        return httpx.Response(201)
+
+    _mock_client(monkeypatch, handler)
+
+    radicale.push_projekt(tmp_db, projekt_id)          # Ausgangsstand, Schnappschuss {A}
+    server["mitglieder"] = sorted(server["mitglieder"] + [B])   # Kollege in Kontakte.app
+    queries.set_kontakt_projekte(tmp_db, C, [projekt_id])       # jemand im Browser
+    radicale.push_projekt(tmp_db, projekt_id)
+
+    # Schon der Push selbst muss zusammengefuehrt haben - ohne auf den Scan zu warten.
+    assert set(server["mitglieder"]) == {A, B, C}
+    assert _mitglieder(tmp_db, projekt_id) == {A, B, C}
+
+
+def test_hintergrund_takt_ist_getrennt():
+    """Kontakte.app haengt lokal an Radicale und wird engmaschig geprueft; der
+    Mail-Eingang ist ein fremdes IMAP-Postfach und bleibt im Tagesrhythmus."""
+    from web import main
+    assert main._KONTAKTE_APP_INTERVALL == 5 * 60
+    assert main._MAIL_INTERVALL == 24 * 60 * 60

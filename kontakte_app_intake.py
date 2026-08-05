@@ -151,20 +151,6 @@ def pruefe_kontakte_app_neuzugaenge(conn) -> dict:
     return {"aktiv": True, "geprueft": geprueft, "neu": neu, "fehler": fehler}
 
 
-def _eigene_mitglieder_auf_server(client, projekt_id: int) -> "set[int] | None":
-    """Liest die kontakt_id der Mitglieder aus der Gruppen-vCard auf Radicale.
-    None, wenn die vCard nicht (mehr) existiert oder nicht lesbar ist - dann darf
-    kein Abgleich stattfinden, sonst gaelte eine fehlende Datei als "alle
-    Mitglieder entfernt"."""
-    resp = client.get(f"projekt-{projekt_id}.vcf")
-    if resp.status_code != 200:
-        return None
-    ids = set()
-    for uid in re.findall(r"X-ADDRESSBOOKSERVER-MEMBER:urn:uuid:kontakt-(\d+)", resp.text):
-        ids.add(int(uid))
-    return ids
-
-
 def pruefe_ordner_mitgliedschaften(conn, client=None) -> dict:
     """Uebernimmt Ordner-Zuordnungen, die direkt in Kontakte.app geaendert wurden -
     also einen bestehenden Kontakt per Drag&Drop in eine Gruppe geschoben oder
@@ -207,11 +193,7 @@ def pruefe_ordner_mitgliedschaften(conn, client=None) -> dict:
             schnappschuss = queries.hole_gepushte_mitglieder(conn, projekt_id)
             if schnappschuss is None:
                 continue
-            try:
-                server = _eigene_mitglieder_auf_server(client, projekt_id)
-            except Exception:
-                fehler += 1
-                continue
+            server = radicale.gruppen_mitglieder_auf_server(projekt_id, client=client)
             if server is None:
                 continue
 

@@ -264,6 +264,31 @@ Feldumfang bewusst an der tatsächlichen Nutzung im bestehenden Apple-Adressbuch
   bestehende Effizienz-Eigenschaft (eine Verbindung für den gesamten Lauf) bleibt gewahrt, der Abgleich
   bekommt den offenen Client durchgereicht.
 
+### 5.9.2 Nebenläufigkeit bei vielen Geräten
+- **Umgesetzt (2026-08-05):** Auslöser war die Frage, was bei ~20 verbundenen Geräten passiert, wenn zwei
+  Personen gleichzeitig etwas ändern.
+- **Drei Richtungen, drei Takte** — wichtig für das Verständnis:
+  - *Rubrica → Geräte*: sofort bei jeder Änderung (Push pro Bearbeitung).
+  - *Gerät → Gerät*: **läuft gar nicht über Rubrica.** Alle Geräte hängen an derselben Radicale-Sammlung;
+    ein auf einem Mac angelegter Kontakt liegt sofort dort und erscheint auf den übrigen bei deren eigenem
+    Abgleich (Apples Takt). Rubrica muss das nur mitbekommen, damit es in DB/Web-UI/Export landet.
+  - *Geräte → Rubrica*: alle **5 Minuten** (`web/main.py::_KONTAKTE_APP_INTERVALL`). Der Mail-Eingang bleibt
+    bewusst im Tagesrhythmus (`_MAIL_INTERVALL`) — ein fremdes IMAP-Postfach alle fünf Minuten anzufassen
+    wäre unnötige Last und könnte in Verbindungslimits laufen.
+- **Der eigentliche Fix ist aber nicht der Takt, sondern Lesen vor Schreiben.** `push_projekt()` schrieb die
+  Gruppen-vCard blind aus der Datenbank. Nachgewiesenes Szenario: Kollege zieht B in Kontakte.app in einen
+  Ordner, kurz darauf fügt jemand im Browser C zum selben Ordner hinzu — der Push überschrieb die vCard,
+  B war lautlos und unwiederbringlich weg, kein späterer Scan konnte ihn zurückholen. Jeder Ordner-Push
+  liest jetzt zuerst den Serverstand, rechnet die Client-Differenz gegen den Schnappschuss ein, gleicht die
+  Datenbank an und schreibt erst dann (`_zusammengefuehrte_mitglieder`). Damit ist der Schutz unabhängig
+  vom Scan-Takt — der Hintergrundlauf ist nur noch die Absicherung für den Fall, dass niemand den Ordner
+  in Rubrica anfasst.
+- **Bewusst offen geblieben:** (a) Wird derselbe **Kontakt** von zwei Seiten bearbeitet, gewinnt der letzte
+  Schreiber — es gibt kein `If-Match`/ETag (Radicale könnte es). (b) Feldänderungen an bestehenden Kontakten
+  liest Rubrica grundsätzlich nicht aus Kontakte.app zurück, nur Neuanlagen und Ordner-Zuordnungen; eine
+  dort korrigierte Telefonnummer wird beim nächsten Push dieses Kontakts überschrieben. Beides ist eine
+  Folge des Einweg-Prinzips für Kontaktdaten (5.9) und wäre der nächste Ausbauschritt.
+
 ### 5.10 Anleitung — eine Quelle für App und Website
 - **Umgesetzt (2026-08-03):** Die Bedienungsanleitung existiert genau einmal, als Jinja-freies
   HTML-Fragment in `web/templates/_anleitung_inhalt.html`. Zwei Ausgabewege greifen darauf zu:
