@@ -50,6 +50,11 @@ from importer.vcard import finde_match, parse_vcf
 from sync import radicale
 
 _EIGENES_MUSTER = re.compile(r"^(kontakt|projekt)-\d+\.vcf$")
+
+# message_id-Praefixe: zugleich Dublettenschutz und - bei den Loeschungen - Schluessel
+# fuer die Push-Sperre (siehe queries.hat_offenen_loeschvorschlag).
+LOESCHUNG_KONTAKT_PRAEFIX = "kontakte-app-loeschung:"
+LOESCHUNG_ORDNER_PRAEFIX = "kontakte-app-ordner-loeschung:"
 _GRUPPEN_MUSTER = re.compile(r"X-ADDRESSBOOKSERVER-KIND:\s*group", re.IGNORECASE)
 
 
@@ -113,13 +118,41 @@ def pruefe_kontakte_app_neuzugaenge(conn) -> dict:
     pruefe_und_beschreibe fuer die fehlertolerante Anzeige-Variante)."""
     client = radicale._client()
     if client is None:
-        return {"aktiv": False, "geprueft": 0, "neu": 0, "fehler": 0}
+        return {"aktiv": False, "geprueft": 0, "neu": 0, "aktualisiert": 0, "fehler": 0}
 
-    geprueft = neu = fehler = 0
+    geprueft = neu = fehler = aktualisiert = 0
     try:
-        namen = [n for n in _fremde_vcf_namen(client)
-                 if not queries.vorschlag_existiert_fuer_message_id(conn, f"kontakte-app:{n}")]
-        mitgliedschaften = _projekt_mitgliedschaften(conn, client) if namen else {}
+        alle_namen = _fremde_vcf_namen(client)
+        namen, nachzuziehen = [], []
+        for n in alle_namen:
+            offener = queries.offener_vorschlag_fuer_message_id(conn, f"kontakte-app:{n}")
+            if offener is not None:
+                # Wurde die vCard nach der Erfassung noch korrigiert (Tippfehler im
+                # Namen o.ae.), muss der Vorschlag mitgezogen werden - sonst legt das
+                # Uebernehmen die alte Fassung an und die Korrektur geht mit der
+                # geloeschten fremden vCard verloren.
+                nachzuziehen.append((n, offener))
+            elif not queries.vorschlag_existiert_fuer_message_id(conn, f"kontakte-app:{n}"):
+                namen.append(n)
+        mitgliedschaften = _projekt_mitgliedschaften(conn, client) if (namen or nachzuziehen) else {}
+
+        for name, offener in nachzuziehen:
+            try:
+                resp = client.get(name)
+                if resp.status_code != 200 or _GRUPPEN_MUSTER.search(resp.text):
+                    continue
+                for kontakt in parse_vcf(resp.text):
+                    kontakt.pop("gruppen", None)
+                    kontakt.pop("gruppen_uids", None)
+                    apple_uid = kontakt.get("apple_uid")
+                    kontakt["erkannte_ordner_ids"] = mitgliedschaften.get(apple_uid, []) if apple_uid else []
+                    kontakt["kontakte_app_vcf_name"] = name
+                    if kontakt != offener["rohdaten"]:
+                        queries.update_vorschlag_rohdaten(conn, offener["id"], kontakt)
+                        aktualisiert += 1
+                    break
+            except Exception:
+                fehler += 1
 
         for name in namen:
             geprueft += 1
@@ -149,7 +182,8 @@ def pruefe_kontakte_app_neuzugaenge(conn) -> dict:
     finally:
         client.close()
 
-    return {"aktiv": True, "geprueft": geprueft, "neu": neu, "fehler": fehler}
+    return {"aktiv": True, "geprueft": geprueft, "neu": neu,
+            "aktualisiert": aktualisiert, "fehler": fehler}
 
 
 def pruefe_ordner_mitgliedschaften(conn, client=None) -> dict:
@@ -181,9 +215,9 @@ def pruefe_ordner_mitgliedschaften(conn, client=None) -> dict:
     if eigener:
         client = radicale._client()
     if client is None:
-        return {"aktiv": False, "geprueft": 0, "hinzugefuegt": 0, "entfernt": 0, "fehler": 0}
+        return {"aktiv": False, "geprueft": 0, "hinzugefuegt": 0, "entfernt": 0, "umbenannt": 0, "fehler": 0}
 
-    geprueft = hinzugefuegt_gesamt = entfernt_gesamt = fehler = 0
+    geprueft = hinzugefuegt_gesamt = entfernt_gesamt = fehler = umbenannt = 0
     geaenderte_projekte: list[int] = []
     try:
         projekte = [dict(r) for r in conn.execute("SELECT id, name FROM projekte")]
@@ -194,9 +228,31 @@ def pruefe_ordner_mitgliedschaften(conn, client=None) -> dict:
             schnappschuss = queries.hole_gepushte_mitglieder(conn, projekt_id)
             if schnappschuss is None:
                 continue
-            server = radicale.gruppen_mitglieder_auf_server(projekt_id, client=client)
-            if server is None:
+            roh = radicale.gruppen_vcard_auf_server(projekt_id, client=client)
+            if roh is None:
+                # Es gab einen bestaetigten Push, jetzt ist die Gruppe weg - in
+                # Kontakte.app geloescht. Als Vorschlag vorlegen (siehe
+                # pruefe_kontakt_aenderungen fuer dieselbe Ueberlegung bei Kontakten).
+                message_id = f"{LOESCHUNG_ORDNER_PRAEFIX}{projekt_id}"
+                if not queries.vorschlag_existiert_fuer_message_id(conn, message_id):
+                    queries.create_vorschlag(conn, {
+                        "typ": "loeschung_ordner", "name": projekt["name"],
+                        "projekt_id": projekt_id,
+                    }, quelle="kontakte_app", message_id=message_id)
                 continue
+
+            server, server_name = roh
+            # Umbenennung wirkt direkt - sie aendert keine Kontaktdaten, nur eine
+            # Bezeichnung (dieselbe Ueberlegung wie beim Verschieben in Ordner).
+            if server_name and server_name != projekt["name"]:
+                try:
+                    queries.rename_projekt(conn, projekt_id, server_name)
+                    projekt["name"] = server_name
+                    umbenannt += 1
+                except Exception:
+                    # Namen sind eindeutig: kollidiert der neue mit einem bestehenden
+                    # Ordner, bleibt es beim alten statt den Push scheitern zu lassen.
+                    fehler += 1
 
             geprueft += 1
             hinzugefuegt = server - schnappschuss
@@ -240,7 +296,7 @@ def pruefe_ordner_mitgliedschaften(conn, client=None) -> dict:
             client.close()
 
     return {"aktiv": True, "geprueft": geprueft, "hinzugefuegt": hinzugefuegt_gesamt,
-            "entfernt": entfernt_gesamt, "fehler": fehler}
+            "entfernt": entfernt_gesamt, "umbenannt": umbenannt, "fehler": fehler}
 
 
 # Felder, die aus einer vCard verlaesslich zurueckgelesen werden koennen. Bewusst
@@ -346,8 +402,27 @@ def pruefe_kontakt_aenderungen(conn, client=None) -> dict:
             except Exception:
                 fehler += 1
                 continue
+            if resp.status_code == 404:
+                # Es gab einen bestaetigten Push, jetzt ist die vCard weg - jemand hat
+                # den Kontakt in Kontakte.app geloescht. Als Vorschlag vorlegen statt
+                # still zu ignorieren (sonst schriebe ihn der naechste Push wortlos
+                # zurueck und die Loeschung waere wirkungslos).
+                message_id = f"{LOESCHUNG_KONTAKT_PRAEFIX}{kontakt_id}"
+                if queries.vorschlag_existiert_fuer_message_id(conn, message_id):
+                    continue
+                bestehend = queries.get_kontakt(conn, kontakt_id)
+                if bestehend is None:
+                    continue
+                geprueft += 1
+                queries.create_vorschlag(conn, {
+                    "typ": "loeschung",
+                    "vorname": bestehend["vorname"], "nachname": bestehend["nachname"],
+                    "firma": bestehend["firma"],
+                }, kontakt_id=kontakt_id, quelle="kontakte_app", message_id=message_id)
+                neu += 1
+                continue
             if resp.status_code != 200:
-                continue  # nicht (mehr) vorhanden - kein Rueckschluss moeglich
+                continue  # nicht lesbar - kein Rueckschluss moeglich
             if resp.text.strip() == (eintrag["vcard"] or "").strip():
                 continue  # unveraendert
 

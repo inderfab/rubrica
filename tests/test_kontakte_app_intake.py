@@ -41,7 +41,7 @@ def test_konfiguriert_spiegelt_base_url(monkeypatch):
 def test_ohne_radicale_konfiguration_meldet_inaktiv(tmp_db, monkeypatch):
     monkeypatch.setattr(radicale, "_client", lambda: None)
     ergebnis = kontakte_app_intake.pruefe_kontakte_app_neuzugaenge(tmp_db)
-    assert ergebnis == {"aktiv": False, "geprueft": 0, "neu": 0, "fehler": 0}
+    assert ergebnis["aktiv"] is False and ergebnis["neu"] == 0
 
 
 def test_erkennt_fremde_vcard_als_vorschlag(tmp_db, monkeypatch):
@@ -58,7 +58,7 @@ def test_erkennt_fremde_vcard_als_vorschlag(tmp_db, monkeypatch):
 
     ergebnis = kontakte_app_intake.pruefe_kontakte_app_neuzugaenge(tmp_db)
 
-    assert ergebnis == {"aktiv": True, "geprueft": 1, "neu": 1, "fehler": 0}
+    assert (ergebnis["aktiv"], ergebnis["geprueft"], ergebnis["neu"], ergebnis["fehler"]) == (True, 1, 1, 0)
     vorschlaege = queries.list_vorschlaege(tmp_db, quelle="kontakte_app")
     assert len(vorschlaege) == 1
     v = vorschlaege[0]
@@ -554,3 +554,101 @@ def test_fehlgeschlagener_push_setzt_keinen_vergleichsstand(tmp_db, monkeypatch)
     _mock_client(monkeypatch, lambda request: httpx.Response(500))
     radicale.push_kontakt(tmp_db, kontakt_id)
     assert queries.hole_gepushte_vcard(tmp_db, kontakt_id) is None
+
+
+# ── Loeschungen, Umbenennung, nachtraegliche Korrektur ───────────────────────
+
+def test_geloeschter_kontakt_wird_als_vorschlag_erfasst(tmp_db, monkeypatch):
+    """Vorher wurde die Loeschung nicht erkannt und beim naechsten Push
+    stillschweigend rueckgaengig gemacht - der Kontakt tauchte wieder auf."""
+    kontakt_id = _kontakt_mit_push(tmp_db, monkeypatch)
+    _mock_client(monkeypatch, lambda request: httpx.Response(404))
+
+    ergebnis = kontakte_app_intake.pruefe_kontakt_aenderungen(tmp_db)
+
+    assert ergebnis["neu"] == 1
+    v = queries.list_vorschlaege(tmp_db, quelle="kontakte_app")[0]
+    assert v["rohdaten"]["typ"] == "loeschung"
+    assert v["kontakt_id"] == kontakt_id
+
+
+def test_push_sperre_solange_loeschvorschlag_offen(tmp_db, monkeypatch):
+    """Ohne Sperre taucht der geloeschte Kontakt binnen Minuten wieder auf, wird
+    erneut geloescht - und jeder Durchgang erzeugt einen weiteren Vorschlag."""
+    kontakt_id = _kontakt_mit_push(tmp_db, monkeypatch)
+    queries.create_vorschlag(
+        tmp_db, {"typ": "loeschung", "vorname": "Anna", "nachname": "Muster", "firma": ""},
+        kontakt_id=kontakt_id, quelle="kontakte_app",
+        message_id=f"kontakte-app-loeschung:{kontakt_id}")
+
+    gesendet = []
+    _mock_client(monkeypatch, lambda r: (gesendet.append(r.method), httpx.Response(201))[1])
+
+    radicale.push_kontakt(tmp_db, kontakt_id)
+
+    assert "PUT" not in gesendet
+
+
+def test_geloeschter_ordner_wird_als_vorschlag_erfasst(tmp_db, monkeypatch):
+    k1 = queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster"})
+    projekt_id = queries.get_or_create_projekt(tmp_db, "Baustelle")
+    queries.set_kontakt_projekte(tmp_db, k1, [projekt_id])
+    queries.setze_gepushte_mitglieder(tmp_db, projekt_id, [k1])
+
+    _mock_client(monkeypatch, lambda request: httpx.Response(404))
+    kontakte_app_intake.pruefe_ordner_mitgliedschaften(tmp_db)
+
+    v = queries.list_vorschlaege(tmp_db, quelle="kontakte_app")[0]
+    assert v["rohdaten"]["typ"] == "loeschung_ordner"
+    assert v["rohdaten"]["projekt_id"] == projekt_id
+
+
+def test_in_kontakte_app_umbenannter_ordner_wird_uebernommen(tmp_db, monkeypatch):
+    """Umbenennen aendert keine Kontaktdaten - wirkt daher direkt, wie das
+    Verschieben in Ordner. Vorher wurde es beim naechsten Push rueckgaengig gemacht."""
+    k1 = queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster"})
+    projekt_id = queries.get_or_create_projekt(tmp_db, "Baustelle Nord")
+    queries.set_kontakt_projekte(tmp_db, k1, [projekt_id])
+    queries.setze_gepushte_mitglieder(tmp_db, projekt_id, [k1])
+
+    def handler(request):
+        if request.method == "GET":
+            text = _gruppen_vcard(projekt_id, [k1]).replace("FN:Testordner", "FN:Baustelle Süd")
+            return httpx.Response(200, text=text)
+        return httpx.Response(201)
+
+    _mock_client(monkeypatch, handler)
+    ergebnis = kontakte_app_intake.pruefe_ordner_mitgliedschaften(tmp_db)
+
+    assert ergebnis["umbenannt"] == 1
+    assert queries.list_projekte(tmp_db)[0]["name"] == "Baustelle Süd"
+
+
+def test_korrektur_an_offenem_vorschlag_wird_nachgezogen(tmp_db, monkeypatch):
+    """Korrigiert jemand den Tippfehler in Kontakte.app, bevor freigegeben wurde,
+    muss der Vorschlag mitziehen - sonst wird die alte Fassung angelegt und die
+    Korrektur verschwindet mit der geloeschten fremden vCard."""
+    vc = ("BEGIN:VCARD\r\nVERSION:3.0\r\nUID:NEU-1\r\nFN:Max Tipfehler\r\n"
+          "N:Tipfehler;Max;;;\r\nEND:VCARD\r\n")
+    srv = {"NEU-1.vcf": vc}
+
+    def handler(request):
+        pfad = request.url.path.rsplit("/", 1)[-1]
+        if request.method == "PROPFIND":
+            hrefs = "".join(f"<response><href>/a/{n}</href></response>" for n in srv)
+            return httpx.Response(207, text=f"<multistatus>{hrefs}</multistatus>")
+        if request.method == "GET":
+            return httpx.Response(200, text=srv[pfad]) if pfad in srv else httpx.Response(404)
+        return httpx.Response(201)
+
+    _mock_client(monkeypatch, handler)
+    kontakte_app_intake.pruefe_kontakte_app_neuzugaenge(tmp_db)
+    assert queries.list_vorschlaege(tmp_db, quelle="kontakte_app")[0]["rohdaten"]["nachname"] == "Tipfehler"
+
+    srv["NEU-1.vcf"] = vc.replace("Tipfehler", "Muster")
+    ergebnis = kontakte_app_intake.pruefe_kontakte_app_neuzugaenge(tmp_db)
+
+    assert ergebnis["aktualisiert"] == 1
+    offene = queries.list_vorschlaege(tmp_db, quelle="kontakte_app")
+    assert len(offene) == 1                      # kein zweiter Vorschlag
+    assert offene[0]["rohdaten"]["nachname"] == "Muster"

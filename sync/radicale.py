@@ -236,12 +236,12 @@ def _remote_vcf_namen(client: "httpx.Client | None" = None) -> list:
             client.close()
 
 
-def gruppen_mitglieder_auf_server(projekt_id: int,
-                                   client: "httpx.Client | None" = None) -> "set[int] | None":
-    """Liest die kontakt_id der Mitglieder aus der Gruppen-vCard auf Radicale.
-    None, wenn die vCard nicht existiert, nicht lesbar ist oder kein Client
-    vorhanden ist - der Aufrufer darf daraus NIE "keine Mitglieder" ableiten,
-    sonst gilt ein fehlgeschlagener Abruf als "alle entfernt"."""
+def gruppen_vcard_auf_server(projekt_id: int,
+                              client: "httpx.Client | None" = None) -> "tuple | None":
+    """Liest Mitglieder und Anzeigenamen aus der Gruppen-vCard auf Radicale und gibt
+    (mitglieder_ids, name) zurueck. None, wenn die vCard nicht existiert, nicht
+    lesbar ist oder kein Client vorhanden ist - der Aufrufer darf daraus NIE "keine
+    Mitglieder" ableiten, sonst gilt ein fehlgeschlagener Abruf als "alle entfernt"."""
     if client is None:
         return None
     try:
@@ -251,7 +251,16 @@ def gruppen_mitglieder_auf_server(projekt_id: int,
         return None
     if resp.status_code != 200:
         return None
-    return {int(i) for i in re.findall(r"X-ADDRESSBOOKSERVER-MEMBER:urn:uuid:kontakt-(\d+)", resp.text)}
+    mitglieder = {int(i) for i in re.findall(r"X-ADDRESSBOOKSERVER-MEMBER:urn:uuid:kontakt-(\d+)", resp.text)}
+    treffer = re.search(r"^FN:(.+)$", resp.text, re.MULTILINE)
+    return mitglieder, (treffer.group(1).strip() if treffer else "")
+
+
+def gruppen_mitglieder_auf_server(projekt_id: int,
+                                   client: "httpx.Client | None" = None) -> "set[int] | None":
+    """Nur die Mitglieder - duenner Aufsatz auf gruppen_vcard_auf_server."""
+    roh = gruppen_vcard_auf_server(projekt_id, client=client)
+    return None if roh is None else roh[0]
 
 
 def _zusammengefuehrte_mitglieder(conn: sqlite3.Connection, projekt_id: int,
@@ -295,6 +304,11 @@ def push_kontakt(conn: sqlite3.Connection, kontakt_id: int,
     kontakt = queries.get_kontakt(conn, kontakt_id)
     if kontakt is None:
         return False
+    if queries.hat_offenen_loeschvorschlag(conn, f"kontakte-app-loeschung:{kontakt_id}"):
+        # In Kontakte.app geloescht, Entscheidung steht noch aus: nicht zurueckschreiben,
+        # sonst taucht der Kontakt dort binnen Minuten wieder auf und wird erneut
+        # geloescht - eine Endlosschleife aus Vorschlaegen.
+        return True
     vcard = kontakt_zu_vcard(kontakt)
     erfolg = _put(f"kontakt-{kontakt_id}.vcf", vcard, client=client)
     if erfolg:
@@ -324,6 +338,8 @@ def push_projekt(conn: sqlite3.Connection, projekt_id: int,
     if row is None:
         return False
     projekt = dict(row)
+    if queries.hat_offenen_loeschvorschlag(conn, f"kontakte-app-ordner-loeschung:{projekt_id}"):
+        return True  # siehe push_kontakt: keine Wiederauferstehung waehrend der Entscheidung
     if _ist_z_ordner(projekt["name"]):
         # Aktiv loeschen statt nur zu ueberspringen: Regression (Nutzer-Feedback) - ein
         # Ordner, der VOR der Umbenennung ins Archiv (Z-Praefix) bereits unter dem alten

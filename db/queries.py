@@ -429,6 +429,32 @@ def rename_projekt(conn: sqlite3.Connection, projekt_id: int, neuer_name: str) -
         conn.execute("UPDATE projekte SET name = ? WHERE id = ?", (neuer_name, projekt_id))
 
 
+def offener_vorschlag_fuer_message_id(conn: sqlite3.Connection, message_id: str) -> "dict | None":
+    """Der noch offene Vorschlag zu dieser message_id, sonst None. Gebraucht, um eine
+    nachtraeglich in Kontakte.app korrigierte vCard in den bereits erfassten Vorschlag
+    nachzuziehen, statt sie zu ueberspringen."""
+    row = conn.execute(
+        "SELECT * FROM vorschlaege WHERE message_id = ? AND status = 'offen' LIMIT 1", (message_id,)
+    ).fetchone()
+    if row is None:
+        return None
+    v = dict(row)
+    v["rohdaten"] = json.loads(v["rohdaten"])
+    return v
+
+
+def hat_offenen_loeschvorschlag(conn: sqlite3.Connection, message_id: str) -> bool:
+    """Prueft, ob zu einem Loeschvorschlag noch eine Entscheidung aussteht.
+
+    Gebraucht als Push-Sperre: solange offen, darf Rubrica den geloeschten Eintrag
+    NICHT wieder auf die Geraete schreiben. Sonst taucht er dort binnen Minuten
+    wieder auf, der Mitarbeitende loescht ihn erneut - und jeder Durchgang erzeugt
+    einen weiteren Vorschlag."""
+    return conn.execute(
+        "SELECT 1 FROM vorschlaege WHERE message_id = ? AND status = 'offen' LIMIT 1", (message_id,)
+    ).fetchone() is not None
+
+
 def setze_gepushte_vcard(conn: sqlite3.Connection, kontakt_id: int, vcard: str) -> None:
     """Haelt die zuletzt erfolgreich gepushte vCard fest - Referenzpunkt fuer die
     Erkennung von Feldaenderungen aus Kontakte.app (siehe

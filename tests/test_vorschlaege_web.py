@@ -10,6 +10,21 @@ def _client():
     return TestClient(app)
 
 
+def _vollstaendig(**felder) -> dict:
+    """Vorschlag mit allen Pflichtfeldern - seit der Pflichtfeldpruefung beim direkten
+    Uebernehmen (web/vorschlaege.py) muessen Fixtures, die uebernommen werden sollen,
+    vollstaendig sein."""
+    daten = {
+        "vorname": "Anna", "nachname": "Muster", "kategorie": "Architektin",
+        "telefonnummern": [{"typ": "Direkt", "nummer": "044 111 11 11"}],
+        "emails": [{"typ": "Direkt", "email": "anna@beispiel.ch"}],
+        "adressen": [{"typ": "arbeit", "strasse": "Musterstrasse 1", "plz": "8000",
+                      "ort": "Zürich", "region": "", "land": ""}],
+    }
+    daten.update(felder)
+    return daten
+
+
 def test_seite_zeigt_offene_mail_und_kontakte_app_vorschlaege(tmp_db):
     queries.create_vorschlag(tmp_db, {"vorname": "Anna", "nachname": "Muster", "telefonnummern": [], "emails": []},
                               quelle="mail")
@@ -26,8 +41,9 @@ def test_seite_zeigt_offene_mail_und_kontakte_app_vorschlaege(tmp_db):
 
 
 def test_uebernehmen_legt_kontakt_an_und_schliesst_vorschlag(tmp_db):
+    projekt_id = queries.get_or_create_projekt(tmp_db, "Testprojekt")
     vorschlag_id = queries.create_vorschlag(
-        tmp_db, {"vorname": "Anna", "nachname": "Muster", "telefonnummern": [], "emails": []}, quelle="mail",
+        tmp_db, _vollstaendig(erkannte_ordner_ids=[projekt_id]), quelle="mail",
     )
 
     r = _client().post(f"/vorschlaege/{vorschlag_id}/uebernehmen", follow_redirects=False)
@@ -138,10 +154,9 @@ def test_jetzt_pruefen_route_kombiniert_beide_quellen(tmp_db, monkeypatch):
 def test_uebernehmen_weist_erkannte_ordner_zu_und_loescht_fremde_vcard(tmp_db, monkeypatch):
     projekt_id = queries.get_or_create_projekt(tmp_db, "Baustelle Muster")
     vorschlag_id = queries.create_vorschlag(
-        tmp_db, {
-            "vorname": "Chris", "nachname": "Contact", "telefonnummern": [], "emails": [],
-            "erkannte_ordner_ids": [projekt_id], "kontakte_app_vcf_name": "ABC-123-FREMD.vcf",
-        },
+        tmp_db, _vollstaendig(vorname="Chris", nachname="Contact",
+                              erkannte_ordner_ids=[projekt_id],
+                              kontakte_app_vcf_name="ABC-123-FREMD.vcf"),
         quelle="kontakte_app",
     )
 
@@ -300,3 +315,61 @@ def test_ablehnen_rueckfrage_nennt_die_folge_nur_bei_kontakte_app(tmp_db):
 
     text = _client().get("/vorschlaege").text
     assert text.count("auch in Kontakte.app auf allen Geräten entfernt") == 1
+
+
+def test_unvollstaendiger_vorschlag_wird_nicht_direkt_uebernommen(tmp_db):
+    """Aus Kontakte.app kommen Kontakte praktisch nie mit Funktion und Ordner. Der
+    direkte Weg pruefte das bisher nicht - nur der Bearbeiten-Weg. So landeten
+    unvollstaendige Kontakte im Bestand."""
+    vorschlag_id = queries.create_vorschlag(
+        tmp_db, {"vorname": "Chris", "nachname": "Contact", "telefonnummern": [], "emails": [],
+                 "kontakte_app_vcf_name": "ABC.vcf"}, quelle="kontakte_app")
+
+    r = _client().post(f"/vorschlaege/{vorschlag_id}/uebernehmen", follow_redirects=False)
+
+    assert r.status_code == 303
+    assert "meldung=" in r.headers["location"]
+    assert queries.list_kontakte(tmp_db) == []
+    assert queries.get_vorschlag(tmp_db, vorschlag_id)["status"] == "offen"
+    r2 = _client().get(r.headers["location"])
+    assert "Funktion" in r2.text and "Ordner" in r2.text
+
+
+def test_loeschvorschlag_uebernehmen_loescht_den_kontakt(tmp_db, monkeypatch):
+    kontakt_id = queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster"})
+    vorschlag_id = queries.create_vorschlag(
+        tmp_db, {"typ": "loeschung", "vorname": "Anna", "nachname": "Muster", "firma": ""},
+        kontakt_id=kontakt_id, quelle="kontakte_app",
+        message_id=f"kontakte-app-loeschung:{kontakt_id}")
+
+    monkeypatch.setattr(radicale, "_client", lambda: httpx.Client(
+        transport=httpx.MockTransport(lambda r: httpx.Response(204)), base_url="https://test/a/"))
+
+    _client().post(f"/vorschlaege/{vorschlag_id}/uebernehmen", follow_redirects=False)
+
+    assert queries.get_kontakt(tmp_db, kontakt_id) is None
+
+
+def test_loeschvorschlag_behalten_stellt_wieder_her(tmp_db, monkeypatch):
+    """Reihenfolge-Regression: solange der Loeschvorschlag offen ist, unterdrueckt
+    push_kontakt jeden Push. Wird der Status nicht VOR dem Push gesetzt, wird die
+    Wiederherstellung still verschluckt und der Kontakt bleibt auf den Geraeten weg."""
+    kontakt_id = queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster"})
+    vorschlag_id = queries.create_vorschlag(
+        tmp_db, {"typ": "loeschung", "vorname": "Anna", "nachname": "Muster", "firma": ""},
+        kontakt_id=kontakt_id, quelle="kontakte_app",
+        message_id=f"kontakte-app-loeschung:{kontakt_id}")
+
+    gesendet = []
+
+    def handler(request):
+        gesendet.append((request.method, request.url.path))
+        return httpx.Response(201)
+
+    monkeypatch.setattr(radicale, "_client", lambda: httpx.Client(
+        transport=httpx.MockTransport(handler), base_url="https://test/a/"))
+
+    _client().post(f"/vorschlaege/{vorschlag_id}/ablehnen", follow_redirects=False)
+
+    assert queries.get_kontakt(tmp_db, kontakt_id) is not None
+    assert ("PUT", f"/a/kontakt-{kontakt_id}.vcf") in gesendet

@@ -32,6 +32,13 @@ router = APIRouter()
 
 _QUELLEN = ["mail", "kontakte_app"]
 
+# Fuer die Rueckmeldung beim direkten Uebernehmen - _validiere_pflichtfelder liefert
+# technische Schluessel, hier werden daraus die Bezeichnungen aus der Oberflaeche.
+_PFLICHTFELD_NAMEN = {
+    "vorname": "Vorname", "nachname": "Nachname", "kategorie": "Funktion",
+    "telefon": "Telefon", "email": "E-Mail", "adresse": "Adresse", "ordner": "Ordner",
+}
+
 
 def _fremde_vcard_entfernen(vorschlag: dict) -> None:
     """Entfernt bei quelle='kontakte_app' die urspruengliche, direkt in Kontakte.app
@@ -82,7 +89,16 @@ def vorschlag_uebernehmen(vorschlag_id: int):
     conn = get_connection()
     try:
         vorschlag = queries.get_vorschlag(conn, vorschlag_id)
-        if vorschlag and vorschlag["rohdaten"].get("typ") == "aenderung":
+        typ = vorschlag["rohdaten"].get("typ") if vorschlag else None
+
+        if typ == "loeschung":
+            queries.delete_kontakt(conn, vorschlag["kontakt_id"])
+            queries.set_vorschlag_status(conn, vorschlag_id, "bestaetigt")
+            # Die vCard ist bereits weg (deshalb der Vorschlag) - kein Push noetig.
+        elif typ == "loeschung_ordner":
+            queries.delete_projekt(conn, vorschlag["rohdaten"]["projekt_id"])
+            queries.set_vorschlag_status(conn, vorschlag_id, "bestaetigt")
+        elif typ == "aenderung":
             kontakt_id = kontakte_app_intake.bestaetige_aenderungs_vorschlag(conn, vorschlag)
             queries.set_vorschlag_status(conn, vorschlag_id, "bestaetigt")
             # Push aktualisiert zugleich den Vergleichsstand, damit dieselbe
@@ -95,6 +111,15 @@ def vorschlag_uebernehmen(vorschlag_id: int):
             _fremde_vcard_entfernen(vorschlag)
         else:
             ordner_ids = vorschlag["rohdaten"].get("erkannte_ordner_ids") if vorschlag else None
+            # Aus Kontakte.app kommen Kontakte praktisch nie mit Funktion und Ordner.
+            # Ohne diese Pruefung landeten sie unvollstaendig im Bestand - der
+            # Bearbeiten-Weg validiert, der direkte Weg tat es bisher nicht.
+            fehlende = _validiere_pflichtfelder(vorschlag["rohdaten"], list(ordner_ids or [])) if vorschlag else {}
+            if fehlende:
+                namen = ", ".join(_PFLICHTFELD_NAMEN.get(f, f) for f in fehlende)
+                meldung = (f"Nicht übernommen – es fehlen Pflichtfelder ({namen}). "
+                           f"Bitte über „Bearbeiten“ ergänzen.")
+                return RedirectResponse(url=f"/vorschlaege?meldung={quote(meldung)}", status_code=303)
             kontakt_id = queries.bestaetige_vorschlag(conn, vorschlag_id, ordner_ids=ordner_ids)
             radicale.push_kontakt_mit_ordnern(conn, kontakt_id)
             if vorschlag:
@@ -115,8 +140,19 @@ def vorschlag_ablehnen(vorschlag_id: int):
     conn = get_connection()
     try:
         vorschlag = queries.get_vorschlag(conn, vorschlag_id)
+        # Status ZUERST setzen: solange der Loeschvorschlag offen ist, unterdrueckt
+        # push_kontakt/push_projekt jeden Push fuer diesen Eintrag (Push-Sperre).
+        # Umgekehrte Reihenfolge wuerde die Wiederherstellung still verschlucken.
         queries.set_vorschlag_status(conn, vorschlag_id, "abgelehnt")
-        if vorschlag and vorschlag["rohdaten"].get("typ") == "aenderung":
+        typ = vorschlag["rohdaten"].get("typ") if vorschlag else None
+
+        if typ == "loeschung":
+            radicale.push_kontakt_mit_ordnern(conn, vorschlag["kontakt_id"])
+            vorschlag = None
+        elif typ == "loeschung_ordner":
+            radicale.push_projekt(conn, vorschlag["rohdaten"]["projekt_id"])
+            vorschlag = None
+        elif typ == "aenderung":
             # Hier wird nichts geloescht, sondern Rubricas Stand wiederhergestellt -
             # sonst bliebe die verworfene Aenderung auf allen Geraeten sichtbar.
             kontakte_app_intake.verwerfe_aenderungs_vorschlag(conn, vorschlag)

@@ -314,6 +314,29 @@ Feldumfang bewusst an der tatsächlichen Nutzung im bestehenden Apple-Adressbuch
 - **Weiterhin offen:** kein `If-Match`/ETag; bearbeiten zwei Personen denselben Kontakt gleichzeitig, gewinnt
   der letzte Schreiber. Vom Nutzer als seltener Fall eingestuft und bewusst zurückgestellt.
 
+### 5.9.4 Löschen, Umbenennen und Nachkorrigieren aus Kontakte.app
+- **Umgesetzt (2026-08-05):** Systematische Prüfung, was ein Mac-Client alles tun kann. Vier Fälle wurden
+  empirisch nachgestellt und waren allesamt still wirkungslos — die Arbeit des Mitarbeitenden ging verloren:
+  Kontakt löschen, Ordner löschen, Ordner umbenennen, sowie eine Korrektur an einer vCard, deren Vorschlag
+  noch offen war.
+- **Löschungen (Kontakt und Ordner) werden Vorschlag**, nicht direkt übernommen — konsistent mit „Anlegen
+  und Ändern gehen über die Freigabe". Erkannt über 404 bei vorhandenem Schnappschuss: es gab einen
+  bestätigten Push, jetzt ist die vCard weg.
+  **Mit Push-Sperre**, solange die Entscheidung aussteht (`queries.hat_offenen_loeschvorschlag`, geprüft in
+  `push_kontakt`/`push_projekt`). Ohne sie schriebe Rubrica den Eintrag binnen Minuten zurück, der
+  Mitarbeitende löschte erneut — und jeder Durchgang erzeugte einen weiteren Vorschlag. Beim Verwerfen muss
+  der Status deshalb **vor** dem Wiederherstellungs-Push gesetzt werden, sonst greift die eigene Sperre.
+- **Umbenennen wirkt direkt** (wie das Verschieben in Ordner): es ändert keine Kontaktdaten. Namenskollision
+  wird abgefangen, da `projekte.name` eindeutig ist.
+- **Korrektur an offenem Vorschlag zieht nach.** Bisher übersprang der Scan jede vCard, zu der schon ein
+  Vorschlag existierte — unabhängig vom Status. Korrigierte jemand danach einen Tippfehler, blieb das
+  unsichtbar, und beim Übernehmen wurde die alte Fassung angelegt, während die korrigierte vCard gelöscht
+  wurde. Jetzt werden **offene** Vorschläge aktualisiert; bestätigte/abgelehnte bleiben übersprungen.
+- **Pflichtfelder gelten jetzt auch beim direkten Übernehmen.** Vorher prüfte nur der Bearbeiten-Weg, sodass
+  Kontakte aus Kontakte.app regelmässig ohne Funktion und Ordner in den Bestand rutschten.
+- **Bewusst nicht behandelt:** ein Kontakt, der in Kontakte.app ins private Konto verschoben wird, ist aus
+  Sicht von CardDAV eine Löschung und läuft über denselben Vorschlag. Das ist gewollt.
+
 ### 5.10 Anleitung — eine Quelle für App und Website
 - **Umgesetzt (2026-08-03):** Die Bedienungsanleitung existiert genau einmal, als Jinja-freies
   HTML-Fragment in `web/templates/_anleitung_inhalt.html`. Zwei Ausgabewege greifen darauf zu:
