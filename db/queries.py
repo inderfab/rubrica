@@ -184,6 +184,43 @@ def kategorie_umstellen(conn: sqlite3.Connection, feld: str, kontakt_id: int, vo
         conn.execute(f"UPDATE {tabelle} SET typ = ? WHERE kontakt_id = ? AND typ = ?", (nach, kontakt_id, von))
 
 
+def kategorie_werte_uebersicht(conn: sqlite3.Connection, feld: str) -> list[dict]:
+    """Alle tatsaechlich vergebenen Telefon-/E-Mail-Kategorien mit Anzahl Eintraege
+    und betroffener Kontakte - Grundlage fuer die Kategorie-Verwaltung: zeigt, was
+    eine Umbenennung anfassen wuerde und welche Werte im Bestand stehen, die gar
+    nicht (mehr) zur konfigurierten Auswahl gehoeren."""
+    tabelle = _KATEGORIE_TABELLEN.get(feld)
+    if not tabelle:
+        return []
+    rows = conn.execute(
+        f"SELECT typ AS wert, COUNT(*) AS anzahl, COUNT(DISTINCT kontakt_id) AS kontakte "
+        f"FROM {tabelle} WHERE typ != '' GROUP BY typ ORDER BY typ COLLATE NOCASE"
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def kategorie_global_umbenennen(conn: sqlite3.Connection, feld: str, alter_wert: str, neuer_wert: str) -> list[int]:
+    """Benennt eine Telefon-/E-Mail-Kategorie im gesamten Bestand um. Ein bereits
+    bestehender `neuer_wert` fuehrt die Eintraege zusammen (so raeumt man einen
+    Ausreisser in eine der regulaeren Kategorien ein). Ein leerer `neuer_wert` ist
+    bewusst wirkungslos - eine Nummer ohne Kategorie gibt es nicht. Gibt die
+    betroffenen kontakt_ids zurueck, damit der Aufrufer sie neu pushen kann (die
+    Kategorie steht als TYPE= in der vCard, siehe sync/radicale.py)."""
+    tabelle = _KATEGORIE_TABELLEN.get(feld)
+    if not tabelle or not alter_wert or not neuer_wert or alter_wert == neuer_wert:
+        return []
+    betroffene = [
+        r["kontakt_id"] for r in conn.execute(
+            f"SELECT DISTINCT kontakt_id FROM {tabelle} WHERE typ = ?", (alter_wert,)
+        )
+    ]
+    if not betroffene:
+        return []
+    with conn:
+        conn.execute(f"UPDATE {tabelle} SET typ = ? WHERE typ = ?", (neuer_wert, alter_wert))
+    return betroffene
+
+
 _FELD_SPALTEN = {"kategorie": "kategorie", "rolle": "rolle"}
 
 

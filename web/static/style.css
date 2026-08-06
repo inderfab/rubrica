@@ -348,3 +348,55 @@ input.gemischt::placeholder, textarea.gemischt::placeholder { color: var(--text-
     width: 9.5rem;
     flex-shrink: 0;
 }
+
+/* ── Kontaktformular kompakt (Nutzer-Feedback) ────────────────────────────
+   Vorher spannte sich das Formular ueber die volle Fensterbreite: Vorname und
+   Nachname standen dadurch weit auseinander (jede Spalte halbe Fensterbreite,
+   das Eingabefeld selbst aber nur ~180px breit), und die vielen einzeln
+   gerahmten Bloecke untereinander erzwangen staendiges Scrollen. Jetzt eine
+   feste, lesbare Spaltenbreite, Felder fuellen ihre Zelle aus, und die Bloecke
+   sitzen enger. */
+.formular-schmal { max-width: 780px; }
+.formular-schmal .field { margin-bottom: 0.5rem; }
+.formular-schmal .grid-2 { gap: 0.5rem 0.75rem; }
+.formular-schmal label { margin-bottom: 0.1rem; }
+.formular-schmal fieldset { padding: 0.5rem 0.8rem 0.7rem; margin-bottom: 0.6rem; }
+.formular-schmal legend { font-size: 0.85rem; }
+.formular-schmal .ordner-checkliste { max-height: 150px; }
+.formular-schmal textarea { width: 100%; }
+/* Eingabefelder fuellen ihre Rasterzelle - sonst klebt der Wert links und der
+   Rest der Zelle bleibt leer (genau der gemeldete Abstand Vorname/Nachname). */
+.formular-schmal .field input[type="text"],
+.formular-schmal .field input[type="email"],
+.formular-schmal .field input[type="tel"] { width: 100%; }
+.formular-schmal .tel-row input,
+.formular-schmal .mail-row input { flex: 1; min-width: 0; }
+.formular-schmal .tel-row, .formular-schmal .mail-row { margin-bottom: 0.35rem; }
+.formular-schmal .tel-row:last-child, .formular-schmal .mail-row:last-child { margin-bottom: 0; }
+/* Telefon und E-Mail nebeneinander: die Kategorie-Auswahl darf hier schmaler
+   sein, sonst bleibt fuer die Nummer selbst zu wenig Platz. */
+.formular-schmal .grid-2 > fieldset { margin-bottom: 0; }
+.formular-schmal .grid-2 .typ-auswahl { width: 7.5rem; }
+.grid-adresse { display: grid; grid-template-columns: 1fr 6rem 1fr; gap: 0.5rem 0.75rem; }
+.formular-schmal .actions { margin-top: 0.8rem; }
+
+/* Kategorie-Verwaltung (Einstellungen): eine Zeile je Kategorie, Reihenfolge per
+   Pfeiltasten - sie ist zugleich die Vorschlagsreihenfolge im Kontaktformular. */
+.kategorie-liste { display: flex; flex-direction: column; gap: 0.35rem; }
+.kategorie-zeile { display: flex; align-items: center; gap: 0.4rem; }
+.kategorie-zeile input[name="name"] { flex: 1; min-width: 0; }
+.kategorie-zeile .kategorie-anzahl { width: 7rem; font-size: 0.8rem; color: var(--text-hell); text-align: right; }
+.kategorie-zeile button { padding: 0.3rem 0.55rem; line-height: 1; }
+
+/* Signaturblock einklappbar - nimmt so nicht mehr die erste Bildschirmhoehe ein. */
+.signatur-block { border: 1px solid var(--rand); border-radius: 8px; padding: 0.5rem 0.8rem; margin-bottom: 0.7rem; }
+.signatur-block summary { font-weight: 600; cursor: pointer; font-size: 0.9rem; }
+.signatur-block[open] summary { margin-bottom: 0.5rem; }
+
+/* Unter ~900px Fensterbreite (schmales Fenster, iPad) wieder untereinander -
+   zwei Spalten mit Kategorie-Dropdown plus Wertfeld werden sonst zu eng. */
+@media (max-width: 900px) {
+    .formular-schmal .grid-2 { grid-template-columns: 1fr; }
+    .formular-schmal .grid-2 > fieldset { margin-bottom: 0.6rem; }
+    .grid-adresse { grid-template-columns: 1fr; }
+}

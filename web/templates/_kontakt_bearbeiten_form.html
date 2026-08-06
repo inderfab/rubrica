@@ -52,7 +52,7 @@
             {% for t in (kontakt.telefonnummern if kontakt else []) %}
             <div class="tel-row">
                 <select name="telefon_typ" class="typ-auswahl">
-                    {% for opt in telefon_typen %}<option value="{{ opt }}" {{ 'selected' if t.typ == opt }}>{{ opt }}</option>{% endfor %}
+                    {% for opt in typ_optionen(telefon_typen, t.typ) %}<option value="{{ opt }}" {{ 'selected' if t.typ == opt }}>{{ opt }}</option>{% endfor %}
                 </select>
                 <input type="text" name="telefon_nummer" value="{{ t.nummer }}" placeholder="Nummer">
                 <button type="button" class="secondary" onclick="this.parentElement.remove()">Entfernen</button>
@@ -69,7 +69,7 @@
             {% for e in (kontakt.emails if kontakt else []) %}
             <div class="mail-row">
                 <select name="email_typ" class="typ-auswahl">
-                    {% for opt in email_typen %}<option value="{{ opt }}" {{ 'selected' if e.typ == opt }}>{{ opt }}</option>{% endfor %}
+                    {% for opt in typ_optionen(email_typen, e.typ) %}<option value="{{ opt }}" {{ 'selected' if e.typ == opt }}>{{ opt }}</option>{% endfor %}
                 </select>
                 <input type="text" name="email_adresse" value="{{ e.email }}" placeholder="E-Mail">
                 <button type="button" class="secondary" onclick="this.parentElement.remove()">Entfernen</button>
@@ -114,7 +114,7 @@
 
     <fieldset>
         <legend>Notizen</legend>
-        <textarea name="notizen" rows="4" style="width: 100%;">{{ kontakt.notizen if kontakt else '' }}</textarea>
+        <textarea name="notizen" rows="2" style="width: 100%;">{{ kontakt.notizen if kontakt else '' }}</textarea>
     </fieldset>
 
     <fieldset class="{{ 'feld-fehler' if fehlende_felder.ordner }}">

@@ -1,6 +1,9 @@
 {# Feld-Fragment fuer die Kontakt-Neuanlage. Wird initial leer gerendert und vom
    Signatur-Parser (htmx) vorbefuellt zurueckgegeben. Erwartet: kontakt (dict oder None),
-   funktionen (list), ordner (list), ausgewaehlte_ordner (list von ids). #}
+   funktionen (list), ordner (list), ausgewaehlte_ordner (list von ids).
+   Layout bewusst kompakt (Nutzer-Feedback: "man muss staendig scrollen") - schmale
+   Feldspalte statt voller Fensterbreite, Telefon und E-Mail nebeneinander,
+   Homepage/Notizen ohne eigenen Rahmen. #}
 {% set tels = (kontakt.telefonnummern if kontakt else []) or [] %}
 {% set mails = (kontakt.emails if kontakt else []) or [] %}
 {% set urls = (kontakt.urls if kontakt else []) or [] %}
@@ -43,45 +46,48 @@
     </div>
 </div>
 
-<fieldset class="{{ 'feld-fehler' if fehlende_felder.telefon }}">
-    <legend>Telefon</legend>
-    <div id="tel-rows" data-optionen='{{ telefon_typen|tojson }}'>
-    {% for i in range([tels|length, 1]|max) %}
-    {# Vorgabe statt leerem Feld (Nutzer-Feedback): ein leeres erstes Feld wurde
-       fuer das Nummernfeld gehalten, die Nummer landete in der Kategorie. #}
-    {% set t = tels[i] if i < tels|length else {'typ': ('Direkt' if i == 0 else 'Privat'), 'nummer': ''} %}
-    <div class="tel-row">
-        <select name="telefon_typ" class="typ-auswahl">
-            {% for opt in telefon_typen %}<option value="{{ opt }}" {{ 'selected' if t.typ == opt }}>{{ opt }}</option>{% endfor %}
-        </select>
-        <input type="text" name="telefon_nummer" value="{{ t.nummer }}" placeholder="Telefonnummer">
-    </div>
-    {% endfor %}
-    </div>
-</fieldset>
+<div class="grid-2">
+    <fieldset class="{{ 'feld-fehler' if fehlende_felder.telefon }}">
+        <legend>Telefon</legend>
+        <div id="tel-rows" data-optionen='{{ telefon_typen|tojson }}'>
+        {% for i in range([tels|length, 1]|max) %}
+        {# Vorgabe statt leerem Feld (Nutzer-Feedback): ein leeres erstes Feld wurde
+           fuer das Nummernfeld gehalten, die Nummer landete in der Kategorie. #}
+        {% set t = tels[i] if i < tels|length else {'typ': telefon_typen[i] if i < telefon_typen|length else telefon_typen[-1], 'nummer': ''} %}
+        <div class="tel-row">
+            <select name="telefon_typ" class="typ-auswahl">
+                {% for opt in typ_optionen(telefon_typen, t.typ) %}<option value="{{ opt }}" {{ 'selected' if t.typ == opt }}>{{ opt }}</option>{% endfor %}
+            </select>
+            <input type="text" name="telefon_nummer" value="{{ t.nummer }}" placeholder="Telefonnummer">
+        </div>
+        {% endfor %}
+        </div>
+    </fieldset>
 
-<fieldset class="{{ 'feld-fehler' if fehlende_felder.email }}">
-    <legend>E-Mail</legend>
-    <div id="mail-rows" data-optionen='{{ email_typen|tojson }}'>
-    {% for i in range([mails|length, 1]|max) %}
-    {% set m = mails[i] if i < mails|length else {'typ': ('Direkt' if i == 0 else 'Privat'), 'email': ''} %}
-    <div class="mail-row">
-        <select name="email_typ" class="typ-auswahl">
-            {% for opt in email_typen %}<option value="{{ opt }}" {{ 'selected' if m.typ == opt }}>{{ opt }}</option>{% endfor %}
-        </select>
-        <input type="email" name="email_adresse" value="{{ m.email }}" placeholder="E-Mail">
-    </div>
-    {% endfor %}
-</fieldset>
+    <fieldset class="{{ 'feld-fehler' if fehlende_felder.email }}">
+        <legend>E-Mail</legend>
+        <div id="mail-rows" data-optionen='{{ email_typen|tojson }}'>
+        {% for i in range([mails|length, 1]|max) %}
+        {% set m = mails[i] if i < mails|length else {'typ': email_typen[i] if i < email_typen|length else email_typen[-1], 'email': ''} %}
+        <div class="mail-row">
+            <select name="email_typ" class="typ-auswahl">
+                {% for opt in typ_optionen(email_typen, m.typ) %}<option value="{{ opt }}" {{ 'selected' if m.typ == opt }}>{{ opt }}</option>{% endfor %}
+            </select>
+            <input type="email" name="email_adresse" value="{{ m.email }}" placeholder="E-Mail">
+        </div>
+        {% endfor %}
+        </div>
+    </fieldset>
+</div>
 
 <fieldset class="{{ 'feld-fehler' if fehlende_felder.adresse }}">
     <legend>Adresse</legend>
     <input type="hidden" name="adresse_typ" value="arbeit">
-    <div class="field">
-        <label>Strasse</label>
-        <input type="text" name="adresse_strasse" value="{{ adr.strasse if adr else '' }}">
-    </div>
-    <div class="grid-2">
+    <div class="grid-adresse">
+        <div class="field">
+            <label>Strasse</label>
+            <input type="text" name="adresse_strasse" value="{{ adr.strasse if adr else '' }}">
+        </div>
         <div class="field">
             <label>PLZ</label>
             <input type="text" name="adresse_plz" value="{{ adr.plz if adr else '' }}">
@@ -95,12 +101,20 @@
     <input type="hidden" name="adresse_land" value="{{ adr.land if adr else '' }}">
 </fieldset>
 
-<fieldset>
-    <legend>Homepage <span style="color:#86868b; font-weight:normal">(optional)</span></legend>
-    {% set u = urls[0] if urls else {'url': ''} %}
-    <input type="hidden" name="url_typ" value="homepage">
-    <input type="text" name="url_adresse" value="{{ u.url }}" placeholder="www.beispiel.ch" style="width:100%">
-</fieldset>
+{% set u = urls[0] if urls else {'url': ''} %}
+<input type="hidden" name="url_typ" value="homepage">
+<div class="grid-2">
+    <div class="field">
+        <label>Homepage <span style="color:#86868b">(optional)</span></label>
+        <input type="text" name="url_adresse" value="{{ u.url }}" placeholder="www.beispiel.ch">
+    </div>
+    <div class="field">
+        {# Bleibt ein textarea: Notizen koennen mehrzeilig sein (auch aus dem
+           Signatur-Parser), ein einzeiliges input wuerde Zeilenumbrueche schlucken. #}
+        <label>Notizen <span style="color:#86868b">(optional)</span></label>
+        <textarea name="notizen" rows="2">{{ kontakt.notizen if kontakt else '' }}</textarea>
+    </div>
+</div>
 
 <fieldset class="{{ 'feld-fehler' if fehlende_felder.ordner }}">
     <legend>Ordner (Projekte)</legend>
@@ -134,9 +148,4 @@
         <input type="text" id="neuer-ordner-name" placeholder="Neuer Ordner…" style="flex:1">
         <button type="button" class="secondary" onclick="rubricaOrdnerCheckelisteAnlegen('ordner-checkliste', 'neuer-ordner-name')">+ Ordner anlegen</button>
     </div>
-</fieldset>
-
-<fieldset>
-    <legend>Notizen <span style="color:#86868b; font-weight:normal">(optional)</span></legend>
-    <textarea name="notizen" rows="2" style="width:100%">{{ kontakt.notizen if kontakt else '' }}</textarea>
 </fieldset>

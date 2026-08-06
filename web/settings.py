@@ -100,6 +100,144 @@ def einstellungen_ca_zertifikat():
                          filename="rubrica-ca.pem")
 
 
+_KATEGORIE_FELDER = {"telefon": settings.telefon_typen, "email": settings.email_typen}
+
+
+def _kategorie_ansicht(conn, feld: str) -> dict:
+    """Konfigurierte Kategorien (in ihrer Reihenfolge, mit Nutzungszahl) und daneben
+    die Werte, die zwar im Bestand stehen, aber nicht zur Auswahl gehoeren - z.B.
+    aus einem Import oder aus Kontakte.app. Nur so sieht man ueberhaupt, dass es
+    sie gibt; im Kontaktformular selbst tauchen sie nur beim betroffenen Datensatz
+    auf (siehe web/shared.py typ_optionen)."""
+    bestand = {r["wert"]: r for r in queries.kategorie_werte_uebersicht(conn, feld)}
+    konfiguriert = _KATEGORIE_FELDER[feld]()
+    return {
+        "konfiguriert": [
+            {"wert": w, "anzahl": bestand.get(w, {}).get("anzahl", 0)} for w in konfiguriert
+        ],
+        "rest": [dict(r) for w, r in bestand.items() if w not in konfiguriert],
+    }
+
+
+def _betroffene_pushen(conn, kontakt_ids: list) -> None:
+    """Die Kategorie steht als TYPE= in der vCard - ohne erneuten Push behielte
+    Kontakte.app die alte Bezeichnung. Eine Umbenennung kann den halben Bestand
+    treffen, deshalb eine gemeinsame Verbindung fuer den ganzen Batch (siehe
+    web/shared.py: pro Kontakt eine eigene TLS-Verbindung war bei 1000+ Kontakten
+    der groesste Teil der Laufzeit)."""
+    eindeutige = sorted(set(kontakt_ids))
+    if not eindeutige:
+        return
+    client = radicale._client()
+    try:
+        for kontakt_id in eindeutige:
+            radicale.push_kontakt(conn, kontakt_id, client=client)
+    finally:
+        if client is not None:
+            client.close()
+
+
+@router.get("/einstellungen/kategorien")
+def kategorien_uebersicht(request: Request, meldung: str = ""):
+    """Verwaltung der Auswahllisten fuer Telefon- und E-Mail-Kategorien. Die Felder
+    im Kontaktformular sind bewusst reine Dropdowns ohne Freitext (sonst entsteht
+    wieder der Wildwuchs aus frei getippten Bezeichnungen) - neue Kategorien
+    entstehen deshalb nur hier."""
+    conn = get_connection()
+    try:
+        telefon = _kategorie_ansicht(conn, "telefon")
+        email = _kategorie_ansicht(conn, "email")
+    finally:
+        conn.close()
+    return templates.TemplateResponse("kategorien.html", {
+        "request": request, "telefon": telefon, "email": email, "meldung": meldung,
+    })
+
+
+def _kategorien_uebernehmen(conn, feld: str, originale: list, namen: list) -> tuple:
+    """Wertet die bearbeitete Liste aus: Reihenfolge und Bestand ergeben sich aus
+    den Zeilen, eine geaenderte Bezeichnung benennt die Kategorie im ganzen Bestand
+    mit um. Eine Kategorie, die noch an Eintraegen haengt, wird nicht entfernt -
+    sonst haetten diese Eintraege eine Kategorie, die es nicht mehr zur Auswahl
+    gibt. Zum Aufloesen erst umbenennen (das fuehrt sie in eine andere zusammen).
+    Gibt (neue_liste, betroffene_kontakt_ids, hinweise) zurueck."""
+    bestand = {r["wert"]: r["anzahl"] for r in queries.kategorie_werte_uebersicht(conn, feld)}
+    vorher = _KATEGORIE_FELDER[feld]()
+    neue_liste: list = []
+    betroffene: list = []
+    hinweise: list = []
+    umbenannt = set()
+
+    for original, name in zip(originale, namen):
+        original, name = original.strip(), name.strip()
+        if not name:
+            continue  # Zeile geleert oder entfernt - Pruefung unten
+        if original:
+            umbenannt.add(original)
+        if original and original != name:
+            betroffene += queries.kategorie_global_umbenennen(conn, feld, original, name)
+        if name not in neue_liste:
+            neue_liste.append(name)
+
+    for alt in vorher:
+        if alt in umbenannt or alt in neue_liste or not bestand.get(alt):
+            continue
+        hinweise.append(
+            f'„{alt}“ behalten – noch {bestand[alt]} Einträge. '
+            f'Zum Auflösen in eine andere Kategorie umbenennen.'
+        )
+        neue_liste.append(alt)
+
+    return neue_liste, betroffene, hinweise
+
+
+@router.post("/einstellungen/kategorien")
+async def kategorien_speichern(request: Request):
+    form = await request.form()
+    feld = (form.get("feld") or "").strip()
+    if feld not in _KATEGORIE_FELDER:
+        return RedirectResponse(url="/einstellungen/kategorien", status_code=303)
+
+    conn = get_connection()
+    try:
+        neue_liste, betroffene, hinweise = _kategorien_uebernehmen(
+            conn, feld, form.getlist("original"), form.getlist("name"),
+        )
+        if neue_liste:
+            settings.save({"kategorien": {feld: neue_liste}})
+        _betroffene_pushen(conn, betroffene)
+    finally:
+        conn.close()
+
+    text = "Liste gespeichert."
+    if betroffene:
+        text += f" {len(set(betroffene))} Kontakte angepasst."
+    if hinweise:
+        text += " " + " ".join(hinweise)
+    return RedirectResponse(url=f"/einstellungen/kategorien?meldung={quote(text)}", status_code=303)
+
+
+@router.post("/einstellungen/kategorien/umbenennen")
+async def kategorien_wert_umbenennen(request: Request):
+    """Sortiert einen im Bestand vorhandenen Ausreisser in eine der konfigurierten
+    Kategorien ein (oder benennt ihn frei um) - ohne die Auswahlliste zu aendern."""
+    form = await request.form()
+    feld = (form.get("feld") or "").strip()
+    alter_wert = (form.get("alter_wert") or "").strip()
+    neuer_wert = (form.get("neuer_wert") or "").strip()
+
+    text = ""
+    if feld in _KATEGORIE_FELDER and alter_wert and neuer_wert:
+        conn = get_connection()
+        try:
+            betroffene = queries.kategorie_global_umbenennen(conn, feld, alter_wert, neuer_wert)
+            _betroffene_pushen(conn, betroffene)
+        finally:
+            conn.close()
+        text = f'„{alter_wert}“ → „{neuer_wert}“: {len(set(betroffene))} Kontakte angepasst.'
+    return RedirectResponse(url=f"/einstellungen/kategorien?meldung={quote(text)}", status_code=303)
+
+
 @router.post("/einstellungen")
 async def einstellungen_speichern(request: Request):
     form = await request.form()

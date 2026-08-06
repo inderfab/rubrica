@@ -33,27 +33,41 @@ CSV_SPALTEN = [
 # Altwerte bleiben in der Zuordnung enthalten: der Export laeuft auch ueber Daten,
 # die (noch) nicht durch die Migration gegangen sind, etwa aus einem gerade
 # eingelesenen Vorschlag.
-_PRIVAT_TYPEN = {"privat", "private", "home", "privat handy"}
+_PRIVAT_TYPEN = {"private", "home"}
 _ALLGEMEIN_TYPEN = {"allgemein", "main"}
-_HANDY_TYPEN = {"direkt handy", "privat handy", "cell", "mobil", "mobile", "iphone", "handy", "natel"}
+_HANDY_TYPEN = {"cell", "mobil", "mobile", "iphone", "natel"}
 
 
 def _ist_privat_typ(typ: str) -> bool:
     """Privat = im PDF nur auf Wunsch sichtbar. "Direkt Handy" ist ausdruecklich
-    NICHT privat - eine geschaeftliche Mobilnummer gehoert auf die Adressliste."""
-    return (typ or "").strip().lower() in _PRIVAT_TYPEN
+    NICHT privat - eine geschaeftliche Mobilnummer gehoert auf die Adressliste.
+
+    Bewusst ueber den Wortanfang statt ueber eine feste Liste: die Kategorien sind
+    seit /einstellungen/kategorien frei erweiterbar, und eine dort neu angelegte
+    "Privat 2" muss ebenfalls als privat gelten - sonst stuende eine Privatnummer
+    unbemerkt auf der Adressliste, die aus dem Haus geht."""
+    return _normalisiert(typ).startswith("privat") or _normalisiert(typ) in _PRIVAT_TYPEN
+
+
+def _normalisiert(typ: str) -> str:
+    return (typ or "").strip().lower()
+
+
+def _ist_handy_typ(typ: str) -> bool:
+    t = _normalisiert(typ)
+    return "handy" in t or t in _HANDY_TYPEN
 
 
 def _kategorie_von_typ(typ: str) -> str:
-    """Ordnet einen (ggf. noch nicht migrierten/alten) Typwert einer Kategorie zu -
-    fuer die je Kategorie getrennten CSV-Spalten. Beruecksichtigt die
-    Handy-Kategorien, damit eine Mobilnummer nicht in der Festnetzspalte landet."""
-    t = (typ or "").strip().lower()
-    privat = t in _PRIVAT_TYPEN
-    handy = t in _HANDY_TYPEN
-    if t in _ALLGEMEIN_TYPEN:
+    """Ordnet einen (ggf. noch nicht migrierten/alten oder frei angelegten) Typwert
+    einer der festen Exportspalten zu. Beruecksichtigt die Handy-Kategorien, damit
+    eine Mobilnummer nicht in der Festnetzspalte landet. Eine eigene, unbekannte
+    Kategorie landet unter "Direkt" - sie soll im Export sichtbar sein, auch wenn
+    es keine passende Spalte gibt."""
+    if _normalisiert(typ) in _ALLGEMEIN_TYPEN:
         return "Allgemein"
-    if privat:
+    handy = _ist_handy_typ(typ)
+    if _ist_privat_typ(typ):
         return "Privat Handy" if handy else "Privat"
     return "Direkt Handy" if handy else "Direkt"
 

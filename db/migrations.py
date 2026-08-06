@@ -12,7 +12,8 @@ _MIGRATIONS: list[tuple[str, str]] = [
         -- Vereinheitlicht bisherige Telefon-/E-Mail-Kategorien (teils deutsch
         -- "arbeit"/"mobil"/"privat", teils englisch aus Apple-Importen
         -- "work"/"cell"/"home") auf die neuen drei Kategorien Direkt/Privat/
-        -- Allgemein (siehe web/contacts.py TELEFON_EMAIL_TYPEN). Mobile Nummern
+        -- Allgemein (die Kategorien von damals; heute config/settings.py bzw.
+        -- /einstellungen/kategorien). Mobile Nummern
         -- gelten als privat; unbekannte/generische Typen (z.B. Apples
         -- "internet" fuer alle E-Mails) werden zu "Direkt" (sichtbar), damit
         -- nichts faelschlich verschwindet - siehe docs/konzept.md.

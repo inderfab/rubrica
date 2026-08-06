@@ -297,3 +297,26 @@ def test_telefon_mit_altwert_allgemein_verschwindet_nicht_aus_csv():
 def test_privates_handy_bleibt_im_pdf_ausgeblendet():
     kontakt = _kontakt(telefonnummern=[{"typ": "Privat Handy", "nummer": "079 999 99 99"}])
     assert generator._direktwahl_pdf(kontakt, privates_telefon_zeigen=False) == ""
+
+
+def test_eigene_privat_kategorie_bleibt_im_pdf_verborgen():
+    """Kategorien sind seit /einstellungen/kategorien frei erweiterbar. Eine dort
+    angelegte "Privat 2" darf nicht durch die Privatsphaere-Pruefung fallen -
+    sonst stuende eine Privatnummer unbemerkt auf der Adressliste, die aus dem
+    Haus geht."""
+    from export import generator
+    assert generator._ist_privat_typ("Privat 2") is True
+    assert generator._ist_privat_typ("Privat Handy") is True
+    assert generator._ist_privat_typ("Direkt Handy") is False
+    assert generator._ist_privat_typ("Zentrale") is False
+
+
+def test_unbekannte_kategorie_verschwindet_nicht_aus_dem_csv():
+    """Fuer eine selbst angelegte Kategorie gibt es keine eigene CSV-Spalte - der
+    Wert muss trotzdem irgendwo auftauchen statt still zu fehlen."""
+    from export import generator
+    kontakt = {"vorname": "Anna", "nachname": "Muster",
+               "telefonnummern": [{"typ": "Zentrale", "nummer": "044 111 11 11"}],
+               "emails": [], "adressen": [], "urls": []}
+    csv_text = generator.kontakte_csv([kontakt]).decode("utf-8-sig")
+    assert "044 111 11 11" in csv_text

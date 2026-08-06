@@ -3,6 +3,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Form, Query, Request, Response
 from fastapi.responses import RedirectResponse
 
+from config import settings
 from db import queries
 from db.connection import get_connection
 from importer.signatur import parse_signatur
@@ -101,17 +102,13 @@ FUNKTIONEN = [
 # klares "gleich oder verschieden"-Konzept bei unterschiedlicher Anzahl je Kontakt).
 FELDER_MEHRFACHBEARBEITUNG = ["vorname", "nachname", "firma", "rolle", "kategorie", "notizen"]
 
-# Feste Kategorien, bewusst OHNE Freitext (Nutzer-Vorgabe): vorher konnte bei jeder
-# neuen Nummer ein beliebiger Wert gewaehlt werden, wodurch im Bestand ein Wildwuchs
-# aus deutschen, englischen und selbst getippten Bezeichnungen entstand. Reihenfolge
-# ist zugleich die Vorschlagsreihenfolge beim Anlegen weiterer Zeilen.
-# Telefon kennt bewusst kein "Allgemein" mehr - eine allgemeine Nummer gehoert zum
+# Kategorien fuer Telefon/E-Mail: reine Auswahl, kein Freitext. Die Listen selbst
+# sind unter /einstellungen/kategorien konfigurierbar - hier stehen nur noch die
+# Vorgabewerte fuer eine frische Installation (siehe config/settings.py).
+# Telefon kennt bewusst kein "Allgemein" - eine allgemeine Nummer gehoert zum
 # Firmenkontakt und ist dort "Direkt".
-TELEFON_TYPEN = ["Direkt", "Direkt Handy", "Privat", "Privat Handy"]
-EMAIL_TYPEN = ["Direkt", "Allgemein", "Privat"]
-
-# Rueckwaertskompatibel: aeltere Stellen erwarten noch den gemeinsamen Namen.
-TELEFON_EMAIL_TYPEN = TELEFON_TYPEN
+TELEFON_TYPEN = settings.TELEFON_TYPEN_STANDARD
+EMAIL_TYPEN = settings.EMAIL_TYPEN_STANDARD
 
 
 def _funktion_optionen(conn) -> list:
@@ -125,14 +122,15 @@ def _funktion_optionen(conn) -> list:
 
 
 def _telefon_typ_optionen(conn) -> list:
-    """Feste Liste - bewusst ohne die im Bestand vorkommenden Zusatzwerte, die es
-    frueher mit anbot und damit den Wildwuchs am Leben hielt. Altwerte sind per
-    Migration auf diese Liste abgebildet (siehe db/migrations.py)."""
-    return list(TELEFON_TYPEN)
+    """Konfigurierte Liste - bewusst ohne die im Bestand vorkommenden Zusatzwerte,
+    die frueher mitangeboten wurden und damit den Wildwuchs am Leben hielten.
+    Altwerte sind per Migration abgebildet (siehe db/migrations.py), Ausreisser
+    lassen sich unter /einstellungen/kategorien einsortieren."""
+    return settings.telefon_typen()
 
 
 def _email_typ_optionen(conn) -> list:
-    return list(EMAIL_TYPEN)
+    return settings.email_typen()
 
 
 def _parse_kontakt_form(form) -> dict:
@@ -436,6 +434,8 @@ def kontakte_bulk_bearbeiten_flyover(request: Request, ids: List[int] = Query(..
         kontakte = [queries.get_kontakt(conn, kid) for kid in ids]
         ordner = queries.list_projekte(conn)
         funktionen = _funktion_optionen(conn)
+        telefon_typen = _telefon_typ_optionen(conn)
+        email_typen = _email_typ_optionen(conn)
     finally:
         conn.close()
 
@@ -450,7 +450,7 @@ def kontakte_bulk_bearbeiten_flyover(request: Request, ids: List[int] = Query(..
     return templates.TemplateResponse("kontakt_bulk_bearbeiten_modal.html", {
         "request": request, "kontakte": kontakte, "ids": ids, "felder": felder,
         "ordner": ordner, "funktionen": funktionen, "zurueck_ordner_id": ordner_id,
-        "telefon_email_typen": TELEFON_EMAIL_TYPEN,
+        "telefon_typen": telefon_typen, "email_typen": email_typen,
     })
 
 

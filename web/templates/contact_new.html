@@ -19,13 +19,16 @@
 </div>
 {% endif %}
 
-<fieldset>
-    <legend>Aus E-Mail-Signatur übernehmen <span style="color:#86868b; font-weight:normal">(optional)</span></legend>
+<div class="formular-schmal">
+{# Eingeklappt (Nutzer-Feedback zum vielen Scrollen): der Signaturblock nahm die
+   erste Bildschirmhoehe ein, obwohl die Felder meist von Hand gefuellt werden. #}
+<details class="signatur-block">
+    <summary>Aus E-Mail-Signatur übernehmen <span style="color:#86868b; font-weight:normal">(optional)</span></summary>
     <p class="empty" style="padding:0 0 0.5rem">
         Signatur aus einer E-Mail hier einfügen und „Felder ausfüllen" klicken –
         Name, Firma, Telefon, Adresse usw. werden automatisch übernommen und können danach angepasst werden.
     </p>
-    <textarea id="signatur" name="signatur" rows="5" style="width:100%"
+    <textarea id="signatur" name="signatur" rows="4" style="width:100%"
               placeholder="Signatur hier einfügen…"></textarea>
     <div style="margin-top:0.5rem">
         <button type="button" class="secondary"
@@ -36,7 +39,7 @@
             Felder ausfüllen
         </button>
     </div>
-</fieldset>
+</details>
 
 <form id="kontakt-neu-form" method="post" action="/kontakte/neu">
     <div id="kontakt-felder">
@@ -47,4 +50,5 @@
         <a href="/kontakte" class="btn secondary">Abbrechen</a>
     </div>
 </form>
+</div>
 {% endblock %}

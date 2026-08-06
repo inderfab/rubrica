@@ -208,3 +208,20 @@ templates.env.filters["tojson"] = lambda value: json.dumps(value, ensure_ascii=F
 # Fuer per Hand zusammengesetzte hx-get/href-Query-Strings (z.B. E-Mail-Adressen
 # als Parameter) - Jinja2 bringt anders als Flask kein urlencode-Filter mit.
 templates.env.filters["urlencode"] = lambda value: quote_plus(str(value))
+
+
+def _typ_optionen(optionen: list, aktueller_wert: str) -> list:
+    """Optionsliste eines Kategorie-Dropdowns inklusive des tatsaechlich am Datensatz
+    stehenden Werts. Ohne diese Ergaenzung waere ein nicht (mehr) konfigurierter
+    Bestandswert im <select> nicht enthalten - der Browser zeigt dann kommentarlos
+    die erste Option an und das blosse Oeffnen und Speichern eines Kontakts wuerde
+    dessen Kategorie still veraendern. Aufraeumen soll ausdruecklich nur ueber
+    /einstellungen/kategorien passieren, nicht als Nebenwirkung."""
+    liste = list(optionen)
+    wert = (aktueller_wert or "").strip()
+    if wert and wert not in liste:
+        liste.append(wert)
+    return liste
+
+
+templates.env.globals["typ_optionen"] = _typ_optionen

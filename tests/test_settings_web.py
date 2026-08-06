@@ -298,3 +298,114 @@ def test_logo_entfernen(tmp_db, monkeypatch, tmp_path):
 
     client.post("/einstellungen/logo/entfernen")
     assert client.get("/einstellungen/logo").status_code == 404
+
+
+# ── Kategorien fuer Telefon/E-Mail ────────────────────────────────────────────
+# Die Auswahl im Kontaktformular ist bewusst ein reines Dropdown ohne Freitext
+# (Nutzer-Vorgabe, sonst entsteht wieder Wildwuchs) - neue Kategorien koennen
+# deshalb nur ueber diese Seite entstehen.
+
+def test_kategorien_seite_zeigt_liste_und_bestandswerte(tmp_db):
+    from db import queries
+    queries.create_kontakt(tmp_db, {
+        "vorname": "Anna", "nachname": "Muster",
+        "telefonnummern": [{"typ": "Direkt", "nummer": "044 111 11 11"},
+                           {"typ": "Zentrale", "nummer": "044 222 22 22"}],
+    })
+
+    r = TestClient(app).get("/einstellungen/kategorien")
+    assert r.status_code == 200
+    for standard in settings.TELEFON_TYPEN_STANDARD:
+        assert f'value="{standard}"' in r.text
+    # "Zentrale" gehoert nicht zur Auswahl, muss aber sichtbar sein, damit man den
+    # Ausreisser ueberhaupt bemerkt und einsortieren kann.
+    assert "Zentrale" in r.text
+
+
+def test_kategorie_hinzufuegen_erscheint_im_kontaktformular(tmp_db):
+    client = TestClient(app)
+    client.post("/einstellungen/kategorien", data={
+        "feld": "telefon", "original": ["Direkt", ""], "name": ["Direkt", "Zentrale"],
+    }, follow_redirects=False)
+
+    assert settings.telefon_typen() == ["Direkt", "Zentrale"]
+    r = client.get("/kontakte/neu")
+    assert '<option value="Zentrale"' in r.text
+
+
+def test_kategorie_umbenennen_zieht_den_bestand_mit(tmp_db):
+    from db import queries
+    kontakt_id = queries.create_kontakt(tmp_db, {
+        "vorname": "Anna", "nachname": "Muster",
+        "telefonnummern": [{"typ": "Direkt", "nummer": "044 111 11 11"}],
+    })
+
+    TestClient(app).post("/einstellungen/kategorien", data={
+        "feld": "telefon", "original": ["Direkt"], "name": ["Arbeit"],
+    }, follow_redirects=False)
+
+    assert settings.telefon_typen()[0] == "Arbeit"
+    assert queries.get_kontakt(tmp_db, kontakt_id)["telefonnummern"][0]["typ"] == "Arbeit"
+
+
+def test_benutzte_kategorie_wird_nicht_entfernt(tmp_db):
+    """Sonst haetten die betroffenen Eintraege eine Kategorie, die es zur Auswahl
+    nicht mehr gibt - und das blosse Speichern des Kontakts wuerde sie still auf
+    einen anderen Wert setzen."""
+    from db import queries
+    queries.create_kontakt(tmp_db, {
+        "vorname": "Anna", "nachname": "Muster",
+        "telefonnummern": [{"typ": "Privat", "nummer": "079 111 11 11"}],
+    })
+
+    r = TestClient(app).post("/einstellungen/kategorien", data={
+        "feld": "telefon", "original": ["Direkt"], "name": ["Direkt"],
+    }, follow_redirects=False)
+
+    assert "Privat" in settings.telefon_typen()
+    assert "Privat" in r.headers["location"]
+
+
+def test_unbenutzte_kategorie_laesst_sich_entfernen(tmp_db):
+    TestClient(app).post("/einstellungen/kategorien", data={
+        "feld": "telefon", "original": ["Direkt", "Privat"], "name": ["Direkt", "Privat"],
+    }, follow_redirects=False)
+
+    assert settings.telefon_typen() == ["Direkt", "Privat"]
+
+
+def test_leere_liste_faellt_auf_die_standardwerte_zurueck(tmp_db):
+    """Ein leeres Dropdown wuerde beim naechsten Speichern eines Kontakts alle
+    Kategorien loeschen."""
+    TestClient(app).post("/einstellungen/kategorien", data={"feld": "telefon"},
+                          follow_redirects=False)
+    assert settings.telefon_typen() == settings.TELEFON_TYPEN_STANDARD
+
+
+def test_bestandswert_laesst_sich_einer_kategorie_zuordnen(tmp_db):
+    from db import queries
+    kontakt_id = queries.create_kontakt(tmp_db, {
+        "vorname": "Anna", "nachname": "Muster",
+        "emails": [{"typ": "work", "email": "anna@beispiel.ch"}],
+    })
+
+    TestClient(app).post("/einstellungen/kategorien/umbenennen", data={
+        "feld": "email", "alter_wert": "work", "neuer_wert": "Direkt",
+    }, follow_redirects=False)
+
+    assert queries.get_kontakt(tmp_db, kontakt_id)["emails"][0]["typ"] == "Direkt"
+    assert "work" not in settings.email_typen()
+
+
+def test_kontaktformular_behaelt_nicht_konfigurierten_bestandswert(tmp_db):
+    """Regression: ein <select> ohne passende Option zeigt kommentarlos die erste
+    an - Oeffnen und Speichern haette die Kategorie des Kontakts still veraendert."""
+    from db import queries
+    kontakt_id = queries.create_kontakt(tmp_db, {
+        "vorname": "Anna", "nachname": "Muster",
+        "telefonnummern": [{"typ": "Zentrale", "nummer": "044 111 11 11"}],
+    })
+
+    r = TestClient(app).get(f"/kontakte/{kontakt_id}/bearbeiten")
+    assert r.status_code == 200
+    assert '<option value="Zentrale" selected>' in r.text

@@ -7,6 +7,17 @@ import yaml
 _EXAMPLE_PATH = Path(__file__).parent.parent / "config.yaml.example"
 LOGO_STAMM = "export-logo"
 
+# Kategorien fuer Telefon/E-Mail - reine Auswahl, kein Freitext (Nutzer-Vorgabe:
+# frueher entstand bei jeder Eingabe ein neuer Wert und damit ein Wildwuchs aus
+# deutschen, englischen und selbst getippten Bezeichnungen). Die Listen sind unter
+# /einstellungen/kategorien anpassbar; die Werte hier sind nur die Vorgabe fuer
+# eine frische Installation. Absichtlich hier und nicht in web/contacts.py, damit
+# auch Migration und Export dieselbe Quelle nutzen koennen, ohne die Web-Schicht
+# zu importieren. Die Reihenfolge ist zugleich die Vorschlagsreihenfolge, in der
+# das Kontaktformular weitere Zeilen anbietet.
+TELEFON_TYPEN_STANDARD = ["Direkt", "Direkt Handy", "Privat", "Privat Handy"]
+EMAIL_TYPEN_STANDARD = ["Direkt", "Allgemein", "Privat"]
+
 
 def daten_verzeichnis() -> Path:
     """Verzeichnis fuer nutzergenerierte Dateien (Config, DB, hochgeladenes
@@ -58,6 +69,27 @@ def get(key: str, default=None):
 
 def load_all() -> dict:
     return _load()
+
+
+def _kategorien(schluessel: str, standard: list) -> list:
+    """Konfigurierte Kategorieliste, bereinigt (leere Eintraege und Duplikate raus,
+    Reihenfolge bleibt). Faellt bewusst auf die Standardliste zurueck, wenn nichts
+    (mehr) konfiguriert ist: eine leere Liste wuerde ein leeres Dropdown erzeugen
+    und beim naechsten Speichern eines Kontakts alle Kategorien loeschen."""
+    bereinigt = []
+    for wert in get(f"kategorien.{schluessel}") or []:
+        wert = str(wert).strip()
+        if wert and wert not in bereinigt:
+            bereinigt.append(wert)
+    return bereinigt or list(standard)
+
+
+def telefon_typen() -> list:
+    return _kategorien("telefon", TELEFON_TYPEN_STANDARD)
+
+
+def email_typen() -> list:
+    return _kategorien("email", EMAIL_TYPEN_STANDARD)
 
 
 def save(updates: dict):

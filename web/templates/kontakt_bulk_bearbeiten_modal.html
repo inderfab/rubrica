@@ -85,13 +85,13 @@
             <div class="field">
                 <label>Telefon: von</label>
                 <select name="telefon_von">
-                    {% for t in telefon_email_typen %}<option value="{{ t }}">{{ t }}</option>{% endfor %}
+                    {% for t in telefon_typen %}<option value="{{ t }}">{{ t }}</option>{% endfor %}
                 </select>
             </div>
             <div class="field">
                 <label>Telefon: auf</label>
                 <select name="telefon_nach">
-                    {% for t in telefon_email_typen %}<option value="{{ t }}" {% if loop.index0 == 1 %}selected{% endif %}>{{ t }}</option>{% endfor %}
+                    {% for t in telefon_typen %}<option value="{{ t }}" {% if loop.index0 == 1 %}selected{% endif %}>{{ t }}</option>{% endfor %}
                 </select>
             </div>
         </div>
@@ -101,13 +101,13 @@
             <div class="field">
                 <label>E-Mail: von</label>
                 <select name="email_von">
-                    {% for t in telefon_email_typen %}<option value="{{ t }}">{{ t }}</option>{% endfor %}
+                    {% for t in email_typen %}<option value="{{ t }}">{{ t }}</option>{% endfor %}
                 </select>
             </div>
             <div class="field">
                 <label>E-Mail: auf</label>
                 <select name="email_nach">
-                    {% for t in telefon_email_typen %}<option value="{{ t }}" {% if loop.index0 == 1 %}selected{% endif %}>{{ t }}</option>{% endfor %}
+                    {% for t in email_typen %}<option value="{{ t }}" {% if loop.index0 == 1 %}selected{% endif %}>{{ t }}</option>{% endfor %}
                 </select>
             </div>
         </div>

@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+{% block title %}Kategorien verwalten – Rubrica{% endblock %}
+{% block content %}
+<h1>Kategorien für Telefon &amp; E-Mail</h1>
+
+{% if meldung %}
+<p style="color:#1a7f37; padding:0.5rem 0">{{ meldung }}</p>
+{% endif %}
+
+{% macro kategorie_block(feld, titel, daten) %}
+<fieldset>
+    <legend>{{ titel }}</legend>
+    <form method="post" action="/einstellungen/kategorien"
+          onsubmit="return rubricaKategorienBestaetigen(this)">
+        <input type="hidden" name="feld" value="{{ feld }}">
+        <div class="kategorie-liste" id="liste-{{ feld }}">
+            {% for k in daten.konfiguriert %}
+            <div class="kategorie-zeile">
+                <input type="hidden" name="original" value="{{ k.wert }}">
+                <input type="text" name="name" value="{{ k.wert }}" data-anzahl="{{ k.anzahl }}">
+                <span class="kategorie-anzahl">{{ k.anzahl }} {{ 'Eintrag' if k.anzahl == 1 else 'Einträge' }}</span>
+                <button type="button" class="secondary" title="nach oben"
+                        onclick="rubricaKategorieVerschieben(this, -1)">↑</button>
+                <button type="button" class="secondary" title="nach unten"
+                        onclick="rubricaKategorieVerschieben(this, 1)">↓</button>
+                <button type="button" class="danger" title="entfernen"
+                        onclick="rubricaKategorieEntfernen(this)">✕</button>
+            </div>
+            {% endfor %}
+        </div>
+        <div class="actions" style="margin-top:0.6rem">
+            <button type="button" class="secondary"
+                    onclick="rubricaKategorieHinzufuegen('liste-{{ feld }}')">+ Kategorie</button>
+            <button type="submit">Speichern</button>
+        </div>
+    </form>
+
+    {% if daten.rest %}
+    <p class="empty" style="margin-top:0.8rem; padding-bottom:0.3rem">
+        Diese Werte stehen im Bestand, gehören aber nicht zur Auswahl – etwa aus einem Import oder aus
+        Kontakte.app. Sie bleiben bei ihrem Kontakt erhalten, bis sie hier einer Kategorie zugeordnet werden.
+    </p>
+    <table>
+        <thead><tr><th>Wert</th><th>Einträge</th><th>Zuordnen zu</th></tr></thead>
+        <tbody>
+            {% for r in daten.rest %}
+            <tr>
+                <td>{{ r.wert }}</td>
+                <td>{{ r.anzahl }}</td>
+                <td>
+                    <form method="post" action="/einstellungen/kategorien/umbenennen"
+                          onsubmit="return confirm('{{ r.anzahl }} Einträge auf die gewählte Kategorie umstellen?')"
+                          style="display:flex; gap:0.5rem;">
+                        <input type="hidden" name="feld" value="{{ feld }}">
+                        <input type="hidden" name="alter_wert" value="{{ r.wert }}">
+                        <select name="neuer_wert">
+                            {% for k in daten.konfiguriert %}<option value="{{ k.wert }}">{{ k.wert }}</option>{% endfor %}
+                        </select>
+                        <button type="submit" class="secondary">Übernehmen</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+</fieldset>
+{% endmacro %}
+
+<div class="formular-schmal">
+    <p class="empty">
+        Diese Listen bestimmen die Auswahl im Kontaktformular. Dort ist bewusst nur eine Auswahl möglich und
+        kein freier Text – neue Kategorien entstehen ausschliesslich hier. Die Reihenfolge ist zugleich die
+        Reihenfolge, in der das Formular weitere Zeilen vorschlägt.
+    </p>
+    <p class="empty" style="padding-top:0">
+        Eine Bezeichnung zu ändern benennt sie im gesamten Bestand mit um (bei vielen Kontakten dauert das
+        Speichern entsprechend, da alle betroffenen Karten neu an Kontakte.app geschickt werden).
+        <br>
+        <strong>Wichtig:</strong> Kategorien, deren Bezeichnung mit „Privat“ beginnt, gelten im PDF-Export als
+        privat und erscheinen dort nur, wenn das in den Export-Einstellungen ausdrücklich aktiviert ist. Wer
+        eine weitere private Kategorie anlegt, benennt sie deshalb am besten „Privat …“.
+    </p>
+    {{ kategorie_block("telefon", "Telefon", telefon) }}
+    {{ kategorie_block("email", "E-Mail", email) }}
+    <p><a href="/einstellungen">← Zurück zu den Einstellungen</a></p>
+</div>
+
+<script>
+// Eine Zeile = eine Kategorie. Das versteckte "original"-Feld haelt fest, wie die
+// Kategorie beim Laden der Seite hiess - daran erkennt der Server eine Umbenennung
+// (und damit, was im Bestand mitgeaendert werden muss) statt nur "alte Liste weg,
+// neue Liste hin". Neue Zeilen haben ein leeres original.
+function rubricaKategorieZeileBauen(name) {
+    const zeile = document.createElement('div');
+    zeile.className = 'kategorie-zeile';
+    zeile.innerHTML =
+        '<input type="hidden" name="original" value="">' +
+        '<input type="text" name="name" data-anzahl="0">' +
+        '<span class="kategorie-anzahl">neu</span>' +
+        '<button type="button" class="secondary" title="nach oben" onclick="rubricaKategorieVerschieben(this, -1)">↑</button>' +
+        '<button type="button" class="secondary" title="nach unten" onclick="rubricaKategorieVerschieben(this, 1)">↓</button>' +
+        '<button type="button" class="danger" title="entfernen" onclick="rubricaKategorieEntfernen(this)">✕</button>';
+    zeile.querySelector('input[name="name"]').value = name || '';
+    return zeile;
+}
+
+function rubricaKategorieHinzufuegen(listenId) {
+    const liste = document.getElementById(listenId);
+    const zeile = rubricaKategorieZeileBauen('');
+    liste.appendChild(zeile);
+    zeile.querySelector('input[name="name"]').focus();
+}
+
+function rubricaKategorieVerschieben(knopf, richtung) {
+    const zeile = knopf.closest('.kategorie-zeile');
+    const nachbar = richtung < 0 ? zeile.previousElementSibling : zeile.nextElementSibling;
+    if (!nachbar) return;
+    if (richtung < 0) zeile.parentElement.insertBefore(zeile, nachbar);
+    else zeile.parentElement.insertBefore(nachbar, zeile);
+}
+
+function rubricaKategorieEntfernen(knopf) {
+    const zeile = knopf.closest('.kategorie-zeile');
+    const anzahl = parseInt(zeile.querySelector('input[name="name"]').dataset.anzahl || '0', 10);
+    if (anzahl > 0) {
+        // Der Server laesst eine noch benutzte Kategorie ohnehin stehen - hier
+        // frueh und verstaendlich sagen, warum, statt es erst nach dem Speichern
+        // als Hinweis zu zeigen.
+        alert('Diese Kategorie hängt noch an ' + anzahl + ' Einträgen und kann nicht entfernt werden.\n\n' +
+              'Bezeichnung stattdessen auf eine andere Kategorie ändern – die Einträge werden dann dort zusammengeführt.');
+        return;
+    }
+    zeile.remove();
+}
+
+function rubricaKategorienBestaetigen(formular) {
+    let betroffen = 0;
+    formular.querySelectorAll('.kategorie-zeile').forEach(function (zeile) {
+        const original = zeile.querySelector('input[name="original"]').value.trim();
+        const feld = zeile.querySelector('input[name="name"]');
+        if (original && original !== feld.value.trim()) {
+            betroffen += parseInt(feld.dataset.anzahl || '0', 10);
+        }
+    });
+    if (betroffen > 0) {
+        return confirm(betroffen + ' bestehende Einträge werden auf die neue Bezeichnung umgestellt und neu ' +
+                       'an Kontakte.app übertragen. Das kann einige Minuten dauern. Fortfahren?');
+    }
+    return true;
+}
+</script>
+{% endblock %}
