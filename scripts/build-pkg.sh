@@ -299,6 +299,38 @@ LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchS
 [ -x "$LSREGISTER" ] && "$LSREGISTER" -u "$APP" 2>/dev/null || true
 rm -rf "$APP"
 
+cat > "$PKG_SCRIPTS/preinstall" <<'PREINSTALL'
+#!/bin/bash
+# Laufende Instanz beenden, BEVOR die Programmdateien ersetzt werden: sonst
+# arbeitet die laufende App auf einem halb ausgetauschten Bundle weiter (Python
+# laedt Module erst bei Bedarf nach) und der Serverprozess kippt mitten im
+# Betrieb. Erst launchd stilllegen - sonst startet KeepAlive sofort neu -,
+# danach auch von Hand gestartete Instanzen.
+#
+# Die Agents werden ueber ihren INHALT gefunden (zeigen sie auf unser Bundle?)
+# statt ueber eine Liste bekannter Label: die Bundle-ID hat im Lauf der Zeit
+# gewechselt, und eine von Hand gepflegte Namensliste war schon einmal die
+# Fehlerquelle (siehe Kommentar im postinstall).
+CURRENT_USER=$(stat -f "%Su" /dev/console 2>/dev/null || echo "")
+if [ -n "$CURRENT_USER" ] && [ "$CURRENT_USER" != "root" ]; then
+  USER_UID=$(id -u "$CURRENT_USER")
+  for PLIST in "/Users/$CURRENT_USER/Library/LaunchAgents"/*.plist; do
+    [ -f "$PLIST" ] || continue
+    grep -q "/Applications/Rubrica Server.app" "$PLIST" || continue
+    LABEL=$(basename "$PLIST" .plist)
+    sudo -u "$CURRENT_USER" launchctl bootout "gui/$USER_UID/$LABEL" 2>/dev/null || true
+  done
+  # Menubar-App und ihre Kindprozesse (uvicorn, Radicale) laufen alle aus dem
+  # Bundle heraus - ein Muster auf den Bundle-Pfad erwischt sie gemeinsam. Der
+  # System-Installer laeuft als eigene Anwendung (menubar/updater.py ruft "open"),
+  # nicht als Kindprozess von Rubrica - er ist davon also nicht betroffen.
+  pkill -f "/Applications/Rubrica Server.app/Contents/" 2>/dev/null || true
+  sleep 1
+fi
+exit 0
+PREINSTALL
+chmod +x "$PKG_SCRIPTS/preinstall"
+
 cat > "$PKG_SCRIPTS/postinstall" <<'POSTINSTALL'
 #!/bin/bash
 CURRENT_USER=$(stat -f "%Su" /dev/console 2>/dev/null || echo "")
@@ -314,13 +346,6 @@ xattr -cr "/Applications/Rubrica Server.app" 2>/dev/null || true
 # Kontakte-Sync-Daemon von macOS die Verbindung still ab (siehe docs/konzept.md 9).
 APP_RES="/Applications/Rubrica Server.app/Contents/Resources"
 DATA_DIR="/Users/$CURRENT_USER/Library/Application Support/Rubrica"
-
-# Muss VOR dem ersten App-Start erfasst werden (der legt config.yaml aus dem
-# Beispiel an, sobald der launchd-Dienst unten hochfaehrt) - sonst liesse sich
-# hinterher nicht mehr unterscheiden, ob dies eine frische Installation war
-# oder ein Update einer bereits eingerichteten.
-FRISCHE_INSTALLATION=0
-[ -f "$DATA_DIR/config.yaml" ] || FRISCHE_INSTALLATION=1
 
 TLS_DIR="$DATA_DIR/radicale-tls"
 HOSTNAME_LOCAL="$(sudo -u "$CURRENT_USER" scutil --get LocalHostName 2>/dev/null || hostname).local"
@@ -370,34 +395,49 @@ PLISTEOF
   fi
 }
 
-_install_agent "ch.rubrica.server" "/Applications/Rubrica Server.app/Contents/MacOS/Rubrica Server"
-
-# Migration: fruehere Versionen installierten Radicale als eigenen zweiten
-# launchd-Dienst unter einer anderen Bundle-ID (ch.rubrica.*). Alte Agents
-# entladen und deren Plists entfernen, sonst liefe eine verwaiste zweite
-# Radicale-Instanz neben der, die die Menubar-App jetzt selbst als Kindprozess
-# startet (Port-Konflikt auf 8443), bzw. zwei Instanzen unter altem/neuem Label.
-for ALTES_LABEL in ch.rubrica.server ch.rubrica.radicale; do
-  ALTE_PLIST="$LA_DIR/$ALTES_LABEL.plist"
-  if [ -f "$ALTE_PLIST" ]; then
-    sudo -u "$CURRENT_USER" launchctl bootout "gui/$USER_UID/$ALTES_LABEL" 2>/dev/null || true
-    rm -f "$ALTE_PLIST"
-  fi
+# Migration: fruehere Versionen liefen unter einer anderen Bundle-ID und starteten
+# Radicale als eigenen zweiten launchd-Dienst. Solche Plists entladen und
+# entfernen, sonst liefe eine verwaiste zweite Instanz neben der neuen
+# (Port-Konflikt auf 8001/8443).
+#
+# Erkennung ueber den Plist-INHALT statt ueber eine Liste bekannter Namen, und
+# das AKTUELLE Label ausdruecklich ausgenommen. Genau hier lag der Fehler: beim
+# Umbenennen der Bundle-ID wurde die Liste auf die NEUEN statt der ALTEN Namen
+# gesetzt, worauf die Schleife den Agent wieder loeschte, den _install_agent
+# unmittelbar davor angelegt hatte - Rubrica startete danach weder nach der
+# Installation noch nach einem Neustart des Rechners.
+for ALTE_PLIST in "$LA_DIR"/*.plist; do
+  [ -f "$ALTE_PLIST" ] || continue
+  grep -q "/Applications/Rubrica Server.app" "$ALTE_PLIST" || continue
+  ALTES_LABEL=$(basename "$ALTE_PLIST" .plist)
+  [ "$ALTES_LABEL" = "ch.rubrica.server" ] && continue
+  sudo -u "$CURRENT_USER" launchctl bootout "gui/$USER_UID/$ALTES_LABEL" 2>/dev/null || true
+  rm -f "$ALTE_PLIST"
 done
 
-# ── Bei einer frischen Installation den Einrichtungsassistenten oeffnen ───────
-# Ohne das faende ein Erstnutzer die Web-UI gar nicht selbst (kein Dock-/
-# Schreibtisch-Icon, nur ein Menubar-Symbol). Bei einem Update einer bereits
-# eingerichteten Installation NICHT oeffnen - das waere bei jedem Update ein
-# ungefragt aufpoppender Browser-Tab.
-if [ "$FRISCHE_INSTALLATION" = "1" ]; then
-  WEB_PORT=8001
-  for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
-    curl -s -o /dev/null "http://127.0.0.1:$WEB_PORT/" && break
-    sleep 1
-  done
-  sudo -u "$CURRENT_USER" open "http://127.0.0.1:$WEB_PORT/" 2>/dev/null || true
+# RunAtLoad startet Rubrica sofort, KeepAlive haelt es am Laufen; da der Agent in
+# ~/Library/LaunchAgents liegt, startet er auch nach jedem Rechner-Neustart mit
+# der Anmeldung wieder.
+_install_agent "ch.rubrica.server" "/Applications/Rubrica Server.app/Contents/MacOS/Rubrica Server"
+
+# Sicherheitsnetz, falls launchctl den Agent nicht annimmt (z.B. weil die
+# Sitzung gerade keine GUI-Domain hat): App direkt starten.
+sleep 2
+if ! pgrep -f "/Applications/Rubrica Server.app/Contents/MacOS/" >/dev/null 2>&1; then
+  sudo -u "$CURRENT_USER" open -a "/Applications/Rubrica Server.app" 2>/dev/null || true
 fi
+
+# ── Rubrica nach der Installation oeffnen ─────────────────────────────────────
+# Bewusst nach JEDER Installation (Nutzer-Vorgabe), nicht nur bei einer frischen:
+# ohne Dock-Icon ist ein Menubar-Symbol der einzige Hinweis, dass etwas laeuft -
+# der geoeffnete Tab ist die Rueckmeldung, dass die Installation geklappt hat.
+# Bei einer frischen Installation ist es zugleich der Einrichtungsassistent.
+WEB_PORT=8001
+for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+  curl -s -o /dev/null "http://127.0.0.1:$WEB_PORT/" && break
+  sleep 1
+done
+sudo -u "$CURRENT_USER" open "http://127.0.0.1:$WEB_PORT/" 2>/dev/null || true
 
 exit 0
 POSTINSTALL
