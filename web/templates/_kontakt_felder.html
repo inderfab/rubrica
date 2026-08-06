@@ -46,10 +46,12 @@
 <fieldset class="{{ 'feld-fehler' if fehlende_felder.telefon }}">
     <legend>Telefon</legend>
     {% for i in range([tels|length, 3]|max) %}
-    {% set t = tels[i] if i < tels|length else {'typ': '', 'nummer': ''} %}
+    {# Vorgabe statt leerem Feld (Nutzer-Feedback): ein leeres erstes Feld wurde
+       fuer das Nummernfeld gehalten, die Nummer landete in der Kategorie. #}
+    {% set t = tels[i] if i < tels|length else {'typ': ('Direkt' if i == 0 else 'Privat'), 'nummer': ''} %}
     <div class="tel-row">
         <div class="combobox" data-optionen='{{ telefon_typen|tojson }}' style="width:8rem;">
-            <input type="text" class="combobox-input" name="telefon_typ" autocomplete="off" value="{{ t.typ }}"
+            <input type="text" class="combobox-input" name="telefon_typ" autocomplete="off" placeholder="Kategorie" value="{{ t.typ }}"
                    oninput="rubricaComboboxInput(event)" onfocus="rubricaComboboxInput(event)"
                    onblur="rubricaComboboxBlur(event)">
             <ul class="combobox-liste"></ul>
@@ -62,10 +64,10 @@
 <fieldset class="{{ 'feld-fehler' if fehlende_felder.email }}">
     <legend>E-Mail</legend>
     {% for i in range([mails|length, 2]|max) %}
-    {% set m = mails[i] if i < mails|length else {'typ': '', 'email': ''} %}
+    {% set m = mails[i] if i < mails|length else {'typ': ('Direkt' if i == 0 else 'Privat'), 'email': ''} %}
     <div class="mail-row">
         <div class="combobox" data-optionen='{{ email_typen|tojson }}' style="width:8rem;">
-            <input type="text" class="combobox-input" name="email_typ" autocomplete="off" value="{{ m.typ }}"
+            <input type="text" class="combobox-input" name="email_typ" autocomplete="off" placeholder="Kategorie" value="{{ m.typ }}"
                    oninput="rubricaComboboxInput(event)" onfocus="rubricaComboboxInput(event)"
                    onblur="rubricaComboboxBlur(event)">
             <ul class="combobox-liste"></ul>

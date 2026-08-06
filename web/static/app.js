@@ -97,6 +97,12 @@ function addRow(containerId, kind, button) {
         input.className = 'combobox-input';
         input.name = spec.typInput;
         input.autocomplete = 'off';
+        // Beschriftet und vorbelegt: ein leeres erstes Feld wurde fuer das
+        // Nummernfeld gehalten und die Nummer landete in der Kategorie
+        // (Nutzer-Feedback). "Privat" als Vorgabe, weil die erste Zeile meist
+        // schon die geschaeftliche Nummer traegt.
+        input.placeholder = 'Kategorie';
+        input.value = 'Privat';
         input.addEventListener('input', rubricaComboboxInput);
         input.addEventListener('focus', rubricaComboboxInput);
         input.addEventListener('blur', rubricaComboboxBlur);

@@ -466,3 +466,15 @@ def test_bulk_kategorie_umstellen_ignoriert_ungueltiges_feld(tmp_db):
     }, follow_redirects=False)
     assert r.status_code == 303
     assert queries.get_kontakt(tmp_db, k1)["telefonnummern"][0]["typ"] == "Allgemein"
+
+
+def test_neuanlage_hat_kategorie_vorgaben(tmp_db):
+    """Nutzer-Feedback: die erste Spalte war leer und wurde fuer das Nummernfeld
+    gehalten - die Nummer landete in der Kategorie. Vorgabe + Beschriftung machen
+    eindeutig, welches Feld welches ist."""
+    r = _client(tmp_db).get("/kontakte/neu")
+    assert r.status_code == 200
+    assert 'placeholder="Kategorie"' in r.text
+    # Erste Zeile geschaeftlich, zweite privat
+    assert 'value="Direkt"' in r.text
+    assert 'value="Privat"' in r.text

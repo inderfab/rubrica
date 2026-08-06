@@ -52,7 +52,7 @@
             {% for t in (kontakt.telefonnummern if kontakt else []) %}
             <div class="tel-row">
                 <div class="combobox" data-optionen='{{ telefon_typen|tojson }}' style="width:8rem;">
-                    <input type="text" class="combobox-input" name="telefon_typ" autocomplete="off" value="{{ t.typ }}"
+                    <input type="text" class="combobox-input" name="telefon_typ" autocomplete="off" placeholder="Kategorie" value="{{ t.typ }}"
                            oninput="rubricaComboboxInput(event)" onfocus="rubricaComboboxInput(event)"
                            onblur="rubricaComboboxBlur(event)">
                     <ul class="combobox-liste"></ul>
@@ -72,7 +72,7 @@
             {% for e in (kontakt.emails if kontakt else []) %}
             <div class="mail-row">
                 <div class="combobox" data-optionen='{{ email_typen|tojson }}' style="width:8rem;">
-                    <input type="text" class="combobox-input" name="email_typ" autocomplete="off" value="{{ e.typ }}"
+                    <input type="text" class="combobox-input" name="email_typ" autocomplete="off" placeholder="Kategorie" value="{{ e.typ }}"
                            oninput="rubricaComboboxInput(event)" onfocus="rubricaComboboxInput(event)"
                            onblur="rubricaComboboxBlur(event)">
                     <ul class="combobox-liste"></ul>
