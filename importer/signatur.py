@@ -66,6 +66,26 @@ _GRUSSFORMEL = re.compile(
 )
 
 
+# Namenszusaetze, die klein geschrieben werden ("Christoph von Arx", "Peter de Boer").
+# Ohne diese Liste scheiterte die Namenserkennung an der Regel "jedes Wort muss gross
+# geschrieben sein" - der Name blieb dann komplett leer, obwohl die Signatur sonst
+# vollstaendig erkannt wurde (Nutzer-Meldung am echten Beispiel). Der Zusatz gehoert
+# zum Nachnamen, nicht zum Vornamen.
+_NAMENSZUSATZ = {
+    "von", "van", "vom", "zu", "zur", "zum", "de", "del", "della", "di", "da", "dos",
+    "du", "der", "den", "dem", "ten", "ter", "le", "la", "el", "al", "bin", "ibn",
+}
+
+
+def _name_aus_worten(worte: list) -> tuple:
+    """Zerlegt eine Namenszeile in (Vorname, Nachname). Ein Namenszusatz leitet den
+    Nachnamen ein: "Christoph von Arx" -> ("Christoph", "von Arx")."""
+    for i, wort in enumerate(worte):
+        if i > 0 and wort.lower() in _NAMENSZUSATZ:
+            return " ".join(worte[:i]), " ".join(worte[i:])
+    return " ".join(worte[:-1]), worte[-1]
+
+
 def _telefon_typ(kontext: str) -> str:
     """Klassifiziert eine Nummer anhand des Textes davor (Label) bzw. der Vorwahl.
     Faxnummern sind praktisch immer Firmen-/Sammelanschluesse -> Allgemein;
@@ -198,9 +218,13 @@ def parse_signatur(text: str) -> dict:
         if _ROLLE_KENNUNG.search(zeile):
             continue
         worte = zeile.split()
-        if 2 <= len(worte) <= 4 and all(w[:1].isupper() for w in worte if w):
-            vorname = " ".join(worte[:-1])
-            nachname = worte[-1]
+        # Klein geschriebene Namenszusaetze ("von", "de") sind erlaubt, solange das
+        # erste und das letzte Wort gross geschrieben sind - sonst waere "Christoph
+        # von Arx" kein Name (siehe _NAMENSZUSATZ).
+        if (2 <= len(worte) <= 4
+                and worte[0][:1].isupper() and worte[-1][:1].isupper()
+                and all(w[:1].isupper() or w.lower() in _NAMENSZUSATZ for w in worte if w)):
+            vorname, nachname = _name_aus_worten(worte)
             break
 
     return {

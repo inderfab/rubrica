@@ -295,3 +295,49 @@ label { display: block; font-size: 0.85rem; color: var(--text-hell); margin-bott
 
 /* Platzhalter fuer Felder mit unterschiedlichen Werten beim Sammel-Bearbeiten */
 input.gemischt::placeholder, textarea.gemischt::placeholder { color: var(--text-hell); font-style: italic; }
+
+/* ── Sync-Panel (Einstellungen, ganz oben) ────────────────────────────────
+   Bewusst prominent: der Knopf ist die erste Massnahme, wenn etwas nicht
+   angekommen ist, wurde im CardDAV-Block weiter unten aber regelmaessig
+   uebersehen (Nutzer-Vorgabe). */
+.sync-panel {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+    border: 1px solid #d8d8d8;
+    border-left: 4px solid #111;
+    border-radius: 8px;
+    padding: 1rem 1.2rem;
+    margin: 0 0 1.2rem;
+    background: #fafafa;
+}
+.sync-panel-text { flex: 1; min-width: 260px; }
+.sync-panel-text strong { display: block; font-size: 1.05rem; margin-bottom: 0.2rem; }
+.sync-panel-text span { color: #666; font-size: 0.88rem; line-height: 1.5; }
+.sync-panel-knopf {
+    font-size: 1rem;
+    padding: 0.7rem 1.6rem;
+    white-space: nowrap;
+}
+
+/* ── Modal kompakter (Nutzer-Feedback) ────────────────────────────────────
+   Vorher scrollte der gesamte Panelinhalt inklusive der Aktionsleiste - man
+   musste bis ans Ende scrollen, um "Speichern"/"Abbrechen" ueberhaupt zu sehen.
+   Jetzt bleibt die Leiste am unteren Rand stehen, waehrend nur der Inhalt
+   scrollt. Zusaetzlich etwas weniger Aussenabstand, damit mehr Formular
+   gleichzeitig sichtbar ist. */
+.modal-overlay { padding: 1.5rem 1rem; }
+.modal-panel { max-height: calc(100vh - 3rem); padding: 1.2rem 1.4rem 0; }
+.modal-panel h2 { margin-bottom: 0.8rem; }
+.modal-panel fieldset { margin-bottom: 0.7rem; }
+.modal-panel .ordner-checkliste { max-height: 150px; }
+.modal-panel .actions {
+    position: sticky;
+    bottom: 0;
+    background: #fff;
+    border-top: 1px solid var(--rand);
+    padding: 0.8rem 0;
+    margin-top: 0.8rem;
+}

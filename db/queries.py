@@ -471,6 +471,22 @@ def hole_gepushte_vcard(conn: sqlite3.Connection, kontakt_id: int) -> "str | Non
     return row["zuletzt_gepushte_vcard"] if row else None
 
 
+def ueberwachungs_abdeckung(conn: sqlite3.Connection) -> dict:
+    """Wie viele Kontakte haben einen Vergleichsstand und werden damit auf
+    Aenderungen und Loeschungen aus Kontakte.app ueberwacht?
+
+    Sichtbar gemacht, weil das Fehlen dieses Standes eine stille Ursache ist: ohne
+    ihn wird eine in Kontakte.app geloeschte oder geaenderte Karte nicht erkannt.
+    Den Stand bekommt ein Kontakt erst beim naechsten Push - nach einem Vollabgleich
+    sind es alle."""
+    row = conn.execute(
+        "SELECT COUNT(*) AS gesamt, "
+        "SUM(CASE WHEN zuletzt_gepushte_vcard IS NOT NULL THEN 1 ELSE 0 END) AS ueberwacht "
+        "FROM kontakte"
+    ).fetchone()
+    return {"gesamt": row["gesamt"] or 0, "ueberwacht": row["ueberwacht"] or 0}
+
+
 def kontakte_mit_gepushter_vcard(conn: sqlite3.Connection) -> list:
     """Alle Kontakte, fuer die ein Vergleichsstand existiert - nur diese kommen fuer
     die Aenderungserkennung in Frage."""

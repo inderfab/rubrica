@@ -62,6 +62,31 @@ def _fremde_vcard_entfernen(vorschlag: dict) -> None:
         kontakte_app_intake.loesche_fremde_vcard(name)
 
 
+def _pseudo_kontakt(conn_ordner: list, vorschlag: dict) -> dict:
+    """Baut das Kontakt-Dict fuer das Bearbeiten-Flyover.
+
+    Bei einer Aenderung (typ == "aenderung") enthalten die rohdaten nur die
+    Gegenueberstellung, nicht den ganzen Kontakt. Hier wird deshalb der BESTEHENDE
+    Kontakt mit den neuen Werten ueberlagert - man sieht also den vollstaendigen
+    Kontakt so, wie er nach dem Uebernehmen aussaehe, und kann vor dem Speichern
+    noch etwas ergaenzen (Nutzer-Wunsch: "dort soll man den kontakt sehen mit den
+    aktuellen angaben und man kann bei bedarf noch etwas zusaetzliches aendern")."""
+    daten = vorschlag["rohdaten"]
+    if daten.get("typ") == "aenderung" and vorschlag.get("bestehender_kontakt"):
+        pseudo = dict(vorschlag["bestehender_kontakt"])
+        pseudo.update(daten.get("geaenderte_felder", {}))
+        return pseudo
+
+    gruppen_namen = set(daten.get("gruppen_als_ordner", []))
+    erkannte_ordner_ids = set(daten.get("erkannte_ordner_ids", []))
+    pseudo = dict(daten)
+    pseudo["projekte"] = [
+        {"id": o["id"]} for o in conn_ordner
+        if o["name"] in gruppen_namen or o["id"] in erkannte_ordner_ids
+    ]
+    return pseudo
+
+
 @router.get("/vorschlaege")
 def vorschlaege_seite(request: Request, meldung: str = ""):
     conn = get_connection()
@@ -85,7 +110,11 @@ def vorschlaege_pruefen():
 
 
 @router.post("/vorschlaege/{vorschlag_id}/uebernehmen")
-def vorschlag_uebernehmen(vorschlag_id: int):
+def vorschlag_uebernehmen(request: Request, vorschlag_id: int):
+    """Wird per htmx abgeschickt: fehlen Pflichtfelder, kommt statt einer Meldung
+    direkt das Bearbeiten-Flyover mit rot markierten Feldern zurueck (Nutzer-
+    Feedback - eine gruene Meldung wirkte wie eine Erfolgsmeldung). Bei Erfolg
+    sorgt HX-Redirect fuer den Seitenwechsel."""
     conn = get_connection()
     try:
         vorschlag = queries.get_vorschlag(conn, vorschlag_id)
@@ -116,16 +145,24 @@ def vorschlag_uebernehmen(vorschlag_id: int):
             # Bearbeiten-Weg validiert, der direkte Weg tat es bisher nicht.
             fehlende = _validiere_pflichtfelder(vorschlag["rohdaten"], list(ordner_ids or [])) if vorschlag else {}
             if fehlende:
-                namen = ", ".join(_PFLICHTFELD_NAMEN.get(f, f) for f in fehlende)
-                meldung = (f"Nicht übernommen – es fehlen Pflichtfelder ({namen}). "
-                           f"Bitte über „Bearbeiten“ ergänzen.")
-                return RedirectResponse(url=f"/vorschlaege?meldung={quote(meldung)}", status_code=303)
+                ordner = queries.list_projekte(conn)
+                return templates.TemplateResponse("archivio_bearbeiten_modal.html", {
+                    "request": request, "kontakt": _pseudo_kontakt(ordner, vorschlag),
+                    "ordner": ordner, "funktionen": _funktion_optionen(conn),
+                    "telefon_typen": _telefon_typ_optionen(conn),
+                    "email_typen": _email_typ_optionen(conn),
+                    "action": f"/vorschlaege/{vorschlag_id}/uebernehmen-bearbeitet",
+                    "modal": True, "zurueck_ordner_id": "", "hx_target": "mail-modal-inhalt",
+                    "fehlende_felder": fehlende, "auto_oeffnen": True,
+                })
             kontakt_id = queries.bestaetige_vorschlag(conn, vorschlag_id, ordner_ids=ordner_ids)
             radicale.push_kontakt_mit_ordnern(conn, kontakt_id)
             if vorschlag:
                 _fremde_vcard_entfernen(vorschlag)
     finally:
         conn.close()
+    if request.headers.get("HX-Request") == "true":
+        return Response(status_code=200, headers={"HX-Redirect": "/vorschlaege"})
     return RedirectResponse(url="/vorschlaege", status_code=303)
 
 
@@ -172,6 +209,8 @@ def vorschlag_bearbeiten_flyover(request: Request, vorschlag_id: int):
     conn = get_connection()
     try:
         vorschlag = queries.get_vorschlag(conn, vorschlag_id)
+        if vorschlag and vorschlag["kontakt_id"]:
+            vorschlag["bestehender_kontakt"] = queries.get_kontakt(conn, vorschlag["kontakt_id"])
         ordner = queries.list_projekte(conn)
         funktionen = _funktion_optionen(conn)
         telefon_typen = _telefon_typ_optionen(conn)
@@ -181,19 +220,14 @@ def vorschlag_bearbeiten_flyover(request: Request, vorschlag_id: int):
     if vorschlag is None:
         return Response(status_code=404)
 
-    daten = vorschlag["rohdaten"]
-    gruppen_namen = set(daten.get("gruppen_als_ordner", []))
-    erkannte_ordner_ids = set(daten.get("erkannte_ordner_ids", []))
-    pseudo_kontakt = dict(daten)
-    pseudo_kontakt["projekte"] = [
-        {"id": o["id"]} for o in ordner if o["name"] in gruppen_namen or o["id"] in erkannte_ordner_ids
-    ]
+    pseudo_kontakt = _pseudo_kontakt(conn_ordner=ordner, vorschlag=vorschlag)
 
     return templates.TemplateResponse("archivio_bearbeiten_modal.html", {
         "request": request, "kontakt": pseudo_kontakt, "ordner": ordner, "funktionen": funktionen,
         "telefon_typen": telefon_typen, "email_typen": email_typen,
         "action": f"/vorschlaege/{vorschlag_id}/uebernehmen-bearbeitet",
         "modal": True, "zurueck_ordner_id": "", "hx_target": "mail-modal-inhalt",
+        "auto_oeffnen": True,
     })
 
 
@@ -226,6 +260,18 @@ async def vorschlag_uebernehmen_bearbeitet(request: Request, vorschlag_id: int):
                 "fehlende_felder": fehlende_felder,
             })
         vorschlag = queries.get_vorschlag(conn, vorschlag_id)
+        if vorschlag and vorschlag["rohdaten"].get("typ") == "aenderung":
+            # Eine Aenderung betrifft einen bestehenden Kontakt: direkt ueberschreiben
+            # statt ueber bestaetige_vorschlag zu gehen, das nur leere Felder ergaenzt
+            # (merge_kontakt) und die Korrektur damit wirkungslos machen wuerde.
+            kontakt_id = vorschlag["kontakt_id"]
+            queries.update_kontakt(conn, kontakt_id, daten)
+            queries.set_kontakt_projekte(conn, kontakt_id, list(ordner_ids))
+            queries.set_vorschlag_status(conn, vorschlag_id, "bestaetigt")
+            radicale.push_kontakt_mit_ordnern(conn, kontakt_id)
+            if request.headers.get("HX-Request") == "true":
+                return Response(status_code=200, headers={"HX-Redirect": "/vorschlaege"})
+            return RedirectResponse(url="/vorschlaege", status_code=303)
         queries.update_vorschlag_rohdaten(conn, vorschlag_id, daten)
         kontakt_id = queries.bestaetige_vorschlag(conn, vorschlag_id, ordner_ids=list(ordner_ids))
         radicale.push_kontakt_mit_ordnern(conn, kontakt_id)

@@ -327,12 +327,13 @@ def test_unvollstaendiger_vorschlag_wird_nicht_direkt_uebernommen(tmp_db):
 
     r = _client().post(f"/vorschlaege/{vorschlag_id}/uebernehmen", follow_redirects=False)
 
-    assert r.status_code == 303
-    assert "meldung=" in r.headers["location"]
+    # Statt einer (gruen wirkenden) Meldung kommt direkt das Bearbeiten-Flyover
+    # mit rot markierten Feldern zurueck - Nutzer-Feedback.
+    assert r.status_code == 200
+    assert "Vorschlag bearbeiten" in r.text
+    assert "feld-fehler" in r.text, "fehlende Felder werden nicht rot markiert"
     assert queries.list_kontakte(tmp_db) == []
     assert queries.get_vorschlag(tmp_db, vorschlag_id)["status"] == "offen"
-    r2 = _client().get(r.headers["location"])
-    assert "Funktion" in r2.text and "Ordner" in r2.text
 
 
 def test_loeschvorschlag_uebernehmen_loescht_den_kontakt(tmp_db, monkeypatch):
@@ -373,3 +374,39 @@ def test_loeschvorschlag_behalten_stellt_wieder_her(tmp_db, monkeypatch):
 
     assert queries.get_kontakt(tmp_db, kontakt_id) is not None
     assert ("PUT", f"/a/kontakt-{kontakt_id}.vcf") in gesendet
+
+
+def test_mail_vorschlag_zeigt_ursprungstext_im_flyover(tmp_db):
+    """Nutzer-Feedback: "Bei den Vorschlägen fehlt der Textblock aus dem Mail damit
+    man das schnell selber nachführen kann." - erkennt der Parser etwas nicht, sieht
+    man den Originaltext jetzt beim Bearbeiten daneben (wie beim Archivio-Import)."""
+    vorschlag_id = queries.create_vorschlag(tmp_db, {
+        "vorname": "", "nachname": "", "telefonnummern": [], "emails": [],
+        "signatur_text": "Freundliche Grüsse\nChristoph von Arx\nbeispiel gmbh",
+        "absender_email": "mail@beispiel.ch",
+    }, quelle="mail")
+
+    r = _client().get(f"/vorschlaege/{vorschlag_id}/bearbeiten-flyover")
+
+    assert r.status_code == 200
+    assert "Christoph von Arx" in r.text
+    assert "mail@beispiel.ch" in r.text
+
+
+def test_aenderung_bearbeiten_zeigt_neue_werte(tmp_db):
+    """Vorher fuehrte "Kontakt ansehen" aus der Vorschlaege-Seite heraus und zeigte
+    den ALTEN Stand. Das Flyover zeigt den Kontakt inklusive der neuen Werte."""
+    kontakt_id = queries.create_kontakt(tmp_db, {
+        "vorname": "Anna", "nachname": "Muster", "kategorie": "Architektin",
+        "telefonnummern": [{"typ": "Direkt", "nummer": "044 111 11 11"}]})
+    vorschlag_id = queries.create_vorschlag(tmp_db, {
+        "typ": "aenderung", "vorname": "Anna", "nachname": "Muster", "firma": "",
+        "unterschiede": [{"feld": "Firma", "alt": "", "neu": "Neu AG", "wert": "Neu AG"}],
+        "geaenderte_felder": {"firma": "Neu AG"},
+    }, kontakt_id=kontakt_id, quelle="kontakte_app")
+
+    r = _client().get(f"/vorschlaege/{vorschlag_id}/bearbeiten-flyover")
+
+    assert r.status_code == 200
+    assert 'value="Neu AG"' in r.text          # neuer Wert vorbefuellt
+    assert 'value="Architektin"' in r.text     # bestehende Funktion bleibt sichtbar

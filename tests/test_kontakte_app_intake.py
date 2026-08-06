@@ -748,3 +748,61 @@ def test_umkategorisierung_ist_in_der_anzeige_erkennbar(tmp_db, monkeypatch):
     u = queries.list_vorschlaege(tmp_db, quelle="kontakte_app")[0]["rohdaten"]["unterschiede"][0]
     assert u["alt"] != u["neu"]
     assert "Direkt" in u["alt"] and "Privat" in u["neu"]
+
+
+def test_andere_schreibweise_ist_keine_aenderung(tmp_db, monkeypatch):
+    """Regression (Nutzer-Meldung): "zeigt die telefonnummer als geaendert an obwohl
+    ich daran nicht geaendert habe und es auch immer noch die gleichen zahlen sind".
+    Kontakte.app schreibt Werte in eigener Schreibweise zurueck - das darf keine
+    Aenderung ausloesen."""
+    kontakt_id = _kontakt_mit_push(tmp_db, monkeypatch)
+    basis = queries.hole_gepushte_vcard(tmp_db, kontakt_id)
+
+    # gleiche Ziffern, andere Formatierung; Mail in anderer Gross-/Kleinschreibung
+    anders = (basis.replace("+41 44 111 11 11", "+41-44-111-11-11")
+                   .replace("anna@beispiel.ch", "Anna@Beispiel.CH"))
+    assert anders != basis
+
+    _mock_client(monkeypatch, lambda r: (
+        httpx.Response(200, text=anders) if r.method == "GET" else httpx.Response(201)))
+    ergebnis = kontakte_app_intake.pruefe_kontakt_aenderungen(tmp_db)
+
+    assert ergebnis["neu"] == 0, "reine Schreibweise wurde faelschlich als Aenderung gemeldet"
+    assert queries.list_vorschlaege(tmp_db, quelle="kontakte_app") == []
+
+
+def test_echte_nummernaenderung_wird_weiterhin_erkannt(tmp_db, monkeypatch):
+    """Gegenprobe zur Normalisierung: andere Ziffern muessen weiterhin auffallen."""
+    kontakt_id = _kontakt_mit_push(tmp_db, monkeypatch)
+    anders = queries.hole_gepushte_vcard(tmp_db, kontakt_id).replace(
+        "+41 44 111 11 11", "+41 44 222 22 22")
+
+    _mock_client(monkeypatch, lambda r: (
+        httpx.Response(200, text=anders) if r.method == "GET" else httpx.Response(201)))
+
+    assert kontakte_app_intake.pruefe_kontakt_aenderungen(tmp_db)["neu"] == 1
+
+
+def test_name_mit_zusatz_wird_erkannt(tmp_db):
+    """Nutzer-Meldung am echten Beispiel: eine vollstaendige Signatur kam als
+    Mail-Vorschlag an, der Name fehlte aber komplett. Ursache war die Regel "jedes
+    Wort muss gross geschrieben sein" - "Christoph von Arx" fiel durch."""
+    from importer.signatur import parse_signatur
+    d = parse_signatur(
+        "Freundliche Grüsse\nChristoph von Arx\nDipl. Ing. Landschaftsarchitekt FH BSLA SIA\n\n"
+        "beispiel landschaftsarchitektur gmbh\nmusterplatz 1\n4500 Musterhausen\n"
+        "tel 032 111 11 11\nmail@beispiel.ch")
+    assert d["vorname"] == "Christoph"
+    assert d["nachname"] == "von Arx"     # Zusatz gehoert zum Nachnamen
+
+
+def test_ueberwachungs_abdeckung_zeigt_luecke(tmp_db, monkeypatch):
+    """Ohne Vergleichsstand bleibt eine Loeschung/Aenderung unbemerkt - das ist eine
+    stille Ursache, deshalb in den Einstellungen sichtbar gemacht."""
+    queries.create_kontakt(tmp_db, {"vorname": "Ohne", "nachname": "Push"})
+    kontakt_id = queries.create_kontakt(tmp_db, {"vorname": "Mit", "nachname": "Push"})
+    _mock_client(monkeypatch, lambda r: httpx.Response(201))
+    radicale.push_kontakt(tmp_db, kontakt_id)
+
+    a = queries.ueberwachungs_abdeckung(tmp_db)
+    assert a == {"gesamt": 2, "ueberwacht": 1}

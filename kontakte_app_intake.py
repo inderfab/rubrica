@@ -358,6 +358,30 @@ def _lesbar(feld: str, wert) -> str:
     return str(wert or "")
 
 
+def _vergleichswert(eintrag) -> str:
+    """Normalisiert einen Listeneintrag fuer den VERGLEICH (nicht fuer die Anzeige).
+
+    Kontakte.app schreibt Werte in eigener Schreibweise zurueck - eine Telefonnummer
+    kommt mit anderen Leerzeichen/Bindestrichen wieder, eine Adresse in anderer
+    Gross-/Kleinschreibung. Ohne Normalisierung meldet Rubrica dann eine Aenderung,
+    obwohl inhaltlich nichts anders ist (Nutzer-Meldung: "zeigt die telefonnummer als
+    geaendert an obwohl ich daran nicht geaendert habe"). Die Kategorie bleibt Teil
+    des Vergleichs, damit eine echte Umstellung (Direkt -> Privat) weiterhin auffaellt."""
+    if not isinstance(eintrag, dict):
+        return str(eintrag).strip().lower()
+    typ = (eintrag.get("typ") or "").strip().lower()
+    if "nummer" in eintrag:
+        return f"tel|{typ}|" + re.sub(r"\D", "", eintrag["nummer"] or "")
+    if "email" in eintrag:
+        return f"mail|{typ}|" + (eintrag["email"] or "").strip().lower()
+    if "url" in eintrag:
+        return f"url|{typ}|" + (eintrag["url"] or "").strip().lower().rstrip("/")
+    felder = ("strasse", "plz", "ort", "region", "land")
+    return f"adr|{typ}|" + "|".join(
+        " ".join(str(eintrag.get(f, "") or "").split()).lower() for f in felder
+    )
+
+
 def _feld_unterschiede(alt: dict, neu: dict) -> dict:
     """Vergleicht zwei geparste Kontakte und liefert nur die abweichenden Felder.
 
@@ -368,10 +392,12 @@ def _feld_unterschiede(alt: dict, neu: dict) -> dict:
     for feld in _VERGLEICHSFELDER:
         a, n = alt.get(feld), neu.get(feld)
         if isinstance(a, list) or isinstance(n, list):
-            # Reihenfolge ist in vCards nicht bedeutungstragend.
-            if sorted(map(str, a or [])) == sorted(map(str, n or [])):
+            # Reihenfolge ist in vCards nicht bedeutungstragend, Schreibweise ebenso
+            # wenig (siehe _vergleichswert).
+            if sorted(_vergleichswert(e) for e in (a or [])) == \
+               sorted(_vergleichswert(e) for e in (n or [])):
                 continue
-        elif (a or "") == (n or ""):
+        elif " ".join((a or "").split()) == " ".join((n or "").split()):
             continue
         unterschiede[feld] = {
             "feld": _FELD_BESCHRIFTUNG.get(feld, feld),

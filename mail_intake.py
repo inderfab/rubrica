@@ -67,6 +67,14 @@ def _text_koerper(msg: Message) -> str:
     return ""
 
 
+def _absender(msg: Message) -> str:
+    """Reine Mailadresse aus dem From-Header - oft die zuverlaessigere Quelle als
+    die Signatur selbst (siehe archivio_bearbeiten_modal.html, wo sie zum Abgleich
+    neben dem Ursprungstext angezeigt wird)."""
+    from email.utils import parseaddr
+    return parseaddr(msg.get("From") or "")[1]
+
+
 def _kandidaten_aus_nachricht(msg: Message) -> list[dict]:
     """vCard-Anhang hat Vorrang vor dem Mailtext - enthaelt eine Mail beides
     (z.B. eine Signatur unter einem geteilten Kontakt), zaehlt nur die vCard,
@@ -80,8 +88,15 @@ def _kandidaten_aus_nachricht(msg: Message) -> list[dict]:
     text = _text_koerper(msg)
     if not text.strip():
         return []
+    # Ursprungstext mitgeben (dasselbe Muster wie beim Archivio-Import, siehe
+    # archivio_bearbeiten_modal.html): erkennt der Signatur-Parser etwas nicht -
+    # zum Beispiel einen Namen in ungewohnter Schreibweise -, sieht man im
+    # Bearbeiten-Flyover den Originaltext daneben und kann es sofort nachtragen,
+    # statt in der Mail nachschlagen zu muessen (Nutzer-Feedback).
     kontakt = parse_signatur(text)
     if kontakt.get("vorname") or kontakt.get("nachname") or kontakt.get("emails"):
+        kontakt["signatur_text"] = text.strip()
+        kontakt["absender_email"] = _absender(msg)
         return [kontakt]
     return []
 

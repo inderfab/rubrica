@@ -33,8 +33,17 @@ def _ca_zertifikat_pfad() -> Path:
 
 @router.get("/einstellungen")
 def einstellungen_form(request: Request, gespeichert: str = "", sync: str = "", mail: str = "", reset: str = ""):
+    # Abdeckung der Aenderungs-/Loescherkennung sichtbar machen: fehlt einem Kontakt
+    # der Vergleichsstand, bleibt eine in Kontakte.app geloeschte oder geaenderte
+    # Karte unbemerkt - eine stille Ursache, die man sonst nicht sieht.
+    conn = get_connection()
+    try:
+        abdeckung = queries.ueberwachungs_abdeckung(conn)
+    finally:
+        conn.close()
     return templates.TemplateResponse("settings.html", {
         "request": request,
+        "abdeckung": abdeckung,
         "gespeichert": bool(gespeichert),
         "sync_ergebnis": sync,
         "mail_ergebnis": mail,

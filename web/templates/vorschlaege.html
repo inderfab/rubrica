@@ -70,9 +70,15 @@
                 <form method="post" action="/vorschlaege/{{ v.id }}/uebernehmen">
                     <button type="submit">Übernehmen</button>
                 </form>
-                {% if v.bestehender_kontakt %}
-                <a href="/kontakte/{{ v.bestehender_kontakt.id }}/bearbeiten" class="btn secondary">Kontakt ansehen</a>
-                {% endif %}
+                {# Bewusst "Bearbeiten" statt "Kontakt ansehen": Letzteres zeigte den
+                   ALTEN Stand und riss den Nutzer aus der Vorschlaege-Seite heraus.
+                   Das Flyover zeigt den Kontakt inklusive der neuen Werte. #}
+                <button type="button" class="secondary"
+                        hx-get="/vorschlaege/{{ v.id }}/bearbeiten-flyover"
+                        hx-target="#mail-modal-inhalt" hx-swap="innerHTML"
+                        onclick="rubricaMailModalOeffnen()">
+                    Bearbeiten
+                </button>
                 <form method="post" action="/vorschlaege/{{ v.id }}/ablehnen"
                       onsubmit="return confirm('Änderung verwerfen?\n\nDer bisherige Stand aus Rubrica wird auf allen Geräten wiederhergestellt.')">
                     <button type="submit" class="secondary">Verwerfen</button>
@@ -111,15 +117,19 @@
             </td>
             <td class="actions">
                 {% if v.bestehender_kontakt %}
-                <form method="post" action="/vorschlaege/{{ v.id }}/uebernehmen"
-                      onsubmit="return confirm('Möglicher Duplikat: {{ v.bestehender_kontakt.vorname }} {{ v.bestehender_kontakt.nachname }} ist bereits vorhanden. Mit diesem Kontakt zusammenführen?')">
-                    <button type="submit">Übernehmen</button>
-                </form>
+                <button type="button"
+                        hx-post="/vorschlaege/{{ v.id }}/uebernehmen"
+                        hx-target="#mail-modal-inhalt" hx-swap="innerHTML"
+                        hx-confirm="Möglicher Duplikat: {{ v.bestehender_kontakt.vorname }} {{ v.bestehender_kontakt.nachname }} ist bereits vorhanden. Mit diesem Kontakt zusammenführen?">
+                    Übernehmen
+                </button>
                 <a href="/kontakte/{{ v.bestehender_kontakt.id }}/bearbeiten" class="btn secondary">Bestehenden ansehen</a>
                 {% else %}
-                <form method="post" action="/vorschlaege/{{ v.id }}/uebernehmen">
-                    <button type="submit">Übernehmen</button>
-                </form>
+                <button type="button"
+                        hx-post="/vorschlaege/{{ v.id }}/uebernehmen"
+                        hx-target="#mail-modal-inhalt" hx-swap="innerHTML">
+                    Übernehmen
+                </button>
                 {% endif %}
                 <button type="button" class="secondary"
                         hx-get="/vorschlaege/{{ v.id }}/bearbeiten-flyover"

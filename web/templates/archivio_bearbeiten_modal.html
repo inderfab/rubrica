@@ -16,3 +16,10 @@
 {% endif %}
 
 {% include "_kontakt_bearbeiten_form.html" %}
+
+{% if auto_oeffnen %}
+{# Wird per htmx nachgeladen (Uebernehmen mit fehlenden Pflichtfeldern bzw.
+   Bearbeiten): das Modal selbst oeffnen, damit der Nutzer nicht auf eine
+   unsichtbare Antwort schaut. Idempotent - ist es bereits offen, passiert nichts. #}
+<script>if (window.rubricaMailModalOeffnen) rubricaMailModalOeffnen();</script>
+{% endif %}
