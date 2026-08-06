@@ -88,6 +88,39 @@ function addRow(containerId, kind, button) {
     row.className = spec.cls;
 
     if (spec.typInput) {
+        // Feste Auswahl statt Freitext-Combobox: bei Telefon/E-Mail soll nicht bei
+        // jeder neuen Zeile ein beliebiger Wert entstehen koennen (Nutzer-Vorgabe,
+        // siehe Migration 2026-08-06). Adresse/URL nutzen weiterhin Freitext.
+        const optionen = JSON.parse((button && button.dataset.optionen) || '[]');
+        if (spec.typInput === 'telefon_typ' || spec.typInput === 'email_typ') {
+            const auswahl = document.createElement('select');
+            auswahl.name = spec.typInput;
+            auswahl.className = 'typ-auswahl';
+            optionen.forEach(function (opt) {
+                const o = document.createElement('option');
+                o.value = opt; o.textContent = opt;
+                auswahl.appendChild(o);
+            });
+            const vorhandene = container.querySelectorAll('select[name="' + spec.typInput + '"]').length;
+            auswahl.selectedIndex = Math.min(vorhandene, Math.max(optionen.length - 1, 0));
+            row.appendChild(auswahl);
+            spec.fields.forEach(([name, placeholder, width]) => {
+                const feld = document.createElement('input');
+                feld.type = 'text';
+                feld.name = name;
+                feld.placeholder = placeholder;
+                if (width) feld.style.width = width;
+                row.appendChild(feld);
+            });
+            const weg = document.createElement('button');
+            weg.type = 'button';
+            weg.className = 'secondary';
+            weg.textContent = 'Entfernen';
+            weg.onclick = function () { row.remove(); };
+            row.appendChild(weg);
+            container.appendChild(row);
+            return;
+        }
         const wrapper = document.createElement('div');
         wrapper.className = 'combobox';
         wrapper.style.width = '8rem';
@@ -97,12 +130,6 @@ function addRow(containerId, kind, button) {
         input.className = 'combobox-input';
         input.name = spec.typInput;
         input.autocomplete = 'off';
-        // Beschriftet und vorbelegt: ein leeres erstes Feld wurde fuer das
-        // Nummernfeld gehalten und die Nummer landete in der Kategorie
-        // (Nutzer-Feedback). "Privat" als Vorgabe, weil die erste Zeile meist
-        // schon die geschaeftliche Nummer traegt.
-        input.placeholder = 'Kategorie';
-        input.value = 'Privat';
         input.addEventListener('input', rubricaComboboxInput);
         input.addEventListener('focus', rubricaComboboxInput);
         input.addEventListener('blur', rubricaComboboxBlur);
@@ -322,3 +349,34 @@ function rubricaKontakteAppImportPollen(statusUrl, knopf, ergebnis, navGuardSett
             setTimeout(() => rubricaKontakteAppImportPollen(statusUrl, knopf, ergebnis, navGuardSetter), 2000);
         });
 }
+
+// ── Telefon-/E-Mail-Zeilen bei Bedarf nachwachsen lassen ────────────────────
+// Nutzer-Vorgabe: eine Zeile als Standard; sobald sie gefuellt ist, erscheint die
+// naechste leere Zeile mit der jeweils naechsten Kategorie. Vorher standen immer
+// drei bzw. zwei leere Zeilen da, und die Kategorie war frei waehlbar - was den
+// Wildwuchs im Bestand erzeugt hat (siehe Migration 2026-08-06).
+function rubricaZeileNachwachsen(container) {
+    const optionen = JSON.parse(container.dataset.optionen || '[]');
+    if (!optionen.length) return;
+    // Wertfeld ueber den Namen suchen, nicht ueber input[type=text]: das
+    // E-Mail-Feld ist type="email" und fiel dadurch komplett durchs Raster.
+    const wertfeld = el => el.querySelector('input[name$="_nummer"], input[name$="_adresse"]');
+    const zeilen = [...container.children].filter(wertfeld);
+    if (!zeilen.length) return;
+
+    const letzte = zeilen[zeilen.length - 1];
+    const wert = wertfeld(letzte).value.trim();
+    if (!wert) return;                       // letzte Zeile noch leer -> nichts tun
+    if (zeilen.length >= optionen.length) return;  // jede Kategorie einmal reicht
+
+    const neu = letzte.cloneNode(true);
+    wertfeld(neu).value = '';
+    const auswahl = neu.querySelector('select');
+    if (auswahl) auswahl.selectedIndex = Math.min(zeilen.length, optionen.length - 1);
+    container.appendChild(neu);
+}
+
+document.addEventListener('input', function (ereignis) {
+    const container = ereignis.target.closest('#tel-rows, #mail-rows');
+    if (container) rubricaZeileNachwachsen(container);
+});

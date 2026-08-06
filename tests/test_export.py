@@ -49,12 +49,19 @@ def test_kontakte_csv_trennt_kategorien_in_eigene_spalten():
         ],
     )
     daten = generator.kontakte_csv([kontakt])
-    header, *rows = daten.decode("utf-8-sig").strip().splitlines()
-    zeile = dict(zip(header.split(";"), rows[0].split(";")))
+    # Richtig parsen statt per split(";"): eine Zelle kann mehrere Werte enthalten
+    # und wird dann korrekt gequotet - naives Splitten zerlegte genau das falsch.
+    import csv as _csv
+    import io as _io
+    zeilen = list(_csv.DictReader(_io.StringIO(daten.decode("utf-8-sig")), delimiter=";"))
+    zeile = zeilen[0]
 
-    assert zeile["Telefon Direkt"] == "052 111 11 11"
-    assert zeile["Telefon Privat"] == "079 222 22 22"
-    assert zeile["Telefon Allgemein"] == "052 333 33 33"
+    # "work" und "main" landen beide unter Direkt (Telefon kennt kein Allgemein mehr).
+    assert "052 111 11 11" in zeile["Telefon Direkt"]
+    # Mobilnummern haben seit 2026-08-06 eine eigene Spalte - eine geschaeftliche
+    # Handynummer ist nicht mehr dasselbe wie eine private.
+    assert zeile["Telefon Direkt Handy"] == "079 222 22 22"
+    assert "052 333 33 33" in zeile["Telefon Direkt"]
     assert zeile["E-Mail Direkt"] == "direkt@firma.ch"
     assert zeile["E-Mail Privat"] == "privat@example.com"
     assert zeile["Adresse Direkt"] == "Buerostrasse 1, 8000 Zuerich"
@@ -99,25 +106,33 @@ def test_bkp_zellen_text_bricht_nach_der_nummer_um():
     assert generator._bkp_zellen_text("Bauherrschaft/Kundschaft") == "Bauherrschaft/Kundschaft"
 
 
-def test_direktwahl_pdf_behandelt_mobil_als_privat():
+def test_direktwahl_pdf_zeigt_geschaeftliches_handy():
     # Mobilnummern gelten als privat (Direkt/Privat/Allgemein-Kategorisierung) -
-    # keine eigene "Mobil"-Spalte mehr, siehe web/contacts.py TELEFON_EMAIL_TYPEN.
+    # Umkehrung der frueheren Regel "Mobilnummern gelten als privat": es gibt jetzt
+    # "Direkt Handy" und "Privat Handy" (siehe web/contacts.py TELEFON_TYPEN). Eine
+    # geschaeftliche Mobilnummer gehoert auf die Projekt-Adressliste, eine private
+    # bleibt ausgeblendet.
     kontakt = _kontakt(telefonnummern=[
-        {"typ": "arbeit", "nummer": "052 123 45 67"},
-        {"typ": "mobil", "nummer": "079 123 45 67"},
+        {"typ": "Direkt", "nummer": "052 123 45 67"},
+        {"typ": "Direkt Handy", "nummer": "079 123 45 67"},
+        {"typ": "Privat Handy", "nummer": "079 999 99 99"},
     ])
-    assert generator._direktwahl_pdf(kontakt, privates_telefon_zeigen=False) == "052 123 45 67"
-    assert generator._direktwahl_pdf(kontakt, privates_telefon_zeigen=True) == "052 123 45 67<br/>079 123 45 67"
+    assert generator._direktwahl_pdf(kontakt, privates_telefon_zeigen=False) == \
+        "052 123 45 67<br/>079 123 45 67"
+    assert "079 999 99 99" in generator._direktwahl_pdf(kontakt, privates_telefon_zeigen=True)
 
 
 def test_direktwahl_pdf_erkennt_englische_apple_typen():
+    """Alt-/Rohwerte aus vCards laufen ebenfalls durch: "home" bleibt privat,
+    "cell" gilt als geschaeftliches Handy (siehe importer/vcard.py)."""
     # Reale Importe (Apple Kontakte.app) taggen meist englisch statt deutsch.
     kontakt = _kontakt(telefonnummern=[
         {"typ": "work", "nummer": "052 111 11 11"},
         {"typ": "cell", "nummer": "079 222 22 22"},
         {"typ": "home", "nummer": "052 333 33 33"},
     ])
-    assert generator._direktwahl_pdf(kontakt, privates_telefon_zeigen=False) == "052 111 11 11"
+    assert generator._direktwahl_pdf(kontakt, privates_telefon_zeigen=False) == \
+        "052 111 11 11<br/>079 222 22 22"
     assert generator._direktwahl_pdf(kontakt, privates_telefon_zeigen=True) == "052 111 11 11<br/>079 222 22 22<br/>052 333 33 33"
 
 
@@ -265,3 +280,20 @@ def test_pdf_export_ignoriert_andere_ordner_zugehoerigkeit():
         "Mein Ordner", [_kontakt(projekte=[{"id": 1, "name": "Anderer Ordner"}])]
     )
     assert daten.startswith(b"%PDF")
+
+
+def test_telefon_mit_altwert_allgemein_verschwindet_nicht_aus_csv():
+    """Regression: beim Wegfall der Spalte "Telefon Allgemein" fiel eine noch als
+    "allgemein"/"main" gefuehrte Nummer durch alle Kategorien und verschwand
+    stillschweigend aus dem Export."""
+    import csv as _csv
+    import io as _io
+    kontakt = _kontakt(telefonnummern=[{"typ": "Allgemein", "nummer": "052 999 99 99"}])
+    daten = generator.kontakte_csv([kontakt])
+    zeile = list(_csv.DictReader(_io.StringIO(daten.decode("utf-8-sig")), delimiter=";"))[0]
+    assert "052 999 99 99" in zeile["Telefon Direkt"]
+
+
+def test_privates_handy_bleibt_im_pdf_ausgeblendet():
+    kontakt = _kontakt(telefonnummern=[{"typ": "Privat Handy", "nummer": "079 999 99 99"}])
+    assert generator._direktwahl_pdf(kontakt, privates_telefon_zeigen=False) == ""

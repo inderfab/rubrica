@@ -341,3 +341,10 @@ input.gemischt::placeholder, textarea.gemischt::placeholder { color: var(--text-
     padding: 0.8rem 0;
     margin-top: 0.8rem;
 }
+
+/* Kategorie-Dropdown bei Telefon/E-Mail - feste Breite, damit die Wertfelder
+   untereinander buendig stehen. */
+.typ-auswahl {
+    width: 9.5rem;
+    flex-shrink: 0;
+}

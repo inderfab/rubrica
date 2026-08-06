@@ -48,15 +48,12 @@
 
     <fieldset class="{{ 'feld-fehler' if fehlende_felder.telefon }}">
         <legend>Telefonnummern</legend>
-        <div id="tel-rows">
+        <div id="tel-rows" data-optionen='{{ telefon_typen|tojson }}'>
             {% for t in (kontakt.telefonnummern if kontakt else []) %}
             <div class="tel-row">
-                <div class="combobox" data-optionen='{{ telefon_typen|tojson }}' style="width:8rem;">
-                    <input type="text" class="combobox-input" name="telefon_typ" autocomplete="off" placeholder="Kategorie" value="{{ t.typ }}"
-                           oninput="rubricaComboboxInput(event)" onfocus="rubricaComboboxInput(event)"
-                           onblur="rubricaComboboxBlur(event)">
-                    <ul class="combobox-liste"></ul>
-                </div>
+                <select name="telefon_typ" class="typ-auswahl">
+                    {% for opt in telefon_typen %}<option value="{{ opt }}" {{ 'selected' if t.typ == opt }}>{{ opt }}</option>{% endfor %}
+                </select>
                 <input type="text" name="telefon_nummer" value="{{ t.nummer }}" placeholder="Nummer">
                 <button type="button" class="secondary" onclick="this.parentElement.remove()">Entfernen</button>
             </div>
@@ -68,15 +65,12 @@
 
     <fieldset class="{{ 'feld-fehler' if fehlende_felder.email }}">
         <legend>E-Mails</legend>
-        <div id="mail-rows">
+        <div id="mail-rows" data-optionen='{{ email_typen|tojson }}'>
             {% for e in (kontakt.emails if kontakt else []) %}
             <div class="mail-row">
-                <div class="combobox" data-optionen='{{ email_typen|tojson }}' style="width:8rem;">
-                    <input type="text" class="combobox-input" name="email_typ" autocomplete="off" placeholder="Kategorie" value="{{ e.typ }}"
-                           oninput="rubricaComboboxInput(event)" onfocus="rubricaComboboxInput(event)"
-                           onblur="rubricaComboboxBlur(event)">
-                    <ul class="combobox-liste"></ul>
-                </div>
+                <select name="email_typ" class="typ-auswahl">
+                    {% for opt in email_typen %}<option value="{{ opt }}" {{ 'selected' if e.typ == opt }}>{{ opt }}</option>{% endfor %}
+                </select>
                 <input type="text" name="email_adresse" value="{{ e.email }}" placeholder="E-Mail">
                 <button type="button" class="secondary" onclick="this.parentElement.remove()">Entfernen</button>
             </div>

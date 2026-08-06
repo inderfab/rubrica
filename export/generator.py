@@ -18,36 +18,58 @@ from reportlab.platypus import Paragraph, SimpleDocTemplate, Table, TableStyle
 
 from sync.radicale import kontakt_zu_vcard
 
+# Telefon hat seit 2026-08-06 vier feste Kategorien (Direkt, Direkt Handy, Privat,
+# Privat Handy) und kein "Allgemein" mehr; E-Mail behaelt Direkt/Allgemein/Privat
+# (siehe web/contacts.py). Die Spalten folgen dem, damit der Export dieselbe
+# Einteilung zeigt wie die Oberflaeche.
 CSV_SPALTEN = [
     "Vorname", "Nachname", "Firma", "Funktion", "Rolle",
-    "Telefon Direkt", "Telefon Privat", "Telefon Allgemein",
+    "Telefon Direkt", "Telefon Direkt Handy", "Telefon Privat", "Telefon Privat Handy",
     "E-Mail Direkt", "E-Mail Privat", "E-Mail Allgemein",
     "Adresse Direkt", "Adresse Privat", "Adresse Allgemein",
     "Homepage", "Notizen",
 ]
 
-_PRIVAT_TYPEN = {"privat", "private", "home", "cell", "mobil", "iphone"}
+# Altwerte bleiben in der Zuordnung enthalten: der Export laeuft auch ueber Daten,
+# die (noch) nicht durch die Migration gegangen sind, etwa aus einem gerade
+# eingelesenen Vorschlag.
+_PRIVAT_TYPEN = {"privat", "private", "home", "privat handy"}
 _ALLGEMEIN_TYPEN = {"allgemein", "main"}
+_HANDY_TYPEN = {"direkt handy", "privat handy", "cell", "mobil", "mobile", "iphone", "handy", "natel"}
 
 
 def _ist_privat_typ(typ: str) -> bool:
+    """Privat = im PDF nur auf Wunsch sichtbar. "Direkt Handy" ist ausdruecklich
+    NICHT privat - eine geschaeftliche Mobilnummer gehoert auf die Adressliste."""
     return (typ or "").strip().lower() in _PRIVAT_TYPEN
 
 
 def _kategorie_von_typ(typ: str) -> str:
-    """Ordnet einen (ggf. noch nicht migrierten/alten) Typwert einer der drei
-    Kategorien zu - fuer die je Kategorie getrennten CSV-Spalten."""
+    """Ordnet einen (ggf. noch nicht migrierten/alten) Typwert einer Kategorie zu -
+    fuer die je Kategorie getrennten CSV-Spalten. Beruecksichtigt die
+    Handy-Kategorien, damit eine Mobilnummer nicht in der Festnetzspalte landet."""
     t = (typ or "").strip().lower()
-    if t in _PRIVAT_TYPEN:
-        return "Privat"
+    privat = t in _PRIVAT_TYPEN
+    handy = t in _HANDY_TYPEN
     if t in _ALLGEMEIN_TYPEN:
         return "Allgemein"
-    return "Direkt"
+    if privat:
+        return "Privat Handy" if handy else "Privat"
+    return "Direkt Handy" if handy else "Direkt"
+
+
+def _telefon_kategorie(typ: str) -> str:
+    """Telefon-Variante von _kategorie_von_typ: es gibt hier kein "Allgemein" mehr
+    (siehe web/contacts.py TELEFON_TYPEN). Ohne diese Umlenkung fiele eine noch als
+    "allgemein"/"main" gefuehrte Nummer durch alle Spalten und verschwaende
+    stillschweigend aus dem CSV."""
+    kategorie = _kategorie_von_typ(typ)
+    return "Direkt" if kategorie == "Allgemein" else kategorie
 
 
 def _telefon_kategorie_text(kontakt: dict, kategorie: str) -> str:
     return "; ".join(
-        t["nummer"] for t in kontakt.get("telefonnummern", []) if _kategorie_von_typ(t.get("typ", "")) == kategorie
+        t["nummer"] for t in kontakt.get("telefonnummern", []) if _telefon_kategorie(t.get("typ", "")) == kategorie
     )
 
 
@@ -203,8 +225,8 @@ def kontakte_csv(kontakte: list[dict]) -> bytes:
         writer.writerow([
             k.get("vorname", ""), k.get("nachname", ""), k.get("firma", ""),
             k.get("kategorie", ""), k.get("rolle", ""),
-            _telefon_kategorie_text(k, "Direkt"), _telefon_kategorie_text(k, "Privat"),
-            _telefon_kategorie_text(k, "Allgemein"),
+            _telefon_kategorie_text(k, "Direkt"), _telefon_kategorie_text(k, "Direkt Handy"),
+            _telefon_kategorie_text(k, "Privat"), _telefon_kategorie_text(k, "Privat Handy"),
             _email_kategorie_text(k, "Direkt"), _email_kategorie_text(k, "Privat"),
             _email_kategorie_text(k, "Allgemein"),
             _adresse_kategorie_text(k, "Direkt"), _adresse_kategorie_text(k, "Privat"),

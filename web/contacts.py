@@ -101,12 +101,17 @@ FUNKTIONEN = [
 # klares "gleich oder verschieden"-Konzept bei unterschiedlicher Anzahl je Kontakt).
 FELDER_MEHRFACHBEARBEITUNG = ["vorname", "nachname", "firma", "rolle", "kategorie", "notizen"]
 
-# Vordefinierte Kategorien fuer Telefonnummern/E-Mails - ersetzt die bisherigen
-# uneinheitlichen Werte (teils deutsch "arbeit"/"mobil"/"privat", teils englisch
-# aus Apple-Importen "work"/"cell"/"home"). Drei Kategorien reichen fuer den
-# Export (Direkt/Allgemein sind immer sichtbar, Privat ist optional - siehe
-# export/generator.py). Freitext bleibt ueber die Combobox weiterhin moeglich.
-TELEFON_EMAIL_TYPEN = ["Direkt", "Privat", "Allgemein"]
+# Feste Kategorien, bewusst OHNE Freitext (Nutzer-Vorgabe): vorher konnte bei jeder
+# neuen Nummer ein beliebiger Wert gewaehlt werden, wodurch im Bestand ein Wildwuchs
+# aus deutschen, englischen und selbst getippten Bezeichnungen entstand. Reihenfolge
+# ist zugleich die Vorschlagsreihenfolge beim Anlegen weiterer Zeilen.
+# Telefon kennt bewusst kein "Allgemein" mehr - eine allgemeine Nummer gehoert zum
+# Firmenkontakt und ist dort "Direkt".
+TELEFON_TYPEN = ["Direkt", "Direkt Handy", "Privat", "Privat Handy"]
+EMAIL_TYPEN = ["Direkt", "Allgemein", "Privat"]
+
+# Rueckwaertskompatibel: aeltere Stellen erwarten noch den gemeinsamen Namen.
+TELEFON_EMAIL_TYPEN = TELEFON_TYPEN
 
 
 def _funktion_optionen(conn) -> list:
@@ -120,17 +125,14 @@ def _funktion_optionen(conn) -> list:
 
 
 def _telefon_typ_optionen(conn) -> list:
-    bestehende = {
-        r["typ"] for r in conn.execute("SELECT DISTINCT typ FROM telefonnummern WHERE typ != ''")
-    }
-    return TELEFON_EMAIL_TYPEN + sorted(bestehende - set(TELEFON_EMAIL_TYPEN))
+    """Feste Liste - bewusst ohne die im Bestand vorkommenden Zusatzwerte, die es
+    frueher mit anbot und damit den Wildwuchs am Leben hielt. Altwerte sind per
+    Migration auf diese Liste abgebildet (siehe db/migrations.py)."""
+    return list(TELEFON_TYPEN)
 
 
 def _email_typ_optionen(conn) -> list:
-    bestehende = {
-        r["typ"] for r in conn.execute("SELECT DISTINCT typ FROM emails WHERE typ != ''")
-    }
-    return TELEFON_EMAIL_TYPEN + sorted(bestehende - set(TELEFON_EMAIL_TYPEN))
+    return list(EMAIL_TYPEN)
 
 
 def _parse_kontakt_form(form) -> dict:

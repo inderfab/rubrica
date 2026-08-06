@@ -12,7 +12,7 @@ def _frisches_schema_ohne_migrationen() -> sqlite3.Connection:
     return conn
 
 
-def test_migration_mappt_telefon_und_email_typen_auf_direkt_privat_allgemein():
+def test_migration_mappt_telefon_und_email_typen_auf_feste_kategorien():
     conn = _frisches_schema_ohne_migrationen()
     with conn:
         conn.execute("INSERT INTO kontakte (id, vorname, nachname) VALUES (1, 'Anna', 'Muster')")
@@ -27,12 +27,18 @@ def test_migration_mappt_telefon_und_email_typen_auf_direkt_privat_allgemein():
     migrations.run(conn)
 
     telefon_typen = {row["nummer"]: row["typ"] for row in conn.execute("SELECT nummer, typ FROM telefonnummern")}
-    assert telefon_typen["052 111 11 11"] == "Direkt"   # work
-    assert telefon_typen["079 222 22 22"] == "Privat"   # cell
-    assert telefon_typen["052 333 33 33"] == "Privat"   # home
-    assert telefon_typen["052 444 44 44"] == "Allgemein"  # main
-    assert telefon_typen["052 555 55 55"] == "Direkt"   # arbeit
-    assert telefon_typen["079 666 66 66"] == "Privat"   # mobil
+    assert telefon_typen["052 111 11 11"] == "Direkt"       # work
+    assert telefon_typen["052 555 55 55"] == "Direkt"       # arbeit
+    assert telefon_typen["052 333 33 33"] == "Privat"       # home
+    # Telefon kennt seit 2026-08-06 kein "Allgemein" mehr - eine allgemeine Nummer
+    # gehoert zum Firmenkontakt und ist dort geschaeftlich.
+    assert telefon_typen["052 444 44 44"] == "Direkt"       # main
+    # cell/mobil hatte die aeltere Migration bereits auf "Privat" gesetzt; als
+    # Schweizer Mobilnummer wird daraus "Privat Handy". Bewusst NICHT nach "Direkt
+    # Handy" umklassiert: das wuerde Nummern, die bisher als privat galten, im PDF-
+    # Export sichtbar machen (private Nummern sind dort standardmaessig ausgeblendet).
+    assert telefon_typen["079 222 22 22"] == "Privat Handy"  # cell
+    assert telefon_typen["079 666 66 66"] == "Privat Handy"  # mobil
 
     email_typen = {row["email"]: row["typ"] for row in conn.execute("SELECT email, typ FROM emails")}
     assert email_typen["a@b.ch"] == "Direkt"       # internet (Apple-generisch)

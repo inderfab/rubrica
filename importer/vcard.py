@@ -40,15 +40,36 @@ def _typ_von(prop) -> str:
 # als privat (in der Praxis meist persoenliche Nummern), unbekannte/generische
 # Typen (z.B. Apples "internet" fuer alle E-Mails) defaulten zu "Direkt"
 # (sichtbar), damit beim Import nichts faelschlich verschwindet.
+# Feste Kategorien, identisch zu web/contacts.py TELEFON_TYPEN - importierte vCards
+# muessen dieselben Werte liefern, sonst entstuende ueber den Import wieder der
+# Wildwuchs, den die Migration 2026-08-06 gerade beseitigt hat.
 _TELEFON_TYP_MAPPING = {
-    "work": "Direkt", "arbeit": "Direkt", "office": "Direkt", "main": "Allgemein",
-    "allgemein": "Allgemein", "home": "Privat", "privat": "Privat", "private": "Privat",
-    "cell": "Privat", "mobil": "Privat", "iphone": "Privat",
+    "work": "Direkt", "arbeit": "Direkt", "office": "Direkt", "main": "Direkt",
+    "allgemein": "Direkt", "voice": "Direkt",
+    "cell": "Direkt Handy", "mobil": "Direkt Handy", "mobile": "Direkt Handy",
+    "iphone": "Direkt Handy", "handy": "Direkt Handy", "natel": "Direkt Handy",
+    "home": "Privat", "privat": "Privat", "private": "Privat",
 }
 _EMAIL_TYP_MAPPING = {
-    "work": "Direkt", "arbeit": "Direkt", "internet": "Direkt", "main": "Allgemein",
-    "allgemein": "Allgemein", "home": "Privat", "privat": "Privat", "private": "Privat",
+    "work": "Direkt", "arbeit": "Direkt", "internet": "Direkt",
+    "main": "Allgemein", "allgemein": "Allgemein", "info": "Allgemein",
+    "home": "Privat", "privat": "Privat", "private": "Privat",
 }
+
+
+# Adress-Typen wurden bisher NICHT normalisiert - Rubrica schreibt TYPE=ARBEIT,
+# Apple gibt beim Zurueckschreiben type=WORK. Dadurch meldete die
+# Aenderungserkennung bei jedem Apple-Rueckschreiben eine Adressaenderung, obwohl
+# inhaltlich nichts anders war (Nutzer-Meldung). Gleiches Muster wie bei Telefon
+# und E-Mail.
+_ADRESSE_TYP_MAPPING = {
+    "work": "arbeit", "arbeit": "arbeit", "office": "arbeit", "business": "arbeit",
+    "home": "privat", "privat": "privat", "private": "privat",
+}
+
+
+def _adresse_typ_normalisieren(rohtyp: str) -> str:
+    return _ADRESSE_TYP_MAPPING.get((rohtyp or "").lower(), "arbeit")
 
 
 def _telefon_typ_normalisieren(rohtyp: str) -> str:
@@ -75,7 +96,7 @@ def _parse_kontakt(vcard) -> dict:
     ]
     adressen = [
         {
-            "typ": _typ_von(adr) or "arbeit",
+            "typ": _adresse_typ_normalisieren(_typ_von(adr)),
             "strasse": (adr.value.street or "").strip(),
             "plz": (adr.value.code or "").strip(),
             "ort": (adr.value.city or "").strip(),

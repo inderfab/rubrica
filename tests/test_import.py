@@ -93,7 +93,7 @@ def test_erneuter_import_nach_ordner_umbenennung_legt_keinen_zweiten_ordner_an(t
     assert [p["name"] for p in kontakt["projekte"]] == ["Projekt X (umbenannt)"]
 
 
-def test_parse_vcf_mappt_englische_apple_typen_auf_direkt_privat_allgemein():
+def test_parse_vcf_mappt_apple_typen_auf_die_festen_kategorien():
     vcf = textwrap.dedent("""\
         BEGIN:VCARD
         VERSION:3.0
@@ -108,8 +108,10 @@ def test_parse_vcf_mappt_englische_apple_typen_auf_direkt_privat_allgemein():
     k = parse_vcf(vcf)[0]
     telefon_typen = {t["nummer"]: t["typ"] for t in k["telefonnummern"]}
     assert telefon_typen["+41 52 111 11 11"] == "Direkt"
-    assert telefon_typen["+41 79 222 22 22"] == "Privat"
-    assert telefon_typen["+41 52 333 33 33"] == "Allgemein"
+    # CELL ist geschaeftlich, solange nichts auf privat hindeutet - Telefon kennt
+    # seit 2026-08-06 kein "Allgemein" mehr (siehe web/contacts.py TELEFON_TYPEN).
+    assert telefon_typen["+41 79 222 22 22"] == "Direkt Handy"
+    assert telefon_typen["+41 52 333 33 33"] == "Direkt"
     assert k["emails"][0]["typ"] == "Direkt"
 
 
@@ -239,7 +241,7 @@ def test_parse_vcf_extrahiert_adresse_url_notizen():
     assert len(kontakte) == 1
     k = kontakte[0]
     assert k["adressen"] == [{
-        "typ": "work", "strasse": "Musterstrasse 1", "plz": "8000",
+        "typ": "arbeit", "strasse": "Musterstrasse 1", "plz": "8000",
         "ort": "Zuerich", "region": "ZH", "land": "Schweiz",
     }]
     assert k["urls"] == [{"typ": "home", "url": "https://carla-beispiel.ch"}]

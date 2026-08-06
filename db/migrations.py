@@ -80,6 +80,43 @@ _MIGRATIONS: list[tuple[str, str]] = [
         DROP TABLE vorschlaege_alt_2026_07_31;
         """,
     ),
+    (
+        "2026-08-06_feste_telefon_email_kategorien",
+        """
+        -- Nutzer-Meldung: "zurzeit ist es ein riesiges durcheinander und jedes mal wenn
+        -- man neue nummern eingibt kann man wieder frei irgendwelche Optionen wählen."
+        -- Die Auswahl bot bisher zusaetzlich alle im Bestand vorkommenden Werte an und
+        -- hielt den Wildwuchs damit am Leben. Ab jetzt sind die Listen fest
+        -- (web/contacts.py: TELEFON_TYPEN / EMAIL_TYPEN); dieser Schritt bildet den
+        -- Altbestand darauf ab.
+        --
+        -- Handy-Erkennung vor der Grobzuordnung, sonst wuerde "cell"/"mobil" schon von
+        -- der Privat-Regel eingefangen. Schweizer Mobilvorwahlen (+41 7x / 07x) gelten
+        -- als Handy, wenn kein Label etwas anderes sagt. Fehlzuordnungen sind bewusst in
+        -- Kauf genommen und lassen sich einzeln korrigieren (Nutzer-Vorgabe).
+        UPDATE telefonnummern SET typ = 'Privat Handy'
+            WHERE lower(typ) IN ('privat handy', 'handy privat', 'mobil privat', 'privatmobil');
+        UPDATE telefonnummern SET typ = 'Direkt Handy'
+            WHERE lower(typ) IN ('cell', 'mobil', 'mobile', 'iphone', 'handy', 'natel', 'direkt handy');
+        UPDATE telefonnummern SET typ = 'Privat'
+            WHERE lower(typ) IN ('home', 'privat', 'private', 'zuhause');
+        -- Alles Uebrige (arbeit/work/main/allgemein/Freitext/leer) wird geschaeftlich.
+        UPDATE telefonnummern SET typ = 'Direkt'
+            WHERE typ NOT IN ('Direkt', 'Direkt Handy', 'Privat', 'Privat Handy');
+        -- Nachlauf: als Privat markierte Schweizer Mobilnummern sauber als Handy fuehren.
+        UPDATE telefonnummern SET typ = 'Privat Handy'
+            WHERE typ = 'Privat' AND (
+                replace(replace(nummer, ' ', ''), '-', '') LIKE '+417%'
+                OR replace(replace(nummer, ' ', ''), '-', '') LIKE '07%');
+
+        UPDATE emails SET typ = 'Privat'
+            WHERE lower(typ) IN ('home', 'privat', 'private');
+        UPDATE emails SET typ = 'Allgemein'
+            WHERE lower(typ) IN ('main', 'allgemein', 'info', 'general');
+        UPDATE emails SET typ = 'Direkt'
+            WHERE typ NOT IN ('Direkt', 'Allgemein', 'Privat');
+        """,
+    ),
 ]
 
 

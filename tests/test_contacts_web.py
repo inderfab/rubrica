@@ -468,13 +468,18 @@ def test_bulk_kategorie_umstellen_ignoriert_ungueltiges_feld(tmp_db):
     assert queries.get_kontakt(tmp_db, k1)["telefonnummern"][0]["typ"] == "Allgemein"
 
 
-def test_neuanlage_hat_kategorie_vorgaben(tmp_db):
-    """Nutzer-Feedback: die erste Spalte war leer und wurde fuer das Nummernfeld
-    gehalten - die Nummer landete in der Kategorie. Vorgabe + Beschriftung machen
-    eindeutig, welches Feld welches ist."""
+def test_neuanlage_hat_feste_kategorien_als_dropdown(tmp_db):
+    """Nutzer-Vorgabe: feste Auswahl statt Freitext, damit nicht bei jeder neuen
+    Nummer wieder ein beliebiger Wert entsteht. Eine Zeile als Standard, "Direkt"
+    vorausgewaehlt."""
     r = _client(tmp_db).get("/kontakte/neu")
     assert r.status_code == 200
-    assert 'placeholder="Kategorie"' in r.text
-    # Erste Zeile geschaeftlich, zweite privat
-    assert 'value="Direkt"' in r.text
-    assert 'value="Privat"' in r.text
+    assert 'name="telefon_typ" class="typ-auswahl"' in r.text
+    assert 'name="email_typ" class="typ-auswahl"' in r.text
+    for option in ("Direkt", "Direkt Handy", "Privat", "Privat Handy"):
+        assert f'<option value="{option}"' in r.text
+    assert 'value="Allgemein"' in r.text            # nur bei E-Mail
+    assert r.text.count('name="telefon_nummer"') == 1   # eine Zeile als Standard
+    assert r.text.count('name="email_adresse"') == 1
+    # Freitext-Combobox darf fuer diese Felder nicht mehr auftauchen
+    assert 'name="telefon_typ" autocomplete' not in r.text

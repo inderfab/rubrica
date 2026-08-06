@@ -45,33 +45,30 @@
 
 <fieldset class="{{ 'feld-fehler' if fehlende_felder.telefon }}">
     <legend>Telefon</legend>
-    {% for i in range([tels|length, 3]|max) %}
+    <div id="tel-rows" data-optionen='{{ telefon_typen|tojson }}'>
+    {% for i in range([tels|length, 1]|max) %}
     {# Vorgabe statt leerem Feld (Nutzer-Feedback): ein leeres erstes Feld wurde
        fuer das Nummernfeld gehalten, die Nummer landete in der Kategorie. #}
     {% set t = tels[i] if i < tels|length else {'typ': ('Direkt' if i == 0 else 'Privat'), 'nummer': ''} %}
     <div class="tel-row">
-        <div class="combobox" data-optionen='{{ telefon_typen|tojson }}' style="width:8rem;">
-            <input type="text" class="combobox-input" name="telefon_typ" autocomplete="off" placeholder="Kategorie" value="{{ t.typ }}"
-                   oninput="rubricaComboboxInput(event)" onfocus="rubricaComboboxInput(event)"
-                   onblur="rubricaComboboxBlur(event)">
-            <ul class="combobox-liste"></ul>
-        </div>
+        <select name="telefon_typ" class="typ-auswahl">
+            {% for opt in telefon_typen %}<option value="{{ opt }}" {{ 'selected' if t.typ == opt }}>{{ opt }}</option>{% endfor %}
+        </select>
         <input type="text" name="telefon_nummer" value="{{ t.nummer }}" placeholder="Telefonnummer">
     </div>
     {% endfor %}
+    </div>
 </fieldset>
 
 <fieldset class="{{ 'feld-fehler' if fehlende_felder.email }}">
     <legend>E-Mail</legend>
-    {% for i in range([mails|length, 2]|max) %}
+    <div id="mail-rows" data-optionen='{{ email_typen|tojson }}'>
+    {% for i in range([mails|length, 1]|max) %}
     {% set m = mails[i] if i < mails|length else {'typ': ('Direkt' if i == 0 else 'Privat'), 'email': ''} %}
     <div class="mail-row">
-        <div class="combobox" data-optionen='{{ email_typen|tojson }}' style="width:8rem;">
-            <input type="text" class="combobox-input" name="email_typ" autocomplete="off" placeholder="Kategorie" value="{{ m.typ }}"
-                   oninput="rubricaComboboxInput(event)" onfocus="rubricaComboboxInput(event)"
-                   onblur="rubricaComboboxBlur(event)">
-            <ul class="combobox-liste"></ul>
-        </div>
+        <select name="email_typ" class="typ-auswahl">
+            {% for opt in email_typen %}<option value="{{ opt }}" {{ 'selected' if m.typ == opt }}>{{ opt }}</option>{% endfor %}
+        </select>
         <input type="email" name="email_adresse" value="{{ m.email }}" placeholder="E-Mail">
     </div>
     {% endfor %}
