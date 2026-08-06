@@ -209,95 +209,8 @@ def test_einstellungen_speichern_zeigt_bestaetigung(tmp_db, monkeypatch, tmp_pat
     assert "Gespeichert" in r.text
 
 
-def test_einstellungen_speichert_firmenname(tmp_db, monkeypatch, tmp_path):
-    config_pfad = tmp_path / "config.yaml"
-    config_pfad.write_text("database:\n  path: rubrica.db\n")
-    monkeypatch.setattr(settings, "_CONFIG_PATH", config_pfad)
-    monkeypatch.setattr(settings, "_settings", {})
-
-    TestClient(app).post("/einstellungen", data={
-        "archivio_signatur_db_path": "", "archivio_min_mails": "2", "export_firmenname": "Muster Architektur AG",
-    })
-    assert settings.get("export.firmenname") == "Muster Architektur AG"
-
-
-def test_einstellungen_speichert_export_checkboxen(tmp_db, monkeypatch, tmp_path):
-    config_pfad = tmp_path / "config.yaml"
-    config_pfad.write_text("database:\n  path: rubrica.db\n")
-    monkeypatch.setattr(settings, "_CONFIG_PATH", config_pfad)
-    monkeypatch.setattr(settings, "_settings", {})
-
-    client = TestClient(app)
-    # Checkboxen aktiviert (HTML-Formulare senden nur angehakte Checkboxen mit)
-    client.post("/einstellungen", data={
-        "archivio_signatur_db_path": "", "archivio_min_mails": "2",
-        "privates_telefon_zeigen": "on", "private_email_zeigen": "on", "privatadresse_zeigen": "on",
-    })
-    assert settings.get("export.privates_telefon_zeigen") is True
-    assert settings.get("export.private_email_zeigen") is True
-    assert settings.get("export.privatadresse_zeigen") is True
-
-    # Nicht angehakt -> muss auf False zurueckgesetzt werden (nicht einfach fehlen)
-    client.post("/einstellungen", data={"archivio_signatur_db_path": "", "archivio_min_mails": "2"})
-    assert settings.get("export.privates_telefon_zeigen") is False
-
-
-def test_einstellungen_formular_zeigt_checkbox_status(tmp_db, monkeypatch):
-    monkeypatch.setattr(settings, "_settings", {"export": {"privates_telefon_zeigen": True}})
-    r = TestClient(app).get("/einstellungen")
-    assert r.status_code == 200
-    # Nur die aktivierte Checkbox soll "checked" haben
-    abschnitt = r.text.split('name="privates_telefon_zeigen"')[1][:20]
-    assert "checked" in abschnitt
-
-
-def test_logo_upload_wird_gespeichert_und_ausgeliefert(tmp_db, monkeypatch, tmp_path):
-    config_pfad = tmp_path / "config.yaml"
-    config_pfad.write_text("database:\n  path: rubrica.db\n")
-    monkeypatch.setattr(settings, "_CONFIG_PATH", config_pfad)
-    monkeypatch.setattr(settings, "_settings", {})
-
-    client = TestClient(app)
-    bild_bytes = b"\x89PNG\r\n\x1a\n" + b"fake-png-inhalt"
-    r = client.post("/einstellungen", data={"archivio_signatur_db_path": "", "archivio_min_mails": "2"},
-                    files={"logo": ("mein-logo.png", bild_bytes, "image/png")}, follow_redirects=False)
-    assert r.status_code == 303
-
-    r = client.get("/einstellungen")
-    assert 'src="/einstellungen/logo"' in r.text
-
-    r = client.get("/einstellungen/logo")
-    assert r.status_code == 200
-    assert r.content == bild_bytes
-
-
-def test_logo_upload_lehnt_unerlaubte_dateiendung_ab(tmp_db, monkeypatch, tmp_path):
-    config_pfad = tmp_path / "config.yaml"
-    config_pfad.write_text("database:\n  path: rubrica.db\n")
-    monkeypatch.setattr(settings, "_CONFIG_PATH", config_pfad)
-    monkeypatch.setattr(settings, "_settings", {})
-
-    client = TestClient(app)
-    client.post("/einstellungen", data={"archivio_signatur_db_path": "", "archivio_min_mails": "2"},
-                files={"logo": ("script.exe", b"nicht ein bild", "application/octet-stream")})
-
-    r = client.get("/einstellungen/logo")
-    assert r.status_code == 404
-
-
-def test_logo_entfernen(tmp_db, monkeypatch, tmp_path):
-    config_pfad = tmp_path / "config.yaml"
-    config_pfad.write_text("database:\n  path: rubrica.db\n")
-    monkeypatch.setattr(settings, "_CONFIG_PATH", config_pfad)
-    monkeypatch.setattr(settings, "_settings", {})
-
-    client = TestClient(app)
-    client.post("/einstellungen", data={"archivio_signatur_db_path": "", "archivio_min_mails": "2"},
-                files={"logo": ("logo.png", b"echtbild", "image/png")})
-    assert client.get("/einstellungen/logo").status_code == 200
-
-    client.post("/einstellungen/logo/entfernen")
-    assert client.get("/einstellungen/logo").status_code == 404
+# Logo und Export-Darstellung liegen seit 2026-08-06 auf der Export-Seite -
+# die zugehoerigen Tests stehen in tests/test_export.py.
 
 
 # ── Kategorien fuer Telefon/E-Mail ────────────────────────────────────────────
@@ -409,3 +322,31 @@ def test_kontaktformular_behaelt_nicht_konfigurierten_bestandswert(tmp_db):
     r = TestClient(app).get(f"/kontakte/{kontakt_id}/bearbeiten")
     assert r.status_code == 200
     assert '<option value="Zentrale" selected>' in r.text
+
+
+def test_carddav_felder_haengen_am_einstellungen_formular(tmp_db):
+    """Der CardDAV-Block steht ueber dem Speichern-Formular und ist per
+    form="einstellungen-form" damit verbunden. Ohne diese Verknuepfung wuerde das
+    Feld beim Speichern fehlen - und die Route setzt ein fehlendes Passwort auf
+    leer, womit sich jede Station stillschweigend nicht mehr anmelden koennte."""
+    r = TestClient(app).get("/einstellungen")
+    assert r.status_code == 200
+    for feld in ("radicale_password", "radicale_base_url"):
+        block = r.text.split(f'name="{feld}"')[0].rsplit("<input", 1)[1] + \
+                r.text.split(f'name="{feld}"')[1].split(">")[0]
+        assert 'form="einstellungen-form"' in block, feld
+
+
+def test_einstellungen_speichern_laesst_export_werte_unberuehrt(tmp_db, monkeypatch, tmp_path):
+    """Gegenstueck zum Test auf der Export-Seite: die Export-Felder stehen nicht
+    mehr in diesem Formular und duerfen von hier aus nicht geleert werden."""
+    config_pfad = tmp_path / "config.yaml"
+    config_pfad.write_text("database:\n  path: rubrica.db\n")
+    monkeypatch.setattr(settings, "_CONFIG_PATH", config_pfad)
+    monkeypatch.setattr(settings, "_settings", {})
+    settings.save({"export": {"firmenname": "Muster AG", "privates_telefon_zeigen": True}})
+
+    TestClient(app).post("/einstellungen", data={"archivio_signatur_db_path": "", "archivio_min_mails": "2"})
+
+    assert settings.get("export.firmenname") == "Muster AG"
+    assert settings.get("export.privates_telefon_zeigen") is True

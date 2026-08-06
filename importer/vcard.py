@@ -8,6 +8,7 @@ import sqlite3
 
 import vobject
 
+from config import settings
 from db import queries
 
 
@@ -27,11 +28,54 @@ def _parse_name(vcard) -> tuple[str, str]:
     return "", ""
 
 
+# "internet", "pref", "voice" und "other" sagen nichts ueber geschaeftlich/privat
+# aus - sie stehen bei Apple regelmaessig VOR dem aussagekraeftigen Typ.
+_GENERISCHE_TYPEN = {"internet", "pref", "voice", "other", "x-other"}
+
+
 def _typ_von(prop) -> str:
-    typ = getattr(prop, "type_param", None)
-    if isinstance(typ, list):
-        typ = typ[0] if typ else None
-    return (typ or "").lower()
+    """Der aussagekraeftigste TYPE-Parameter einer Eigenschaft.
+
+    Bewusst nicht einfach der erste: Apple schreibt private Adressen als
+    `EMAIL;type=INTERNET;type=HOME`. Wer nur den ersten nimmt, sieht "internet",
+    mappt auf "Direkt" - und eine private Adresse landet damit auf der
+    Adressliste, die aus dem Haus geht. Gleiches Muster bei
+    `TEL;type=pref;type=HOME`."""
+    typen = prop.params.get("TYPE") if hasattr(prop, "params") else None
+    if not typen:
+        typ = getattr(prop, "type_param", None)
+        typen = typ if isinstance(typ, list) else ([typ] if typ else [])
+    typen = [str(t).strip().lower() for t in typen if str(t).strip()]
+    for t in typen:
+        if t not in _GENERISCHE_TYPEN:
+            return t
+    return typen[0] if typen else ""
+
+
+# Selbst vergebene Bezeichnungen ("Sekretariat", "Direktwahl") legt Kontakte.app
+# nicht als TYPE ab, sondern als gruppierte X-ABLabel-Zeile:
+#     item1.TEL;type=pref:+41 44 111 11 11
+#     item1.X-ABLabel:Sekretariat
+# Die Standardbezeichnungen kommen dort in Apples eigener Schreibweise
+# (`_$!<Work>!$_`) und werden auf den blossen Begriff zurueckgefuehrt.
+_APPLE_LABEL_MUSTER = re.compile(r"^_\$!<(.+)>!\$_$")
+
+
+def _ab_labels(vcard) -> dict:
+    labels = {}
+    for kind in vcard.getChildren():
+        if kind.name.upper() == "X-ABLABEL" and getattr(kind, "group", None):
+            labels[kind.group.lower()] = (kind.value or "").strip()
+    return labels
+
+
+def _eigenes_label(prop, labels: dict) -> str:
+    gruppe = getattr(prop, "group", None)
+    if not gruppe:
+        return ""
+    roh = labels.get(gruppe.lower(), "")
+    treffer = _APPLE_LABEL_MUSTER.match(roh)
+    return treffer.group(1).strip() if treffer else roh
 
 
 # vCard-Importe (v.a. aus Apple Kontakte.app) taggen Telefonnummern/E-Mails
@@ -72,12 +116,36 @@ def _adresse_typ_normalisieren(rohtyp: str) -> str:
     return _ADRESSE_TYP_MAPPING.get((rohtyp or "").lower(), "arbeit")
 
 
-def _telefon_typ_normalisieren(rohtyp: str) -> str:
-    return _TELEFON_TYP_MAPPING.get(rohtyp.lower(), "Direkt")
+def _bekannte_schreibweise(label: str, konfigurierte: list) -> str:
+    """Uebernimmt die in Rubrica konfigurierte Schreibweise, wenn es die Kategorie
+    dort schon gibt - "sekretariat" aus Kontakte.app soll nicht neben einem bereits
+    vorhandenen "Sekretariat" als zweiter Wert stehen."""
+    for kategorie in konfigurierte:
+        if kategorie.lower() == label.lower():
+            return kategorie
+    return label
 
 
-def _email_typ_normalisieren(rohtyp: str) -> str:
-    return _EMAIL_TYP_MAPPING.get(rohtyp.lower(), "Direkt")
+def _typ_normalisieren(rohtyp: str, label: str, mapping: dict, konfigurierte: list) -> str:
+    """Ein TYPE-Parameter ist eine technische vCard-Angabe und wird auf unsere
+    Kategorien abgebildet. Eine selbst vergebene Bezeichnung (X-ABLabel) sind
+    dagegen die Worte des Nutzers und bleiben erhalten - sonst faellt in
+    Kontakte.app vergebenes "Sekretariat" stillschweigend auf "Direkt" zurueck und
+    die Information ist weg. Als eigener Wert taucht sie stattdessen unter
+    /einstellungen/kategorien auf und laesst sich dort einsortieren."""
+    if label:
+        if label.lower() in mapping:
+            return mapping[label.lower()]
+        return _bekannte_schreibweise(label, konfigurierte)
+    return mapping.get((rohtyp or "").lower(), "Direkt")
+
+
+def _telefon_typ_normalisieren(rohtyp: str, label: str = "") -> str:
+    return _typ_normalisieren(rohtyp, label, _TELEFON_TYP_MAPPING, settings.telefon_typen())
+
+
+def _email_typ_normalisieren(rohtyp: str, label: str = "") -> str:
+    return _typ_normalisieren(rohtyp, label, _EMAIL_TYP_MAPPING, settings.email_typen())
 
 
 def _parse_kontakt(vcard) -> dict:
@@ -86,12 +154,15 @@ def _parse_kontakt(vcard) -> dict:
     rolle = vcard.title.value if hasattr(vcard, "title") else ""
     apple_uid = vcard.uid.value if hasattr(vcard, "uid") else None
 
+    labels = _ab_labels(vcard)
     telefonnummern = [
-        {"typ": _telefon_typ_normalisieren(_typ_von(tel)), "nummer": tel.value.strip()}
+        {"typ": _telefon_typ_normalisieren(_typ_von(tel), _eigenes_label(tel, labels)),
+         "nummer": tel.value.strip()}
         for tel in _values(vcard, "tel") if tel.value and tel.value.strip()
     ]
     emails = [
-        {"typ": _email_typ_normalisieren(_typ_von(mail)), "email": mail.value.strip()}
+        {"typ": _email_typ_normalisieren(_typ_von(mail), _eigenes_label(mail, labels)),
+         "email": mail.value.strip()}
         for mail in _values(vcard, "email") if mail.value and mail.value.strip()
     ]
     adressen = [

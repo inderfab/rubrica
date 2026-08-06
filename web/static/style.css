@@ -388,10 +388,33 @@ input.gemischt::placeholder, textarea.gemischt::placeholder { color: var(--text-
 .kategorie-zeile .kategorie-anzahl { width: 7rem; font-size: 0.8rem; color: var(--text-hell); text-align: right; }
 .kategorie-zeile button { padding: 0.3rem 0.55rem; line-height: 1; }
 
-/* Signaturblock einklappbar - nimmt so nicht mehr die erste Bildschirmhoehe ein. */
-.signatur-block { border: 1px solid var(--rand); border-radius: 8px; padding: 0.5rem 0.8rem; margin-bottom: 0.7rem; }
-.signatur-block summary { font-weight: 600; cursor: pointer; font-size: 0.9rem; }
-.signatur-block[open] summary { margin-bottom: 0.5rem; }
+/* Einklappbare Bloecke (Signaturimport, Einstellungs-Abschnitte). Aufgeklappt
+   sieht ein Block aus wie das bisherige <fieldset>, zugeklappt ist er eine Zeile -
+   die Einstellungsseite passt so auf einen Bildschirm (Nutzer-Vorgabe). */
+.signatur-block, .einstell-block {
+    border: 1px solid var(--rand);
+    border-radius: 8px;
+    padding: 0.5rem 0.8rem;
+    margin-bottom: 0.7rem;
+}
+.signatur-block summary, .einstell-block summary { font-weight: 600; cursor: pointer; font-size: 0.9rem; }
+.signatur-block[open] summary, .einstell-block[open] summary {
+    margin-bottom: 0.6rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--rand);
+}
+.einstell-block .field { margin-bottom: 0.5rem; }
+.einstell-block input[type="text"], .einstell-block input[type="email"] { width: 100%; }
+.einstell-block .grid-2 { gap: 0.5rem 0.75rem; }
+.einstell-block fieldset { margin: 0.6rem 0 0; padding: 0.5rem 0.8rem 0.7rem; }
+.einstell-block.gefahr { border-color: var(--gefahr); }
+.einstell-block.gefahr summary { color: var(--gefahr); }
+
+/* Ankreuzfeld mit Beschriftung daneben statt darueber (Vorgabe von label{display:block}) */
+label.ankreuz { display: flex; align-items: center; gap: 0.4rem; font-size: 0.9rem; color: var(--text); margin-bottom: 0.35rem; }
+
+/* Verweise auf die Unterseiten der Verwaltung - kompakte Zeile statt je ein Absatz */
+.verwaltungs-links { display: flex; flex-wrap: wrap; gap: 0.4rem 1.2rem; margin: 0.9rem 0 1.1rem; font-size: 0.9rem; }
 
 /* Unter ~900px Fensterbreite (schmales Fenster, iPad) wieder untereinander -
    zwei Spalten mit Kategorie-Dropdown plus Wertfeld werden sonst zu eng. */

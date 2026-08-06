@@ -18,7 +18,7 @@ from config import settings
 from db.connection import get_connection
 from sync import radicale
 from web import import_status
-from web.settings import LOGO_ERLAUBTE_ENDUNGEN, _logo_entfernen
+from web.export import LOGO_ERLAUBTE_ENDUNGEN, _logo_entfernen
 from web.shared import _hostname_local, _ist_lokale_maschine, templates
 
 router = APIRouter()

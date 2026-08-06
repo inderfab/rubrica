@@ -2,15 +2,15 @@
 {% block title %}Export – Rubrica{% endblock %}
 {% block content %}
 <h1>Export</h1>
-<p class="empty">
-    Kontaktliste eines Ordners als formatierte PDF-Liste, Excel-Tabelle (CSV) und/oder
-    vCard-Datei zum direkten Import in Kontakte.app exportieren.
-</p>
 
+{% if gespeichert %}
+<p style="color:#1a7f37; padding:0.5rem 0">Gespeichert.</p>
+{% endif %}
 {% if fehler == "formate" %}
 <p class="fehler">Bitte mindestens ein Format auswählen.</p>
 {% endif %}
 
+<div class="formular-schmal">
 <form method="post" action="/export">
     <div class="field">
         <label>Ordner</label>
@@ -37,4 +37,54 @@
 
     <button type="submit">Exportieren</button>
 </form>
+
+{# Darstellung des PDF-Exports: steht hier statt unter /einstellungen
+   (Nutzer-Vorgabe) - die Werte wirken sich ausschliesslich auf diesen Export aus. #}
+<details class="einstell-block" style="margin-top:1.2rem">
+    <summary>Darstellung der PDF-Liste</summary>
+    <form method="post" action="/export/einstellungen" enctype="multipart/form-data">
+        <p class="empty" style="padding:0 0 0.5rem">
+            Firmenname und Logo erscheinen im Kopf jeder PDF-Liste; der Ordnername bleibt deren Titel.
+        </p>
+        <div class="field">
+            <label>Firmenname</label>
+            <input type="text" name="export_firmenname" value="{{ export_firmenname }}"
+                   placeholder="z. B. Muster Architektur AG">
+        </div>
+        <div class="field">
+            <label>Logo <span style="color:#86868b">(PNG, JPG, GIF)</span></label><br>
+            {% if logo_vorhanden %}
+            <img src="/export/logo" alt="Aktuelles Logo" style="max-height:60px; display:block; margin-bottom:0.5rem;">
+            {% endif %}
+            <input type="file" name="logo" accept=".png,.jpg,.jpeg,.gif">
+            {% if logo_vorhanden %}
+            <button type="submit" formaction="/export/logo/entfernen" class="secondary" style="margin-top:0.4rem">
+                Logo entfernen
+            </button>
+            {% endif %}
+        </div>
+
+        <fieldset>
+            <legend>Sichtbare Felder</legend>
+            <p class="empty" style="padding:0 0 0.5rem">
+                Als privat kategorisierte Angaben erscheinen nur, wenn hier aktiviert.
+            </p>
+            <label class="ankreuz">
+                <input type="checkbox" name="privates_telefon_zeigen" {% if privates_telefon_zeigen %}checked{% endif %}>
+                Private Telefonnummer
+            </label>
+            <label class="ankreuz">
+                <input type="checkbox" name="private_email_zeigen" {% if private_email_zeigen %}checked{% endif %}>
+                Private E-Mail-Adresse
+            </label>
+            <label class="ankreuz">
+                <input type="checkbox" name="privatadresse_zeigen" {% if privatadresse_zeigen %}checked{% endif %}>
+                Privatadresse
+            </label>
+        </fieldset>
+
+        <button type="submit">Speichern</button>
+    </form>
+</details>
+</div>
 {% endblock %}

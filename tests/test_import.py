@@ -334,3 +334,48 @@ def test_list_import_zusammenfuehrungen_zeigt_nur_gemergte_dubletten(tmp_db):
     assert len(zusammenfuehrungen) == 1
     assert zusammenfuehrungen[0]["rohdaten"]["emails"][0]["email"] == "peter@beispiel.ch"
     assert zusammenfuehrungen[0]["bestehender_kontakt"]["nachname"] == "Kunz"
+
+
+# ── Bezeichnungen aus Kontakte.app ────────────────────────────────────────────
+
+def _karte(zeilen: str) -> dict:
+    import vobject
+    from importer import vcard
+    return vcard._parse_kontakt(vobject.readOne(
+        "BEGIN:VCARD\r\nVERSION:3.0\r\nN:Muster;Anna;;;\r\nFN:Anna Muster\r\n"
+        + zeilen + "END:VCARD\r\n"
+    ))
+
+
+def test_private_email_aus_kontakte_app_bleibt_privat(tmp_db):
+    """Regression: Apple schreibt `EMAIL;type=INTERNET;type=HOME`. Wer nur den
+    ersten TYPE liest, sieht "internet", mappt auf "Direkt" - und die private
+    Adresse steht damit auf der Adressliste, die aus dem Haus geht."""
+    kontakt = _karte("EMAIL;type=INTERNET;type=HOME:privat@beispiel.ch\r\n")
+    assert kontakt["emails"][0]["typ"] == "Privat"
+
+
+def test_privatnummer_hinter_pref_bleibt_privat(tmp_db):
+    kontakt = _karte("TEL;type=pref;type=HOME:+41 44 444 44 44\r\n")
+    assert kontakt["telefonnummern"][0]["typ"] == "Privat"
+
+
+def test_eigene_bezeichnung_aus_kontakte_app_bleibt_erhalten(tmp_db):
+    """Eine selbst vergebene Bezeichnung sind die Worte des Nutzers - sie wird als
+    eigene Kategorie uebernommen statt still auf "Direkt" zu fallen. Einsortieren
+    laesst sie sich danach unter /einstellungen/kategorien."""
+    kontakt = _karte("item1.TEL;type=pref:+41 44 111 11 11\r\nitem1.X-ABLabel:Sekretariat\r\n")
+    assert kontakt["telefonnummern"][0]["typ"] == "Sekretariat"
+
+
+def test_apple_standardbezeichnung_wird_zugeordnet(tmp_db):
+    """Apples eigene Schreibweise fuer Standardbezeichnungen (`_$!<Work>!$_`) darf
+    nicht als eigene Kategorie durchgehen."""
+    kontakt = _karte("item1.TEL:+41 44 222 22 22\r\nitem1.X-ABLabel:_$!<Work>!$_\r\n")
+    assert kontakt["telefonnummern"][0]["typ"] == "Direkt"
+
+
+def test_eigene_bezeichnung_uebernimmt_bestehende_schreibweise(tmp_db, monkeypatch):
+    """Damit "direkt" aus Kontakte.app nicht als zweiter Wert neben "Direkt" steht."""
+    kontakt = _karte("item1.TEL:+41 44 222 22 22\r\nitem1.X-ABLabel:pRIVAT hANDY\r\n")
+    assert kontakt["telefonnummern"][0]["typ"] == "Privat Handy"

@@ -320,3 +320,87 @@ def test_unbekannte_kategorie_verschwindet_nicht_aus_dem_csv():
                "emails": [], "adressen": [], "urls": []}
     csv_text = generator.kontakte_csv([kontakt]).decode("utf-8-sig")
     assert "044 111 11 11" in csv_text
+
+
+# ── Darstellungs-Einstellungen (von /einstellungen hierher gezogen) ───────────
+# Firmenname, Logo und die sichtbaren Felder wirken sich ausschliesslich auf den
+# PDF-Export aus und stehen deshalb auf dieser Seite (Nutzer-Vorgabe).
+
+def _leere_config(monkeypatch, tmp_path):
+    config_pfad = tmp_path / "config.yaml"
+    config_pfad.write_text("database:\n  path: rubrica.db\n")
+    monkeypatch.setattr(settings, "_CONFIG_PATH", config_pfad)
+    monkeypatch.setattr(settings, "_settings", {})
+
+
+def test_export_speichert_firmenname(tmp_db, monkeypatch, tmp_path):
+    _leere_config(monkeypatch, tmp_path)
+    TestClient(app).post("/export/einstellungen", data={"export_firmenname": "Muster Architektur AG"})
+    assert settings.get("export.firmenname") == "Muster Architektur AG"
+
+
+def test_export_einstellungen_lassen_andere_abschnitte_unberuehrt(tmp_db, monkeypatch, tmp_path):
+    """Regression: die allgemeine Einstellungen-Route speichert saemtliche
+    Abschnitte auf einmal. Waeren die Export-Felder weiterhin Teil davon (oder
+    umgekehrt), wuerde das Speichern hier die Mail-Zugangsdaten leeren."""
+    _leere_config(monkeypatch, tmp_path)
+    settings.save({"mail": {"host": "imap.beispiel.ch", "username": "rubrica@beispiel.ch"}})
+
+    TestClient(app).post("/export/einstellungen", data={"export_firmenname": "Muster AG"})
+
+    assert settings.get("mail.host") == "imap.beispiel.ch"
+    assert settings.get("mail.username") == "rubrica@beispiel.ch"
+
+
+def test_export_speichert_sichtbare_felder(tmp_db, monkeypatch, tmp_path):
+    _leere_config(monkeypatch, tmp_path)
+    client = TestClient(app)
+    client.post("/export/einstellungen", data={
+        "privates_telefon_zeigen": "on", "private_email_zeigen": "on", "privatadresse_zeigen": "on",
+    })
+    assert settings.get("export.privates_telefon_zeigen") is True
+    assert settings.get("export.private_email_zeigen") is True
+    assert settings.get("export.privatadresse_zeigen") is True
+
+    # Nicht angehakt -> muss auf False zurueckgesetzt werden (nicht einfach fehlen)
+    client.post("/export/einstellungen", data={})
+    assert settings.get("export.privates_telefon_zeigen") is False
+
+
+def test_export_seite_zeigt_checkbox_status(tmp_db, monkeypatch):
+    monkeypatch.setattr(settings, "_settings", {"export": {"privates_telefon_zeigen": True}})
+    r = TestClient(app).get("/export")
+    assert r.status_code == 200
+    assert "checked" in r.text.split('name="privates_telefon_zeigen"')[1][:20]
+
+
+def test_logo_upload_wird_gespeichert_und_ausgeliefert(tmp_db, monkeypatch, tmp_path):
+    _leere_config(monkeypatch, tmp_path)
+    client = TestClient(app)
+    bild_bytes = b"\x89PNG\r\n\x1a\n" + b"fake-png-inhalt"
+    r = client.post("/export/einstellungen", data={},
+                    files={"logo": ("mein-logo.png", bild_bytes, "image/png")}, follow_redirects=False)
+    assert r.status_code == 303
+
+    assert 'src="/export/logo"' in client.get("/export").text
+    r = client.get("/export/logo")
+    assert r.status_code == 200
+    assert r.content == bild_bytes
+
+
+def test_logo_upload_lehnt_unerlaubte_endung_ab(tmp_db, monkeypatch, tmp_path):
+    _leere_config(monkeypatch, tmp_path)
+    client = TestClient(app)
+    client.post("/export/einstellungen", data={},
+                files={"logo": ("script.exe", b"nicht ein bild", "application/octet-stream")})
+    assert client.get("/export/logo").status_code == 404
+
+
+def test_logo_entfernen(tmp_db, monkeypatch, tmp_path):
+    _leere_config(monkeypatch, tmp_path)
+    client = TestClient(app)
+    client.post("/export/einstellungen", data={}, files={"logo": ("logo.png", b"echtbild", "image/png")})
+    assert client.get("/export/logo").status_code == 200
+
+    client.post("/export/logo/entfernen")
+    assert client.get("/export/logo").status_code == 404

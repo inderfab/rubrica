@@ -16,25 +16,25 @@
 <p style="color:#1a7f37; padding:0.5rem 0">{{ reset_ergebnis }}</p>
 {% endif %}
 
-{# Bewusst ganz oben und optisch hervorgehoben (Nutzer-Vorgabe): der Knopf ist die
-   erste Massnahme, wenn etwas nicht angekommen ist, und wurde weiter unten im
-   CardDAV-Block regelmaessig uebersehen. #}
+<div class="formular-schmal">
+
+{# Ganz oben und hervorgehoben (Nutzer-Vorgabe): erste Massnahme, wenn etwas nicht
+   angekommen ist - weiter unten wurde der Knopf regelmaessig uebersehen. #}
 <div class="sync-panel">
     <div class="sync-panel-text">
         <strong>Jetzt alles neu synchronisieren</strong>
         <span>
-            Liest zuerst Änderungen aus Kontakte.app ein und gleicht danach alle Kontakte und Ordner erneut
-            ab – inklusive Entfernen verwaister Einträge. Erste Massnahme, wenn etwas nicht angekommen ist.
-            Bei grossem Bestand dauert das einige Minuten.
+            Liest Änderungen aus Kontakte.app ein und gleicht danach alles neu ab. Dauert bei grossem
+            Bestand einige Minuten.
         </span>
         {% if abdeckung and abdeckung.gesamt %}
         <span style="display:block; margin-top:0.4rem; font-size:0.85rem;
                      color:{{ '#a15c00' if abdeckung.ueberwacht < abdeckung.gesamt else '#1a7f37' }}">
             {% if abdeckung.ueberwacht < abdeckung.gesamt %}
             ⚠ Nur {{ abdeckung.ueberwacht }} von {{ abdeckung.gesamt }} Kontakten werden auf Änderungen und
-            Löschungen aus Kontakte.app überwacht. Ein Durchlauf hier setzt das für alle in Gang.
+            Löschungen aus Kontakte.app überwacht. Ein Durchlauf setzt das für alle in Gang.
             {% else %}
-            ✓ Alle {{ abdeckung.gesamt }} Kontakte werden auf Änderungen und Löschungen aus Kontakte.app überwacht.
+            ✓ Alle {{ abdeckung.gesamt }} Kontakte werden auf Änderungen und Löschungen überwacht.
             {% endif %}
         </span>
         {% endif %}
@@ -44,215 +44,150 @@
     </form>
 </div>
 
-<p class="empty">
-    <a href="/einstellungen/funktionen-rollen">Funktion &amp; Rolle verwalten (Tippfehler korrigieren, umbenennen, zusammenführen) →</a>
-</p>
-<p class="empty">
-    <a href="/einstellungen/kategorien">Kategorien für Telefon &amp; E-Mail verwalten (Auswahl im Kontaktformular) →</a>
-</p>
-<p class="empty">
-    <a href="/setup/1">Einrichtungsassistenten erneut öffnen →</a>
-    (nur direkt auf diesem Rechner - bestehende Kontakte bleiben unberührt)
-</p>
-
-<form method="post" action="/einstellungen" enctype="multipart/form-data">
-    <fieldset>
-        <legend>Export</legend>
-        <p class="empty" style="padding:0 0 0.5rem">
-            Firmenname und Logo erscheinen im Kopf der PDF-Adresslisten (Export einzelner Ordner). Der
-            Ordnername bleibt der Titel der jeweiligen Liste (z. B. Projektname).
-        </p>
+{# Zugangsdaten fuer eine neue Station: der zweithaeufigste Grund, hier zu sein
+   (Nutzer-Vorgabe), deshalb offen und direkt unter dem Sync-Knopf. #}
+<details class="einstell-block" open>
+    <summary>Apple Kontakte einrichten (CardDAV)</summary>
+    <p class="empty" style="padding:0 0 0.6rem">
+        Kontakte.app → Accounts → CardDAV-Account, Modus „Manuell“ – nur den Server unten eintragen,
+        ohne Port und ohne Pfad.
+    </p>
+    <div class="grid-2">
         <div class="field">
-            <label>Firmenname</label>
-            <input type="text" name="export_firmenname" value="{{ export_firmenname }}"
-                   placeholder="z. B. Muster Architektur AG" style="width:100%">
+            <label>Server</label>
+            <input type="text" value="{{ radicale_hostname }}" readonly onclick="this.select()">
         </div>
         <div class="field">
-            <label>Logo</label><br>
-            {% if logo_vorhanden %}
-            <img src="/einstellungen/logo" alt="Aktuelles Logo" style="max-height:60px; display:block; margin-bottom:0.5rem;">
-            {% endif %}
-            <input type="file" name="logo" accept=".png,.jpg,.jpeg,.gif">
-            <p class="empty" style="padding:0.2rem 0 0; font-size:0.8rem;">Unterstützte Formate: PNG, JPG, JPEG, GIF</p>
-            {% if logo_vorhanden %}
-            <button type="submit" formaction="/einstellungen/logo/entfernen" class="secondary" style="margin-top:0.4rem">
-                Logo entfernen
-            </button>
-            {% endif %}
+            <label>Benutzer</label>
+            <input type="text" value="{{ radicale_username or '–' }}" readonly onclick="this.select()">
         </div>
-    </fieldset>
-
-    <fieldset>
-        <legend>Export – sichtbare Felder</legend>
-        <p class="empty" style="padding:0 0 0.5rem">
-            Standardmässig zeigt der PDF-Export nur geschäftliche Kontaktdaten (Kategorie "Direkt"/"Allgemein").
-            Als "Privat" kategorisierte Telefonnummern (inkl. Mobilnummern), E-Mails und Adressen erscheinen
-            nur, wenn hier aktiviert.
-        </p>
-        <label style="display:flex; align-items:center; gap:0.4rem; font-weight:normal; margin-bottom:0.4rem;">
-            <input type="checkbox" name="privates_telefon_zeigen" {% if privates_telefon_zeigen %}checked{% endif %}>
-            Private Telefonnummer anzeigen
-        </label>
-        <label style="display:flex; align-items:center; gap:0.4rem; font-weight:normal; margin-bottom:0.4rem;">
-            <input type="checkbox" name="private_email_zeigen" {% if private_email_zeigen %}checked{% endif %}>
-            Private E-Mail-Adresse anzeigen
-        </label>
-        <label style="display:flex; align-items:center; gap:0.4rem; font-weight:normal;">
-            <input type="checkbox" name="privatadresse_zeigen" {% if privatadresse_zeigen %}checked{% endif %}>
-            Privatadresse anzeigen
-        </label>
-    </fieldset>
-
-    <fieldset>
-        <legend>CardDAV-Sync (Radicale)</legend>
-        <p class="empty" style="padding:0 0 0.5rem">
-            Damit gibt Rubrica Kontakte/Ordner an Radicale weiter, das sie wiederum an Apple Kontakte
-            ausliefert (Einweg-Sync, nie umgekehrt). Sync ist immer aktiv - kein separater An/Aus-Schalter,
-            sonst funktioniert das Löschen/Ändern in Kontakte.app nicht mehr. Wird auf einem verbundenen
-            Mac direkt ein neuer Kontakt in Kontakte.app angelegt, wird das erkannt und erscheint als
-            offener Vorschlag unter <a href="/vorschlaege">Vorschläge</a> - nie automatisch übernommen.
-        </p>
-
-        <div class="grid-2">
-            <div class="field">
-                <label>Server (in Kontakte.app eintragen)</label>
-                <input type="text" value="{{ radicale_hostname }}" readonly onclick="this.select()">
-            </div>
-            <div class="field">
-                <label>Benutzer</label>
-                <p style="margin:0.3rem 0 0">{{ radicale_username or "–" }}</p>
-            </div>
-        </div>
-        <div class="field">
-            <label>Passwort</label>
-            <input type="text" name="radicale_password" value="{{ radicale_password }}" style="width:100%">
-        </div>
-        <p class="empty" style="padding:0.3rem 0 0; font-size:0.8rem">
-            Kontakte.app → Accounts → CardDAV-Account, Modus „Manuell" (nicht „Erweitert"), nur den
-            Server-Wert oben eintragen - ohne Port, ohne Pfad. Benutzername und Adressbuch-Pfad
-            (<code>{{ radicale_addressbook_path or "–" }}</code>) sind hier bewusst nicht änderbar - beide
-            müssen unter Radicale immer zusammenpassen, ein Ändern von nur einem der beiden führte schon
-            zu einem stillen Sync-Ausfall.
-        </p>
-
-        <details style="margin-top:0.8rem">
-            <summary style="cursor:pointer; color:var(--text-hell)">Interne Server-Adresse (fortgeschritten)</summary>
-            <div class="field" style="margin-top:0.5rem">
-                <input type="text" name="radicale_base_url" value="{{ radicale_base_url }}"
-                       placeholder="https://127.0.0.1:8443" style="width:100%">
-                <p class="empty" style="padding:0.3rem 0 0; font-size:0.8rem">
-                    Rubricas eigene, interne Verbindung zu Radicale (localhost) - nicht die Adresse für
-                    Kontakte.app (siehe oben). Nur relevant, falls Radicale auf einem anderen Port oder
-                    separat vom Rubrica-Server läuft.
-                </p>
-            </div>
-        </details>
-        {% if ca_zertifikat_vorhanden %}
-        <p class="empty" style="padding:0.6rem 0 0.3rem">
-            Für weitere Stationen: das CA-Zertifikat einmal herunterladen, per Doppelklick öffnen und im
-            Schlüsselbund auf „Immer vertrauen" setzen. Zuverlässiger als der Zertifikat-Dialog beim
-            Account-Einrichten, da der Hintergrund-Sync sonst manchmal trotzdem stillschweigend scheitert.
-        </p>
-        <a href="/einstellungen/ca-zertifikat" class="btn secondary" download>CA-Zertifikat herunterladen</a>
-        {% endif %}
-    </fieldset>
-
-    <fieldset>
-        <legend>Archivio-Anbindung</legend>
-        <p class="empty" style="padding:0 0 0.5rem">
-            Liest die von Archivio gepflegte Signatur-Datenbank (Tabelle <code>signatur_quelle</code>:
-            Absender, Postfach, voller Mailtext) und schlägt daraus im Archivio-Import neue Kontakte vor.
-            Leer lassen, um die Funktion zu deaktivieren.
-        </p>
-        <div class="field">
-            <label>Pfad zur Archivio-Signatur-Datenbank</label>
-            <input type="text" name="archivio_signatur_db_path" value="{{ archivio_signatur_db_path }}"
-                   placeholder="/Users/…/Library/Application Support/Archivio/rubrica.db" style="width:100%">
-        </div>
-        <div class="field">
-            <label>Mindestanzahl E-Mails pro Absender (Indiz für echte Korrespondenz)</label>
-            <input type="number" name="archivio_min_mails" value="{{ archivio_min_mails }}" min="1" style="width:6rem">
-        </div>
-        <div class="field">
-            <label>Eigene E-Mail-Domain(s) (kommagetrennt, ohne "@")</label>
-            <input type="text" name="archivio_eigene_domains" value="{{ archivio_eigene_domains }}"
-                   placeholder="z. B. musterfirma.ch" style="width:100%">
-            <p class="empty" style="padding-top:0.3rem">
-                Mitarbeitende dieser Domain(s) werden nie als Kontaktvorschlag angezeigt (sie sind bereits
-                erfasst, kein externer Ansprechpartner).
+    </div>
+    <div class="field">
+        <label>Passwort</label>
+        <input type="text" name="radicale_password" form="einstellungen-form" value="{{ radicale_password }}">
+    </div>
+    {% if ca_zertifikat_vorhanden %}
+    <p class="empty" style="padding:0.3rem 0 0.5rem">
+        Auf jeder neuen Station einmalig: Zertifikat laden, doppelklicken, im Schlüsselbund auf
+        „Immer vertrauen“ setzen. Ohne das scheitert der Hintergrund-Sync mitunter stillschweigend.
+    </p>
+    <a href="/einstellungen/ca-zertifikat" class="btn secondary" download>CA-Zertifikat herunterladen</a>
+    {% endif %}
+    <p class="empty" style="padding:0.6rem 0 0; font-size:0.8rem">
+        Benutzername und Adressbuch-Pfad (<code>{{ radicale_addressbook_path or "–" }}</code>) sind bewusst
+        nicht änderbar – beide müssen unter Radicale zusammenpassen, sonst fällt der Sync still aus.
+    </p>
+    <details style="margin-top:0.6rem">
+        <summary style="cursor:pointer; color:var(--text-hell); font-weight:normal">Interne Server-Adresse (fortgeschritten)</summary>
+        <div class="field" style="margin-top:0.5rem">
+            <input type="text" name="radicale_base_url" form="einstellungen-form" value="{{ radicale_base_url }}"
+                   placeholder="https://127.0.0.1:8443">
+            <p class="empty" style="padding:0.3rem 0 0; font-size:0.8rem">
+                Rubricas eigene Verbindung zu Radicale (localhost) – nicht die Adresse für Kontakte.app.
             </p>
         </div>
-    </fieldset>
+    </details>
+</details>
 
-    <fieldset>
-        <legend>Mail-Eingang (Kontaktvorschläge)</legend>
+<div class="verwaltungs-links">
+    <a href="/einstellungen/kategorien">Kategorien für Telefon &amp; E-Mail →</a>
+    <a href="/einstellungen/funktionen-rollen">Funktion &amp; Rolle verwalten →</a>
+    <a href="/export">Darstellung der PDF-Liste →</a>
+    <a href="/setup/1">Einrichtungsassistent →</a>
+</div>
+
+{# Ein gemeinsames Formular fuer alle Abschnitte: eingeklappte <details> senden ihre
+   Felder trotzdem mit, ein Speichern-Knopf am Ende genuegt. Die CardDAV-Felder oben
+   haengen per form="…" an demselben Formular. #}
+<form method="post" action="/einstellungen" id="einstellungen-form">
+    <details class="einstell-block">
+        <summary>Mail-Eingang für Kontaktvorschläge</summary>
         <p class="empty" style="padding:0 0 0.5rem">
-            Ein dediziertes Postfach (z. B. rubrica@musterfirma.ch), an das Mitarbeitende von unterwegs
-            eine vCard ("Kontakt senden" in Kontakte.app) oder einfach Name/Telefon/Mail als Text schicken
-            können. Wird 1× täglich automatisch sowie manuell geprüft; jede gefundene Nachricht erzeugt
-            einen offenen Vorschlag zur Bestätigung im Büro (siehe „Vorschläge"). Leer lassen, um die
-            Funktion zu deaktivieren.
+            Postfach, an das Mitarbeitende von unterwegs eine vCard oder Name/Telefon/Mail als Text schicken.
+            Wird täglich geprüft, jede Nachricht wird ein offener <a href="/vorschlaege">Vorschlag</a>.
+            Leer lassen = aus.
         </p>
         <div class="grid-2">
             <div class="field">
                 <label>IMAP-Server</label>
-                <input type="text" name="mail_host" value="{{ mail_host }}" placeholder="imap.beispiel.ch" style="width:100%">
+                <input type="text" name="mail_host" value="{{ mail_host }}" placeholder="imap.beispiel.ch">
             </div>
             <div class="field">
                 <label>Port</label>
                 <input type="number" name="mail_port" value="{{ mail_port }}" style="width:6rem">
             </div>
-        </div>
-        <div class="grid-2">
             <div class="field">
                 <label>Benutzername</label>
-                <input type="text" name="mail_username" value="{{ mail_username }}" placeholder="rubrica@musterfirma.ch" style="width:100%">
+                <input type="text" name="mail_username" value="{{ mail_username }}" placeholder="rubrica@musterfirma.ch">
             </div>
             <div class="field">
                 <label>Passwort</label>
-                <input type="text" name="mail_password" value="{{ mail_password }}" style="width:100%">
+                <input type="text" name="mail_password" value="{{ mail_password }}">
             </div>
         </div>
-        <div class="actions" style="justify-content:flex-start; gap:0.5rem; margin-top:0.5rem">
+        <div class="actions" style="margin-top:0.5rem">
             <button type="submit" formaction="/einstellungen/mail-test" class="secondary">Verbindung testen</button>
             <button type="submit" formaction="/einstellungen/mail-pruefen" class="secondary">Jetzt prüfen</button>
-            <a href="/vorschlaege" class="btn secondary">Vorschläge ansehen →</a>
         </div>
-    </fieldset>
+    </details>
 
-    <fieldset>
-        <legend>Backup</legend>
+    <details class="einstell-block">
+        <summary>Archivio-Anbindung</summary>
         <p class="empty" style="padding:0 0 0.5rem">
-            Nach jeder Änderung wird ein Snapshot der Datenbank an diesen Pfad geschrieben (überschreibt
-            jeweils die vorherige Sicherung) – z. B. ein NAS-Ordner, für eine zusätzliche Kopie ausserhalb
-            dieses Rechners. Leer lassen, um kein automatisches Backup zu schreiben.
+            Schlägt Kontakte aus den von Archivio erfassten E-Mail-Signaturen vor. Leer lassen = aus.
+        </p>
+        <div class="field">
+            <label>Pfad zur Archivio-Signatur-Datenbank</label>
+            <input type="text" name="archivio_signatur_db_path" value="{{ archivio_signatur_db_path }}"
+                   placeholder="/Users/…/Library/Application Support/Archivio/rubrica.db">
+        </div>
+        <div class="grid-2">
+            <div class="field">
+                <label>Mindestanzahl E-Mails pro Absender</label>
+                <input type="number" name="archivio_min_mails" value="{{ archivio_min_mails }}" min="1" style="width:6rem">
+            </div>
+            <div class="field">
+                <label>Eigene Domain(s), kommagetrennt</label>
+                <input type="text" name="archivio_eigene_domains" value="{{ archivio_eigene_domains }}"
+                       placeholder="musterfirma.ch">
+            </div>
+        </div>
+        <p class="empty" style="padding:0.2rem 0 0; font-size:0.8rem">
+            Mitarbeitende der eigenen Domain werden nie vorgeschlagen.
+        </p>
+    </details>
+
+    <details class="einstell-block">
+        <summary>Backup</summary>
+        <p class="empty" style="padding:0 0 0.5rem">
+            Nach jeder Änderung wird die Datenbank hierhin gesichert (überschreibt die vorherige Kopie),
+            z. B. auf ein NAS. Leer lassen = aus.
         </p>
         <div class="field">
             <label>Backup-Pfad (Ordner)</label>
             <input type="text" name="backup_pfad" value="{{ backup_pfad }}"
-                   placeholder="/Volumes/NAS/Rubrica-Backup" style="width:100%">
+                   placeholder="/Volumes/NAS/Rubrica-Backup">
         </div>
-    </fieldset>
+    </details>
 
     <button type="submit">Speichern</button>
 </form>
 
-<fieldset style="border-color:#eb5757">
-    <legend style="color:#eb5757">Gefahrenzone</legend>
+<details class="einstell-block gefahr" style="margin-top:1.2rem">
+    <summary>Gefahrenzone</summary>
     <p class="empty" style="padding:0 0 0.5rem">
-        Löscht ALLE Kontakte aus Rubrica unwiderruflich und stösst danach einen Radicale-Vollabgleich an,
-        damit sie auch aus Apple Kontakte verschwinden – z. B. um vor einem sauberen Neu-Import mit einem
-        leeren Bestand zu starten. Bei grossen Beständen kann der Radicale-Abgleich selbst einige Minuten
-        dauern (ein Löschvorgang pro Kontakt) – ggf. danach "Jetzt alles neu synchronisieren" oben erneut
-        klicken, falls noch nicht alles verschwunden ist.
+        Löscht ALLE Kontakte unwiderruflich und entfernt sie danach auch aus Apple Kontakte – etwa um vor
+        einem sauberen Neu-Import leer zu starten. Der Abgleich dauert bei grossem Bestand einige Minuten.
     </p>
     <form method="post" action="/einstellungen/alle-kontakte-loeschen"
           onsubmit="return confirm('Bist du sicher, dass du ALLE Kontakte' + (this.auch_ordner.checked ? ' UND ALLE ORDNER' : '') + ' aus Rubrica unwiderruflich löschen willst? Dies kann nicht rückgängig gemacht werden.')">
-        <label style="display:flex; align-items:center; gap:0.35rem; font-size:0.9rem; margin-bottom:0.5rem;">
+        <label class="ankreuz">
             <input type="checkbox" name="auch_ordner" value="1">
             Auch alle Ordner löschen
         </label>
-        <button type="submit" class="danger">Alle Kontakte löschen</button>
+        <button type="submit" class="danger" style="margin-top:0.5rem">Alle Kontakte löschen</button>
     </form>
-</fieldset>
+</details>
+
+</div>
 {% endblock %}

@@ -19,13 +19,6 @@ from web.shared import _hostname_local, templates
 
 router = APIRouter()
 
-LOGO_ERLAUBTE_ENDUNGEN = {".png", ".jpg", ".jpeg", ".gif"}
-
-
-def _logo_entfernen() -> None:
-    for alte_datei in settings.daten_verzeichnis().glob(f"{settings.LOGO_STAMM}.*"):
-        alte_datei.unlink(missing_ok=True)
-
 
 def _ca_zertifikat_pfad() -> Path:
     return settings.daten_verzeichnis() / "radicale-tls" / "ca-cert.pem"
@@ -52,11 +45,6 @@ def einstellungen_form(request: Request, gespeichert: str = "", sync: str = "", 
         "archivio_min_mails": settings.get("archivio.min_mails", 2),
         "archivio_eigene_domains": ", ".join(settings.get("archivio.eigene_domains", []) or []),
         "backup_pfad": settings.get("backup.pfad", "") or "",
-        "export_firmenname": settings.get("export.firmenname", "") or "",
-        "logo_vorhanden": settings.logo_pfad() is not None,
-        "privates_telefon_zeigen": bool(settings.get("export.privates_telefon_zeigen", False)),
-        "private_email_zeigen": bool(settings.get("export.private_email_zeigen", False)),
-        "privatadresse_zeigen": bool(settings.get("export.privatadresse_zeigen", False)),
         "radicale_base_url": settings.get("radicale.base_url", "") or "",
         "radicale_addressbook_path": f"/{radicale.RADICALE_BENUTZER}/kontakte/",
         "radicale_username": radicale.RADICALE_BENUTZER,
@@ -68,20 +56,6 @@ def einstellungen_form(request: Request, gespeichert: str = "", sync: str = "", 
         "mail_username": settings.get("mail.username", "") or "",
         "mail_password": settings.get("mail.password", "") or "",
     })
-
-
-@router.get("/einstellungen/logo")
-def einstellungen_logo():
-    pfad = settings.logo_pfad()
-    if pfad is None:
-        return Response(status_code=404)
-    return FileResponse(pfad)
-
-
-@router.post("/einstellungen/logo/entfernen")
-def einstellungen_logo_entfernen():
-    _logo_entfernen()
-    return RedirectResponse(url="/einstellungen?gespeichert=1", status_code=303)
 
 
 @router.get("/einstellungen/ca-zertifikat")
@@ -252,7 +226,6 @@ async def einstellungen_speichern(request: Request):
         if d.strip()
     ]
     backup_pfad = (form.get("backup_pfad") or "").strip()
-    export_firmenname = (form.get("export_firmenname") or "").strip()
     radicale_base_url = (form.get("radicale_base_url") or "").strip()
     radicale_password = form.get("radicale_password") or ""
     mail_host = (form.get("mail_host") or "").strip()
@@ -263,14 +236,8 @@ async def einstellungen_speichern(request: Request):
     mail_username = (form.get("mail_username") or "").strip()
     mail_password = form.get("mail_password") or ""
 
-    logo = form.get("logo")
-    if logo is not None and getattr(logo, "filename", ""):
-        endung = Path(logo.filename).suffix.lower()
-        if endung in LOGO_ERLAUBTE_ENDUNGEN:
-            _logo_entfernen()
-            ziel = settings.daten_verzeichnis() / f"{settings.LOGO_STAMM}{endung}"
-            ziel.write_bytes(await logo.read())
-
+    # Firmenname, Logo und die sichtbaren Felder stehen bewusst auf der
+    # Export-Seite (web/export.py) - sie wirken sich nur dort aus.
     settings.save({
         "archivio": {"signatur_db_path": signatur_db_path, "min_mails": min_mails,
                      "eigene_domains": eigene_domains},
@@ -278,12 +245,6 @@ async def einstellungen_speichern(request: Request):
         "radicale": {
             "base_url": radicale_base_url,
             "password": radicale_password,
-        },
-        "export": {
-            "firmenname": export_firmenname,
-            "privates_telefon_zeigen": form.get("privates_telefon_zeigen") is not None,
-            "private_email_zeigen": form.get("private_email_zeigen") is not None,
-            "privatadresse_zeigen": form.get("privatadresse_zeigen") is not None,
         },
         "mail": {
             "host": mail_host, "port": mail_port,
