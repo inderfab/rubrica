@@ -3,14 +3,15 @@
 Vollständiger Durchlauf von der Installation bis zum Export. Gedacht zum Abhaken:
 jeder Punkt ist eine Handlung mit einer klaren Erwartung.
 
-**Stand:** Durchgang mit v1.14.0 bis Abschnitt C. Die dabei gefundenen Fehler sind in
-**v1.15.0** behoben — die betroffenen Punkte stehen unten auf 🔁 und gehören nach der
-Neuinstallation nochmals geprüft.
+**Stand:** zweiter Durchgang mit **v1.15.0** bis Abschnitt C. Die offenen Befunde daraus
+stehen in [Offene Befunde aus v1.15.0](#offene-befunde-aus-v1150) und sind der
+Startpunkt für die nächste Sitzung.
 
 | Zeichen | Bedeutung |
 |---|---|
 | ✅ | geprüft und in Ordnung |
-| 🔁 | war fehlerhaft oder wurde geändert — nach der Neuinstallation nochmals prüfen |
+| ❌ | geprüft, funktioniert nicht — offen |
+| 🔁 | geändert oder unklar — nochmals prüfen |
 | ⬜ | noch nicht getestet |
 
 **Zwei Rollen im Text:**
@@ -29,8 +30,8 @@ synchronisieren** urteilen.
 
 | | Status | Handlung | Erwartung | Befund |
 |---|---|---|---|---|
-| A1 | 🔁 | `.pkg` doppelklicken und installieren, während Rubrica noch läuft | Die laufende Instanz wird beendet, danach läuft **genau eine** Instanz (ein Symbol in der Menüleiste) | 1.14.0: beendete die App, startete danach aber zwei — behoben |
-| A2 | 🔁 | Nach der Installation | Rubrica startet von selbst, Symbol in der Menüleiste. **Kein** Browser-Tab (nur bei einer frischen Installation) | 1.14.0: Start ging, Tab war unerwünscht — geändert |
+| A1 | ✅ | `.pkg` doppelklicken und installieren, während Rubrica noch läuft | Die laufende Instanz wird beendet, danach läuft **genau eine** Instanz (ein Symbol in der Menüleiste) | 1.15.0 in Ordnung |
+| A2 | 🔁 | Nach der Installation | Rubrica startet von selbst, Symbol in der Menüleiste. **Kein** Browser-Tab (nur bei einer frischen Installation) | Start in Ordnung; Verhalten beim nächsten Rechner-Neustart noch beobachten |
 | A3 | ✅ | Rechner neu starten und anmelden | Rubrica läuft wieder, ohne dass jemand etwas startet | 1× Rubrica startet korrekt (Archivio startet doppelt — anderes Projekt) |
 | A4 | ✅ | Im Browser die Kontaktliste öffnen | Alle Kontakte da, Anzahl stimmt | |
 | A5 | ✅ | Menüleisten-Symbol anklicken | Web-Oberfläche und CardDAV zeigen beide grün | |
@@ -61,19 +62,19 @@ kommt zuerst als **Vorschlag**.
 
 | | Status | Handlung | Erwartung | Befund |
 |---|---|---|---|---|
-| C1 | 🔁 | Neuen Kontakt in Kontakte.app anlegen (im Rubrica-Account) | Erscheint unter Vorschlägen **mit allen eingegebenen Feldern** | 1.14.0: kam an, aber komplett leer — behoben |
-| C2 | ⬜ | Diesen Vorschlag mit **Übernehmen** bestätigen | Wird ein echter Kontakt; die Karteikarte in Kontakte.app bleibt bestehen | war durch C1 blockiert |
-| C3 | ⬜ | Einen Vorschlag **Ablehnen** | Verschwindet aus den Vorschlägen und wird auch in Kontakte.app entfernt | war durch C1 blockiert |
-| C4 | ⬜ | Vorschlag über **Bearbeiten** korrigieren, dann übernehmen | Die korrigierten Werte werden gespeichert, nicht die ursprünglichen | war durch C1 blockiert |
+| C1 | ❌ | Neuen Kontakt in Kontakte.app anlegen (im Rubrica-Account) | Erscheint **einmal** unter Vorschlägen, mit allen Feldern und mit der Ordner-Zuordnung | 1.15.0: Felder kommen an. Aber **doppelt** (derselbe Kontakt zweimal in der Liste), und die **Ordner-Zuordnung fehlt**, obwohl der Kontakt in Kontakte.app direkt in einem Ordner angelegt wurde → Befunde 1 und 2 |
+| C2 | 🔁 | Diesen Vorschlag mit **Übernehmen** bestätigen | Wird ein echter Kontakt; die Karteikarte in Kontakte.app bleibt bestehen | übernommen; wegen C1 ohne Ordner. Nach der Behebung von C1 nochmals prüfen, ob die Zuordnung mitkommt |
+| C3 | ⬜ | Einen Vorschlag **Ablehnen** | Verschwindet aus den Vorschlägen und wird auch in Kontakte.app entfernt | |
+| C4 | ✅ | Vorschlag über **Bearbeiten** korrigieren, dann übernehmen | Die korrigierten Werte werden gespeichert, nicht die ursprünglichen | |
 | C5 | ✅ | Neue Gruppe in Kontakte.app anlegen | Kommt als Ordner-Vorschlag | |
 | C6 | ✅ | Gruppe mit einem bereits bestehenden Kontakt darin anlegen | Nach Bestätigung ist der Kontakt dem neuen Ordner zugeordnet | |
 | C7 | ✅ | Bestehenden Kontakt in Kontakte.app in eine andere Gruppe ziehen | Zuordnung landet in Rubrica (ohne Rückfrage — Zuordnungen gelten als unkritisch) | |
 | C8 | ✅ | Bei einem bestehenden Kontakt in Kontakte.app die Telefonnummer ändern | Kommt als Änderungsvorschlag, alter und neuer Wert sind gegenübergestellt | |
-| C9 | 🔁 | Diesen Änderungsvorschlag ablehnen | Rubrica bleibt beim alten Wert und schreibt ihn nach Kontakte.app zurück | 1.14.0: Nummer blieb auf dem neuen Wert (1112 statt 1111). Möglicherweise Folge des Kategorie-Fehlers, möglicherweise nur Apples Verzögerung — offen |
+| C9 | 🔁 | Diesen Änderungsvorschlag ablehnen | Rubrica bleibt beim alten Wert und schreibt ihn nach Kontakte.app zurück | Notiz aus 1.15.0: „test test nicht 12345“ — nicht eindeutig lesbar, in der nächsten Sitzung mit klar unterscheidbaren Werten wiederholen |
 | C10 | ✅ | Kontakt in Kontakte.app löschen | Kommt als Löschvorschlag — der Kontakt bleibt in Rubrica, bis entschieden ist | |
-| C11 | 🔁 | Löschvorschlag mit **Behalten** beantworten | Der Kontakt taucht in Kontakte.app wieder auf (kann einige Minuten dauern) | Notiz „umbenannt“ — Ergebnis unklar, nochmals sauber durchspielen |
+| C11 | ❌ | Löschvorschlag mit **Behalten** beantworten | Der Kontakt taucht in Kontakte.app wieder auf | Er taucht **nicht** wieder auf → Befund 3. Entscheid dazu: Löschen soll künftig nur noch im Browser möglich sein |
 | C12 | ✅ | Kontakt in Kontakte.app anlegen, aber **im privaten Account** (iCloud/„Auf meinem Mac“) | Kommt **nicht** in Rubrica an — Rubrica sieht nur seinen eigenen Account | |
-| C13 | 🔁 | Nach der Installation einmal **Jetzt alles neu synchronisieren**, dann Vorschläge öffnen | Keine Änderungsvorschläge für Nummern, die niemand angefasst hat. Die aus 1.14.0 stehengebliebenen ziehen sich dabei selbst zurück | neu — Gegenprobe zum Kategorie-Fehler |
+| C13 | ✅ | Nach der Installation einmal **Jetzt alles neu synchronisieren**, dann Vorschläge öffnen | Keine Änderungsvorschläge für Nummern, die niemand angefasst hat | Vorschlagsflut aus 1.14.0 ist weg |
 
 ---
 
@@ -143,6 +144,40 @@ Der Fall, für den die Zusammenführung gebaut ist.
 | H2 | ⬜ | Im Browser einen Kontakt einem Ordner zuweisen, während jemand in Kontakte.app einen anderen in dieselbe Gruppe zieht | Beide Zuordnungen bleiben erhalten |
 | H3 | ⬜ | Einstellungen → **Jetzt alles neu synchronisieren** | Meldet Anzahl Kontakte, Ordner und entfernte Karteileichen; danach steht dort „Alle … Kontakte werden überwacht“ |
 | H4 | ⬜ | Backup-Pfad setzen, dann einen Kontakt ändern | Am Zielort liegt eine frische Kopie der Datenbank |
+
+---
+
+## Offene Befunde aus v1.15.0
+
+Startpunkt für die nächste Sitzung. Alles drei betrifft den Weg von Kontakte.app
+nach Rubrica.
+
+**1 — Vorschlag kommt doppelt (C1).** Derselbe in Kontakte.app angelegte Kontakt steht
+zweimal in der Liste, mit identischen Feldern. Die Meldung zählte dabei zwei geprüfte
+Einträge und zwei neue Vorschläge, es sind also zwei verschiedene Karteikarten auf dem
+Server. Erste Vermutung: Kontakte.app legt beim Speichern eine zweite Karte mit neuer
+UID an, statt die zuvor angelegte leere weiterzuverwenden — dann sieht Rubrica zwei
+Neuzugänge. Zu prüfen: welche `.vcf`-Dateien tatsächlich auf dem Server liegen, und ob
+sich zwei Karten desselben Kontakts über ihren Inhalt zusammenführen lassen, statt sich
+nur auf den Dateinamen zu verlassen.
+
+**2 — Ordner-Zuordnung fehlt (C1/C2).** Der Kontakt wurde in Kontakte.app direkt in
+einem Ordner angelegt, der Vorschlag kam ohne diese Zuordnung an. Verdacht: der bereits
+dokumentierte Wettlauf (siehe Modul-Kommentar in `kontakte_app_intake.py`). Rubrica baut
+beim Pushen die Mitgliederliste eines Ordners komplett aus der eigenen Datenbank neu
+auf. Passiert das, bevor der Scan die in Kontakte.app hinzugefügte Mitgliedschaft
+gesehen hat, ist sie überschrieben, noch ehe sie jemand lesen konnte. Bisher war das als
+hinnehmbar eingestuft — der Test zeigt, dass es der Normalfall ist, wenn man einen
+Kontakt direkt in einer Gruppe anlegt.
+
+**3 — Löschen: „Behalten“ stellt nicht wieder her (C11).** Nach dem Löschen in
+Kontakte.app und der Antwort „Behalten“ taucht der Kontakt dort nicht wieder auf.
+**Entscheid:** das Löschen von Kontakten soll künftig nur noch im Browser möglich sein.
+Damit fällt der ganze Löschvorschlags-Weg weg — eine Löschung in Kontakte.app wird
+einfach zurückgeschrieben. Das ist zugleich der einfachere und verlässlichere Weg als
+der Vorschlag mit zwei Antwortmöglichkeiten. Zu klären: wie deutlich muss das den
+Mitarbeitenden angezeigt werden (der Kontakt taucht ja nach ein paar Minuten wieder
+auf), und was in der Anleitung dazu steht.
 
 ---
 
