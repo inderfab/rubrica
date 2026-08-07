@@ -137,7 +137,22 @@ def _typ_normalisieren(rohtyp: str, label: str, mapping: dict, konfigurierte: li
         if label.lower() in mapping:
             return mapping[label.lower()]
         return _bekannte_schreibweise(label, konfigurierte)
-    return mapping.get((rohtyp or "").lower(), "Direkt")
+    roh = (rohtyp or "").lower()
+    if roh in mapping:
+        return mapping[roh]
+    # Eine konfigurierte Kategorie, die als TYPE dasteht, muss sich selbst
+    # zurueckliefern. Regression: aeltere Rubrica-Versionen schrieben die Kategorie
+    # unveraendert als TYPE (also auch "PRIVAT HANDY"), und die Zuordnungstabelle
+    # kennt nur die einwortigen Begriffe - "Privat Handy" fiel damit beim
+    # Zuruecklesen auf "Direkt". Da die Aenderungserkennung geparsten Schnappschuss
+    # gegen geparsten Serverstand vergleicht, erzeugte das reihenweise
+    # Aenderungsvorschlaege "Privat -> Direkt" fuer Nummern, die niemand angefasst
+    # hatte. Solche vCards liegen weiterhin auf dem Server, der Rueckweg muss sie
+    # also verstehen.
+    for kategorie in konfigurierte:
+        if kategorie.lower() == roh:
+            return kategorie
+    return "Direkt"
 
 
 def _telefon_typ_normalisieren(rohtyp: str, label: str = "") -> str:

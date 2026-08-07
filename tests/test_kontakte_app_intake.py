@@ -715,7 +715,9 @@ def test_alle_vcard_felder_werden_als_aenderung_erkannt(tmp_db, monkeypatch):
         ("Adresse", "Altweg 1", "Neuweg 9"),
         ("Web", "www.alt.ch", "www.neu.ch"),
         ("Vorname", "N:Muster;Anna", "N:Muster;Anita"),
-        ("Telefon", "TEL;TYPE=DIREKT", "TEL;TYPE=PRIVAT"),
+        # Die Kategorie steht als X-ABLabel in der Karte (siehe
+        # radicale._beschriftete_zeilen), nicht als TYPE-Parameter.
+        ("Telefon", "X-ABLabel:Direkt\r\nitem2", "X-ABLabel:Privat\r\nitem2"),
     ]
     for feld, alt, neu in faelle:
         for v in queries.list_vorschlaege(tmp_db, quelle="kontakte_app"):
@@ -739,7 +741,7 @@ def test_umkategorisierung_ist_in_der_anzeige_erkennbar(tmp_db, monkeypatch):
     saehe aus wie ein Fehler."""
     kontakt_id = _kontakt_mit_push(tmp_db, monkeypatch)
     geaendert = queries.hole_gepushte_vcard(tmp_db, kontakt_id).replace(
-        "TEL;TYPE=DIREKT", "TEL;TYPE=PRIVAT")
+        "X-ABLabel:Direkt\r\nitem2", "X-ABLabel:Privat\r\nitem2")
 
     _mock_client(monkeypatch, lambda r: (
         httpx.Response(200, text=geaendert) if r.method == "GET" else httpx.Response(201)))
@@ -806,3 +808,167 @@ def test_ueberwachungs_abdeckung_zeigt_luecke(tmp_db, monkeypatch):
 
     a = queries.ueberwachungs_abdeckung(tmp_db)
     assert a == {"gesamt": 2, "ueberwacht": 1}
+
+
+def test_hinfaelliger_aenderungsvorschlag_wird_zurueckgezogen(tmp_db, monkeypatch):
+    """Nutzer-Meldung: nach einem Fehler in der Kategorie-Rueckrichtung standen
+    reihenweise Vorschlaege in der Liste, die keine echte Aenderung waren. Sobald
+    der Unterschied nicht mehr besteht, muss der Vorschlag von selbst verschwinden -
+    sonst muesste man Hunderte davon einzeln wegklicken."""
+    kontakt_id = _kontakt_mit_push(tmp_db, monkeypatch)
+    basis = queries.hole_gepushte_vcard(tmp_db, kontakt_id)
+    geaendert = basis.replace("+41 44 111 11 11", "+41 44 222 22 22")
+
+    _mock_client(monkeypatch, lambda r: (
+        httpx.Response(200, text=geaendert) if r.method == "GET" else httpx.Response(201)))
+    assert kontakte_app_intake.pruefe_kontakt_aenderungen(tmp_db)["neu"] == 1
+    assert len(queries.list_vorschlaege(tmp_db, quelle="kontakte_app")) == 1
+
+    # Der Server steht wieder auf dem Vergleichsstand - der Vorschlag ist gegenstandslos.
+    _mock_client(monkeypatch, lambda r: (
+        httpx.Response(200, text=basis) if r.method == "GET" else httpx.Response(201)))
+    ergebnis = kontakte_app_intake.pruefe_kontakt_aenderungen(tmp_db)
+
+    assert ergebnis["zurueckgezogen"] == 1
+    assert queries.list_vorschlaege(tmp_db, quelle="kontakte_app") == []
+
+
+def test_neue_andere_aenderung_ersetzt_den_alten_vorschlag(tmp_db, monkeypatch):
+    """Sonst stuenden zwei Vorschlaege zum selben Kontakt in der Liste, von denen
+    einer einen laengst ueberholten Stand vorschlaegt."""
+    kontakt_id = _kontakt_mit_push(tmp_db, monkeypatch)
+    basis = queries.hole_gepushte_vcard(tmp_db, kontakt_id)
+
+    for neue_nummer in ("+41 44 222 22 22", "+41 44 333 33 33"):
+        geaendert = basis.replace("+41 44 111 11 11", neue_nummer)
+        assert geaendert != basis
+        _mock_client(monkeypatch, lambda r, t=geaendert: (
+            httpx.Response(200, text=t) if r.method == "GET" else httpx.Response(201)))
+        kontakte_app_intake.pruefe_kontakt_aenderungen(tmp_db)
+
+    offen = queries.list_vorschlaege(tmp_db, quelle="kontakte_app")
+    assert len(offen) == 1
+    assert "+41 44 333 33 33" in str(offen[0]["rohdaten"]["unterschiede"])
+
+
+_LEERE_VCARD = (
+    "BEGIN:VCARD\r\nVERSION:3.0\r\nUID:NEU-LEER\r\nN:;;;;\r\nFN:\r\nEND:VCARD\r\n"
+)
+
+
+def test_leere_karte_erzeugt_keinen_vorschlag(tmp_db, monkeypatch):
+    """Regression (Nutzer-Meldung: "sie erscheinen aber sie sind leer"). Kontakte.app
+    legt die Karte schon beim Klick auf "+" an und schiebt sie sofort auf den
+    Server - zu dem Zeitpunkt steht noch kein einziges Feld darin."""
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "PROPFIND":
+            return httpx.Response(207, text=_propfind_xml(["NEU-LEER.vcf"]))
+        return httpx.Response(200, text=_LEERE_VCARD)
+
+    monkeypatch.setattr(radicale, "_client", lambda: httpx.Client(
+        transport=httpx.MockTransport(handler), base_url="https://test/a/"))
+
+    ergebnis = kontakte_app_intake.pruefe_kontakte_app_neuzugaenge(tmp_db)
+
+    assert ergebnis["neu"] == 0
+    assert queries.list_vorschlaege(tmp_db, quelle="kontakte_app") == []
+
+
+def test_karte_wird_nach_dem_ausfuellen_doch_noch_erfasst(tmp_db, monkeypatch):
+    """Die Karte wird uebersprungen, nicht dauerhaft verworfen."""
+    inhalt = {"text": _LEERE_VCARD}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "PROPFIND":
+            return httpx.Response(207, text=_propfind_xml(["NEU-LEER.vcf"]))
+        return httpx.Response(200, text=inhalt["text"])
+
+    monkeypatch.setattr(radicale, "_client", lambda: httpx.Client(
+        transport=httpx.MockTransport(handler), base_url="https://test/a/"))
+
+    kontakte_app_intake.pruefe_kontakte_app_neuzugaenge(tmp_db)
+    inhalt["text"] = _LEERE_VCARD.replace("N:;;;;\r\nFN:\r\n", "N:Muster;Anna;;;\r\nFN:Anna Muster\r\n")
+    ergebnis = kontakte_app_intake.pruefe_kontakte_app_neuzugaenge(tmp_db)
+
+    assert ergebnis["neu"] == 1
+    assert queries.list_vorschlaege(tmp_db, quelle="kontakte_app")[0]["rohdaten"]["vorname"] == "Anna"
+
+
+def test_geloeschte_karte_zieht_offenen_vorschlag_zurueck(tmp_db, monkeypatch):
+    """Wer den in Kontakte.app angelegten Kontakt dort wieder loescht, bevor ihn
+    jemand im Buero bestaetigt, laesst sonst einen Vorschlag stehen, der auf eine
+    nicht mehr existierende Karte zeigt."""
+    namen = {"liste": ["ABC-123-FREMD.vcf"]}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "PROPFIND":
+            return httpx.Response(207, text=_propfind_xml(namen["liste"]))
+        return httpx.Response(200, text=_FREMDE_VCARD)
+
+    monkeypatch.setattr(radicale, "_client", lambda: httpx.Client(
+        transport=httpx.MockTransport(handler), base_url="https://test/a/"))
+
+    kontakte_app_intake.pruefe_kontakte_app_neuzugaenge(tmp_db)
+    assert len(queries.list_vorschlaege(tmp_db, quelle="kontakte_app")) == 1
+
+    namen["liste"] = []
+    ergebnis = kontakte_app_intake.pruefe_kontakte_app_neuzugaenge(tmp_db)
+
+    assert ergebnis["zurueckgezogen"] == 1
+    assert queries.list_vorschlaege(tmp_db, quelle="kontakte_app") == []
+
+
+def test_verbindungsfehler_zieht_keine_vorschlaege_zurueck(tmp_db, monkeypatch):
+    """Sonst raeumte ein einzelner Aussetzer beim PROPFIND saemtliche offenen
+    Vorschlaege ab - die leere Liste waere faelschlich als "alles weg" gelesen."""
+    zustand = {"propfind_ok": True}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "PROPFIND":
+            if not zustand["propfind_ok"]:
+                return httpx.Response(503)
+            return httpx.Response(207, text=_propfind_xml(["ABC-123-FREMD.vcf"]))
+        return httpx.Response(200, text=_FREMDE_VCARD)
+
+    monkeypatch.setattr(radicale, "_client", lambda: httpx.Client(
+        transport=httpx.MockTransport(handler), base_url="https://test/a/"))
+
+    kontakte_app_intake.pruefe_kontakte_app_neuzugaenge(tmp_db)
+    zustand["propfind_ok"] = False
+    ergebnis = kontakte_app_intake.pruefe_kontakte_app_neuzugaenge(tmp_db)
+
+    assert ergebnis["zurueckgezogen"] == 0
+    assert len(queries.list_vorschlaege(tmp_db, quelle="kontakte_app")) == 1
+
+
+def test_serverstand_der_schon_in_rubrica_steht_ist_keine_aenderung(tmp_db, monkeypatch):
+    """Regression (Nutzer-Meldung: reihenweise Vorschläge "Privat -> Direkt").
+    Rubricas eigene Kategorie-Umstellung hat den Datenbankstand verändert; der
+    Schnappschuss stammte noch von davor, der Server hatte den neuen Stand schon.
+    Der Vergleich Schnappschuss/Server sah darin eine Änderung aus Kontakte.app -
+    obwohl der Server genau das zeigte, was in Rubrica ohnehin steht."""
+    kontakt_id = _kontakt_mit_push(tmp_db, monkeypatch)
+    veralteter_schnappschuss = queries.hole_gepushte_vcard(tmp_db, kontakt_id).replace(
+        "X-ABLabel:Direkt\r\nitem2", "X-ABLabel:Privat\r\nitem2")
+    queries.setze_gepushte_vcard(tmp_db, kontakt_id, veralteter_schnappschuss)
+    aktuell = radicale.kontakt_zu_vcard(queries.get_kontakt(tmp_db, kontakt_id))
+
+    _mock_client(monkeypatch, lambda r: (
+        httpx.Response(200, text=aktuell) if r.method == "GET" else httpx.Response(201)))
+    ergebnis = kontakte_app_intake.pruefe_kontakt_aenderungen(tmp_db)
+
+    assert ergebnis["neu"] == 0
+    assert queries.list_vorschlaege(tmp_db, quelle="kontakte_app") == []
+
+
+def test_echte_aenderung_wird_davon_nicht_verdeckt(tmp_db, monkeypatch):
+    """Gegenprobe: weicht der Server auch vom Datenbankstand ab, ist es eine echte
+    Änderung aus Kontakte.app und muss weiterhin als Vorschlag kommen."""
+    kontakt_id = _kontakt_mit_push(tmp_db, monkeypatch)
+    geaendert = queries.hole_gepushte_vcard(tmp_db, kontakt_id).replace(
+        "+41 44 111 11 11", "+41 44 999 99 99")
+
+    _mock_client(monkeypatch, lambda r: (
+        httpx.Response(200, text=geaendert) if r.method == "GET" else httpx.Response(201)))
+
+    assert kontakte_app_intake.pruefe_kontakt_aenderungen(tmp_db)["neu"] == 1

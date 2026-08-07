@@ -492,6 +492,18 @@ def hat_offenen_loeschvorschlag(conn: sqlite3.Connection, message_id: str) -> bo
     ).fetchone() is not None
 
 
+def offene_aenderungs_vorschlaege(conn: sqlite3.Connection, kontakt_id: int) -> list:
+    """Alle offenen Aenderungsvorschlaege zu einem Kontakt - Grundlage dafuer, einen
+    hinfaellig gewordenen wieder zurueckzuziehen (siehe
+    kontakte_app_intake.pruefe_kontakt_aenderungen)."""
+    rows = conn.execute(
+        "SELECT id, message_id FROM vorschlaege WHERE kontakt_id = ? AND status = 'offen' "
+        "AND message_id LIKE 'kontakte-app-aenderung:%'",
+        (kontakt_id,),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
 def setze_gepushte_vcard(conn: sqlite3.Connection, kontakt_id: int, vcard: str) -> None:
     """Haelt die zuletzt erfolgreich gepushte vCard fest - Referenzpunkt fuer die
     Erkennung von Feldaenderungen aus Kontakte.app (siehe

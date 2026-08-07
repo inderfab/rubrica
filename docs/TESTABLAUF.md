@@ -17,13 +17,13 @@ synchronisieren** urteilen.
 
 ## A — Installation und Grundbetrieb
 
-| | Handlung | Erwartung |
+| | Handlung | Erwartung | -> kommentar
 |---|---|---|
-| A1 | `.pkg` doppelklicken und installieren, während Rubrica noch läuft | Die laufende Instanz wird beendet, die Installation läuft durch |
-| A2 | Nach der Installation | Rubrica startet von selbst, ein Browser-Tab öffnet sich, das Symbol erscheint in der Menüleiste |
-| A3 | Rechner neu starten und anmelden | Rubrica läuft wieder, ohne dass jemand etwas startet |
-| A4 | Im Browser die Kontaktliste öffnen | Alle Kontakte da, Anzahl stimmt |
-| A5 | Menüleisten-Symbol anklicken | Web-Oberfläche und CardDAV zeigen beide grün |
+| A1 | `.pkg` doppelklicken und installieren, während Rubrica noch läuft | Die laufende Instanz wird beendet, die Installation läuft durch | -> killt das App aber startet dann zwei Programme gleichezitig, 2 x v1.14 in der menübar.
+| A2 | Nach der Installation | Rubrica startet von selbst, ein Browser-Tab öffnet sich, das Symbol erscheint in der Menüleiste | -> Start geht, browser braucht es nicht. 
+| A3 | Rechner neu starten und anmelden | Rubrica läuft wieder, ohne dass jemand etwas startet | -> geht, 1x rubrica startet, archivio startet  doppelt in gleicher version.
+| A4 | Im Browser die Kontaktliste öffnen | Alle Kontakte da, Anzahl stimmt | -> korrekt
+| A5 | Menüleisten-Symbol anklicken | Web-Oberfläche und CardDAV zeigen beide grün | -> korrekt
 
 ---
 
@@ -31,17 +31,19 @@ synchronisieren** urteilen.
 
 | | Handlung | Erwartung |
 |---|---|---|
-| B1 | Neuen Kontakt anlegen, einem Ordner zuweisen | Erscheint in der Liste; nach einigen Minuten auch in Kontakte.app, in der richtigen Gruppe |
-| B2 | Kontakt anlegen und ein Pflichtfeld leer lassen | Speichern wird abgelehnt, das fehlende Feld ist rot markiert |
-| B3 | Kontakt anlegen mit Namen, den es schon gibt | Rückfrage „Möglicher Duplikat“ mit der Wahl, den bestehenden zu bearbeiten |
-| B4 | Bei einem Kontakt Telefonnummer ändern | Änderung nach einigen Minuten in Kontakte.app sichtbar |
-| B5 | Kontakt aus einem Ordner entfernen | Verschwindet in Kontakte.app aus der Gruppe, bleibt aber als Kontakt bestehen |
-| B6 | Kontakt im Browser löschen | Verschwindet auch aus Kontakte.app |
-| B7 | Neuen Ordner anlegen | Erscheint in Kontakte.app als Gruppe |
-| B8 | Ordner umbenennen | Gruppe in Kontakte.app heisst neu, die Mitglieder bleiben |
-| B9 | Mehrere Kontakte auswählen → Sammelbearbeiten | Änderung greift bei allen ausgewählten |
-| B10 | Kontakt per Drag & Drop auf einen Ordner ziehen | Zuordnung wird übernommen |
+| B1 | Neuen Kontakt anlegen, einem Ordner zuweisen | Erscheint in der Liste; nach einigen Minuten auch in Kontakte.app, in der richtigen Gruppe | -> korrekt
+| B2 | Kontakt anlegen und ein Pflichtfeld leer lassen | Speichern wird abgelehnt, das fehlende Feld ist rot markiert | -> korrekt
+| B3 | Kontakt anlegen mit Namen, den es schon gibt | Rückfrage „Möglicher Duplikat“ mit der Wahl, den bestehenden zu bearbeiten | -> korrekt
+| B4 | Bei einem Kontakt Telefonnummer ändern | Änderung nach einigen Minuten in Kontakte.app sichtbar | -> korrekt
+| B5 | Kontakt aus einem Ordner entfernen | Verschwindet in Kontakte.app aus der Gruppe, bleibt aber als Kontakt bestehen | -> korrekt
+| B6 | Kontakt im Browser löschen | Verschwindet auch aus Kontakte.app | ->korrekt
+| B7 | Neuen Ordner anlegen | Erscheint in Kontakte.app als Gruppe | -> korrekt
+| B8 | Ordner umbenennen | Gruppe in Kontakte.app heisst neu, die Mitglieder bleiben | -> korrekt
+| B9 | Mehrere Kontakte auswählen → Sammelbearbeiten | Änderung greift bei allen ausgewählten | -> korrekt
+| B10 | Kontakt per Drag & Drop auf einen Ordner ziehen | Zuordnung wird übernommen | -> korrekt
+Kontakt aus Gruppe entfernen im Browser geht nur mühsam über bearbeiten und checkbox raus. Auf dem Kontakte App ist es gut, wenn man den Kontakt löscht kommt: "Willst du Kontakt aus Ordner entfernen oder löschen" und dann zwei Buttons "entfernen" und "löschen".
 
+Allgemeiner Input: Bei Adresse auch ein Dropdownmenü mit Arbeit, Privat, Baustelle anlegen.
 ---
 
 ## C — Arbeiten in Kontakte.app (Mitarbeitende)
@@ -51,19 +53,20 @@ kommt zuerst als **Vorschlag**.
 
 | | Handlung | Erwartung |
 |---|---|---|
-| C1 | Neuen Kontakt in Kontakte.app anlegen (im Rubrica-Account) | Erscheint unter Vorschlägen, nicht direkt in der Liste |
+| C1 | Neuen Kontakt in Kontakte.app anlegen (im Rubrica-Account) | Erscheint unter Vorschlägen, nicht direkt in der Liste | -> habe zwei angelegt, sie erscheinen aber sie sind leer. alles felder leer.
 | C2 | Diesen Vorschlag mit **Übernehmen** bestätigen | Wird ein echter Kontakt; die Karteikarte in Kontakte.app bleibt bestehen |
 | C3 | Einen Vorschlag **Ablehnen** | Verschwindet aus den Vorschlägen und wird auch in Kontakte.app entfernt |
 | C4 | Vorschlag über **Bearbeiten** korrigieren, dann übernehmen | Die korrigierten Werte werden gespeichert, nicht die ursprünglichen |
-| C5 | Neue Gruppe in Kontakte.app anlegen | Kommt als Ordner-Vorschlag |
-| C6 | Gruppe mit einem bereits bestehenden Kontakt darin anlegen | Nach Bestätigung ist der Kontakt dem neuen Ordner zugeordnet |
-| C7 | Bestehenden Kontakt in Kontakte.app in eine andere Gruppe ziehen | Zuordnung landet in Rubrica (ohne Rückfrage — Zuordnungen gelten als unkritisch) |
-| C8 | Bei einem bestehenden Kontakt in Kontakte.app die Telefonnummer ändern | Kommt als Änderungsvorschlag, alter und neuer Wert sind gegenübergestellt |
-| C9 | Diesen Änderungsvorschlag ablehnen | Rubrica bleibt beim alten Wert und schreibt ihn nach Kontakte.app zurück |
-| C10 | Kontakt in Kontakte.app löschen | Kommt als Löschvorschlag — der Kontakt bleibt in Rubrica, bis entschieden ist |
-| C11 | Löschvorschlag mit **Behalten** beantworten | Der Kontakt taucht in Kontakte.app wieder auf (kann einige Minuten dauern) |
-| C12 | Kontakt in Kontakte.app anlegen, aber **im privaten Account** (iCloud/„Auf meinem Mac“) | Kommt **nicht** in Rubrica an — Rubrica sieht nur seinen eigenen Account |
+| C5 | Neue Gruppe in Kontakte.app anlegen | Kommt als Ordner-Vorschlag | ->korrekt
+| C6 | Gruppe mit einem bereits bestehenden Kontakt darin anlegen | Nach Bestätigung ist der Kontakt dem neuen Ordner zugeordnet | -> korrekt
+| C7 | Bestehenden Kontakt in Kontakte.app in eine andere Gruppe ziehen | Zuordnung landet in Rubrica (ohne Rückfrage — Zuordnungen gelten als unkritisch) | -> korrekt
+| C8 | Bei einem bestehenden Kontakt in Kontakte.app die Telefonnummer ändern | Kommt als Änderungsvorschlag, alter und neuer Wert sind gegenübergestellt | -> korrekt
+| C9 | Diesen Änderungsvorschlag ablehnen | Rubrica bleibt beim alten Wert und schreibt ihn nach Kontakte.app zurück | -> ging nicht, telefonnummer blib alt. 1112 zu 1111
+| C10 | Kontakt in Kontakte.app löschen | Kommt als Löschvorschlag — der Kontakt bleibt in Rubrica, bis entschieden ist | -> korrekt
+| C11 | Löschvorschlag mit **Behalten** beantworten | Der Kontakt taucht in Kontakte.app wieder auf (kann einige Minuten dauern) | umbenannnt
+| C12 | Kontakt in Kontakte.app anlegen, aber **im privaten Account** (iCloud/„Auf meinem Mac“) | Kommt **nicht** in Rubrica an — Rubrica sieht nur seinen eigenen Account | ->korrekt
 
+C1 ist kritisch
 ---
 
 ## D — Kategorien für Telefon und E-Mail

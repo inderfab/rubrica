@@ -75,6 +75,60 @@ def _fold(zeile: str) -> str:
     return "\r\n ".join(t.decode("utf-8") for t in teile)
 
 
+# Unsere Kategorien sind keine vCard-Typen. Fuer fremde Clients wird zusaetzlich
+# der naechstliegende Standardtyp mitgeschrieben; massgeblich ist die Bezeichnung.
+_STANDARD_TEL_TYPEN = {
+    "direkt": ("WORK",), "direkt handy": ("WORK", "CELL"),
+    "privat": ("HOME",), "privat handy": ("HOME", "CELL"),
+}
+_STANDARD_MAIL_TYPEN = {
+    "direkt": ("WORK",), "allgemein": ("WORK",), "privat": ("HOME",),
+}
+
+
+def _geratener_standardtyp(kategorie: str) -> tuple:
+    """Naechstliegender vCard-Standardtyp fuer eine selbst angelegte oder noch nicht
+    migrierte Kategorie ("Sekretariat", "Privat 2", "mobil"). Nur fuer fremde
+    Clients gedacht - Rubrica selbst liest die Bezeichnung, nicht den Typ."""
+    k = (kategorie or "").strip().lower()
+    typen = ("HOME",) if k.startswith(("privat", "home")) else ("WORK",)
+    if any(wort in k for wort in ("handy", "mobil", "cell", "natel", "iphone")):
+        typen += ("CELL",)
+    return typen
+
+
+class _Gruppenzaehler:
+    """Fortlaufende itemN-Praefixe innerhalb einer vCard."""
+
+    def __init__(self):
+        self._n = 0
+
+    def naechste(self) -> str:
+        self._n += 1
+        return f"item{self._n}"
+
+
+def _beschriftete_zeilen(gruppe: "_Gruppenzaehler", feld: str, kategorie: str,
+                         wert: str, standardtypen: dict) -> list:
+    """Schreibt einen Eintrag in Apples Schreibweise fuer eigene Bezeichnungen:
+
+        item1.TEL;TYPE=HOME;TYPE=CELL:+41 79 …
+        item1.X-ABLabel:Privat Handy
+
+    Frueher stand die Kategorie direkt als Typ (`TEL;TYPE=PRIVAT HANDY`). Das ist
+    kein gueltiger Parameterwert - Leerzeichen muessten in Anfuehrungszeichen
+    stehen -, und der Rueckweg fand fuer den zusammengesetzten Begriff keine
+    Zuordnung mehr. Als X-ABLabel zeigt Kontakte.app die Bezeichnung ausserdem so
+    an, wie sie in Rubrica heisst, statt eines technischen Kuerzels."""
+    typen = standardtypen.get((kategorie or "").strip().lower()) or _geratener_standardtyp(kategorie)
+    praefix = gruppe.naechste()
+    typ_teil = "".join(f";TYPE={t}" for t in typen)
+    return [
+        f"{praefix}.{feld}{typ_teil}:{wert}",
+        f"{praefix}.X-ABLabel:{_escape(kategorie)}",
+    ]
+
+
 def kontakt_zu_vcard(kontakt: dict) -> str:
     """Baut eine vCard 3.0 aus einem queries.get_kontakt()-Dict."""
     zeilen = [
@@ -90,10 +144,11 @@ def kontakt_zu_vcard(kontakt: dict) -> str:
         zeilen.append(f"TITLE:{_escape(kontakt['rolle'])}")
     if kontakt.get("kategorie"):
         zeilen.append(f"CATEGORIES:{_escape(kontakt['kategorie'])}")
+    gruppe = _Gruppenzaehler()
     for tel in kontakt.get("telefonnummern", []):
-        zeilen.append(f"TEL;TYPE={_escape(tel['typ']).upper()}:{tel['nummer']}")
+        zeilen += _beschriftete_zeilen(gruppe, "TEL", tel["typ"], tel["nummer"], _STANDARD_TEL_TYPEN)
     for mail in kontakt.get("emails", []):
-        zeilen.append(f"EMAIL;TYPE={_escape(mail['typ']).upper()}:{mail['email']}")
+        zeilen += _beschriftete_zeilen(gruppe, "EMAIL", mail["typ"], mail["email"], _STANDARD_MAIL_TYPEN)
     for adr in kontakt.get("adressen", []):
         zeilen.append(
             f"ADR;TYPE={_escape(adr['typ']).upper()}:;;{_escape(adr['strasse'])};"

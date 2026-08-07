@@ -26,8 +26,13 @@ def test_kontakt_zu_vcard_enthaelt_alle_felder():
     assert "ORG:Muster AG" in vcard
     assert "TITLE:Bauleiterin" in vcard
     assert "CATEGORIES:Fachplaner" in vcard
-    assert "TEL;TYPE=MOBIL:079 123 45 67" in vcard
-    assert "EMAIL;TYPE=ARBEIT:anna@example.com" in vcard
+    # Telefon und E-Mail tragen die Kategorie als X-ABLabel, nicht als TYPE: unsere
+    # Kategorien sind keine vCard-Typen, und "Privat Handy" waere als Parameterwert
+    # mit Leerzeichen ungueltig (siehe radicale._beschriftete_zeilen).
+    assert "item1.TEL;TYPE=WORK;TYPE=CELL:079 123 45 67" in vcard
+    assert "item1.X-ABLabel:mobil" in vcard
+    assert "item2.EMAIL;TYPE=WORK:anna@example.com" in vcard
+    assert "item2.X-ABLabel:arbeit" in vcard
     assert "ADR;TYPE=ARBEIT:;;Teststrasse 1;Zuerich;ZH;8000;Schweiz" in vcard
     assert "URL;TYPE=HOMEPAGE:https://example.com" in vcard
     assert "NOTE:Testnotiz" in vcard
@@ -314,3 +319,39 @@ def test_sync_alle_entfernt_bereits_gepushten_z_ordner(tmp_db, monkeypatch):
     assert ergebnis["entfernt"] == 1
     assert ("DELETE", f"/a/projekt-{z_projekt_id}.vcf") in gesendet
     assert ("PUT", f"/a/projekt-{z_projekt_id}.vcf") not in gesendet
+
+
+def test_kategorie_ueberlebt_den_weg_durch_die_vcard():
+    """Regression (Nutzer-Meldung: reihenweise Vorschläge "Privat -> Direkt" für
+    Nummern, die niemand angefasst hatte). Die Kategorie stand als TYPE in der
+    vCard - "PRIVAT HANDY" ist als Parameterwert mit Leerzeichen ungültig und fand
+    beim Zurücklesen keine Zuordnung mehr, landete also auf "Direkt". Da die
+    Änderungserkennung geparsten Schnappschuss gegen geparsten Serverstand
+    vergleicht, wurde daraus ein Änderungsvorschlag."""
+    import vobject
+    from importer import vcard as vcard_modul
+
+    kategorien = ["Direkt", "Direkt Handy", "Privat", "Privat Handy", "Sekretariat"]
+    kontakt = _kontakt(
+        telefonnummern=[{"typ": k, "nummer": f"+41 44 111 11 {i:02d}"} for i, k in enumerate(kategorien)],
+        emails=[{"typ": k, "email": f"{i}@beispiel.ch"} for i, k in enumerate(["Direkt", "Allgemein", "Privat"])],
+    )
+    zurueck = vcard_modul._parse_kontakt(vobject.readOne(radicale.kontakt_zu_vcard(kontakt)))
+
+    assert [t["typ"] for t in zurueck["telefonnummern"]] == kategorien
+    assert [e["typ"] for e in zurueck["emails"]] == ["Direkt", "Allgemein", "Privat"]
+
+
+def test_alte_vcards_mit_kategorie_als_typ_bleiben_lesbar():
+    """Karten im alten Format liegen weiterhin auf dem Server - der Rückweg muss
+    sie verstehen, sonst meldet die Änderungserkennung sie als Umkategorisierung."""
+    import vobject
+    from importer import vcard as vcard_modul
+
+    alt = ("BEGIN:VCARD\r\nVERSION:3.0\r\nN:Muster;Anna;;;\r\nFN:Anna Muster\r\n"
+           "TEL;TYPE=PRIVAT HANDY:+41 79 242 59 32\r\n"
+           "TEL;TYPE=DIREKT HANDY:+41 79 111 11 11\r\n"
+           "TEL;TYPE=PRIVAT:+41 44 222 22 22\r\n"
+           "END:VCARD\r\n")
+    typen = [t["typ"] for t in vcard_modul._parse_kontakt(vobject.readOne(alt))["telefonnummern"]]
+    assert typen == ["Privat Handy", "Direkt Handy", "Privat"]

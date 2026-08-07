@@ -347,6 +347,13 @@ xattr -cr "/Applications/Rubrica Server.app" 2>/dev/null || true
 APP_RES="/Applications/Rubrica Server.app/Contents/Resources"
 DATA_DIR="/Users/$CURRENT_USER/Library/Application Support/Rubrica"
 
+# Muss VOR dem ersten App-Start erfasst werden (der legt config.yaml aus dem
+# Beispiel an, sobald der launchd-Dienst unten hochfaehrt) - sonst liesse sich
+# hinterher nicht mehr unterscheiden, ob dies eine frische Installation war
+# oder ein Update einer bereits eingerichteten.
+FRISCHE_INSTALLATION=0
+[ -f "$DATA_DIR/config.yaml" ] || FRISCHE_INSTALLATION=1
+
 TLS_DIR="$DATA_DIR/radicale-tls"
 HOSTNAME_LOCAL="$(sudo -u "$CURRENT_USER" scutil --get LocalHostName 2>/dev/null || hostname).local"
 if [ ! -f "$TLS_DIR/cert.pem" ]; then
@@ -420,24 +427,27 @@ done
 # der Anmeldung wieder.
 _install_agent "ch.rubrica.server" "/Applications/Rubrica Server.app/Contents/MacOS/Rubrica Server"
 
-# Sicherheitsnetz, falls launchctl den Agent nicht annimmt (z.B. weil die
-# Sitzung gerade keine GUI-Domain hat): App direkt starten.
-sleep 2
-if ! pgrep -f "/Applications/Rubrica Server.app/Contents/MacOS/" >/dev/null 2>&1; then
+# Sicherheitsnetz, falls launchctl den Agent nicht annimmt (z.B. weil die Sitzung
+# gerade keine GUI-Domain hat). Gefragt wird nach dem JOB, nicht nach dem Prozess:
+# eine Prozesspruefung kurz nach dem Bootstrap findet die App noch nicht (sie
+# startet gerade erst) und legte eine zweite daneben - genau das ergab zwei
+# Symbole in der Menueleiste (Nutzer-Meldung beim Abnahmetest).
+if ! sudo -u "$CURRENT_USER" launchctl print "gui/$USER_UID/ch.rubrica.server" >/dev/null 2>&1; then
   sudo -u "$CURRENT_USER" open -a "/Applications/Rubrica Server.app" 2>/dev/null || true
 fi
 
-# ── Rubrica nach der Installation oeffnen ─────────────────────────────────────
-# Bewusst nach JEDER Installation (Nutzer-Vorgabe), nicht nur bei einer frischen:
-# ohne Dock-Icon ist ein Menubar-Symbol der einzige Hinweis, dass etwas laeuft -
-# der geoeffnete Tab ist die Rueckmeldung, dass die Installation geklappt hat.
-# Bei einer frischen Installation ist es zugleich der Einrichtungsassistent.
-WEB_PORT=8001
-for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
-  curl -s -o /dev/null "http://127.0.0.1:$WEB_PORT/" && break
-  sleep 1
-done
-sudo -u "$CURRENT_USER" open "http://127.0.0.1:$WEB_PORT/" 2>/dev/null || true
+# ── Bei einer frischen Installation den Einrichtungsassistenten oeffnen ───────
+# Nur dann: bei einem Update ist der Tab ueberfluessig ("browser braucht es
+# nicht", Nutzer-Rueckmeldung), beim ersten Mal faende man die Web-Oberflaeche
+# sonst gar nicht - es gibt kein Dock-Icon, nur das Menueleisten-Symbol.
+if [ "$FRISCHE_INSTALLATION" = "1" ]; then
+  WEB_PORT=8001
+  for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+    curl -s -o /dev/null "http://127.0.0.1:$WEB_PORT/" && break
+    sleep 1
+  done
+  sudo -u "$CURRENT_USER" open "http://127.0.0.1:$WEB_PORT/" 2>/dev/null || true
+fi
 
 exit 0
 POSTINSTALL

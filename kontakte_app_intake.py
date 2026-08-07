@@ -62,12 +62,17 @@ def konfiguriert() -> bool:
     return bool(radicale.settings.get("radicale.base_url", ""))
 
 
-def _fremde_vcf_namen(client) -> list[str]:
+def _fremde_vcf_namen(client) -> "list[str] | None":
     """Alle .vcf-Ressourcennamen im Adressbuch (PROPFIND, Tiefe 1), gefiltert auf
-    alles, was NICHT Rubricas eigenem Namensmuster entspricht."""
+    alles, was NICHT Rubricas eigenem Namensmuster entspricht.
+
+    None bedeutet "nicht abfragbar" und ist bewusst von der leeren Liste
+    unterschieden: die leere Liste heisst "es gibt keine fremden Karten mehr" und
+    zieht verwaiste Vorschlaege zurueck - bei einem Verbindungsfehler waere genau
+    das falsch."""
     resp = client.request("PROPFIND", "", headers={"Depth": "1"})
     if resp.status_code >= 400:
-        return []
+        return None
     alle = re.findall(r"([A-Za-z0-9\-_.]+\.vcf)", resp.text)
     return [name for name in alle if not _EIGENES_MUSTER.match(name)]
 
@@ -116,6 +121,20 @@ def _ordner_rohdaten(text: str, vcf_name: str) -> dict:
     }
 
 
+def _ohne_inhalt(kontakt: dict) -> bool:
+    """Traegt die Karte ueberhaupt etwas, das man vorschlagen koennte?
+
+    Kontakte.app legt eine Karte bereits beim Klick auf "+" an und schiebt sie
+    sofort auf den Server - zu diesem Zeitpunkt ist sie noch komplett leer, der
+    Name wird erst danach getippt. Ohne diese Pruefung entstand daraus ein
+    Vorschlag ohne ein einziges Feld (Nutzer-Meldung: "sie erscheinen aber sie
+    sind leer"). Uebersprungen wird er nur; sobald die Karte gefuellt ist, greift
+    beim naechsten Durchlauf der normale Weg."""
+    if any(str(kontakt.get(feld) or "").strip() for feld in ("vorname", "nachname", "firma")):
+        return False
+    return not any(kontakt.get(feld) for feld in ("telefonnummern", "emails", "adressen", "urls"))
+
+
 def pruefe_kontakte_app_neuzugaenge(conn) -> dict:
     """Scannt Radicale nach fremden vCards, legt fuer jede neue (noch nicht als
     Vorschlag erfasste) einen offenen Vorschlag mit quelle='kontakte_app' an -
@@ -126,9 +145,12 @@ def pruefe_kontakte_app_neuzugaenge(conn) -> dict:
     if client is None:
         return {"aktiv": False, "geprueft": 0, "neu": 0, "aktualisiert": 0, "fehler": 0}
 
-    geprueft = neu = fehler = aktualisiert = 0
+    geprueft = neu = fehler = aktualisiert = zurueckgezogen = 0
     try:
         alle_namen = _fremde_vcf_namen(client)
+        if alle_namen is None:
+            return {"aktiv": True, "geprueft": 0, "neu": 0, "aktualisiert": 0,
+                    "zurueckgezogen": 0, "fehler": 1}
         namen, nachzuziehen = [], []
         for n in alle_namen:
             offener = queries.offener_vorschlag_fuer_message_id(conn, f"kontakte-app:{n}")
@@ -179,17 +201,46 @@ def pruefe_kontakte_app_neuzugaenge(conn) -> dict:
                     apple_uid = kontakt.get("apple_uid")
                     kontakt["erkannte_ordner_ids"] = mitgliedschaften.get(apple_uid, []) if apple_uid else []
                     kontakt["kontakte_app_vcf_name"] = name
+                    if _ohne_inhalt(kontakt):
+                        continue
                     match_id = finde_match(conn, kontakt)
                     queries.create_vorschlag(conn, kontakt, kontakt_id=match_id,
                                               quelle="kontakte_app", message_id=message_id)
                     neu += 1
             except Exception:
                 fehler += 1
+        zurueckgezogen = _ziehe_verwaiste_vorschlaege_zurueck(conn, alle_namen)
     finally:
         client.close()
 
-    return {"aktiv": True, "geprueft": geprueft, "neu": neu,
-            "aktualisiert": aktualisiert, "fehler": fehler}
+    return {"aktiv": True, "geprueft": geprueft, "neu": neu, "aktualisiert": aktualisiert,
+            "zurueckgezogen": zurueckgezogen, "fehler": fehler}
+
+
+def _ziehe_verwaiste_vorschlaege_zurueck(conn, vorhandene_namen: list) -> int:
+    """Schliesst offene Kontakte.app-Vorschlaege, zu denen es nichts mehr zu
+    entscheiden gibt:
+
+    - Die zugehoerige Karte liegt nicht mehr auf dem Server. Sie wurde in
+      Kontakte.app wieder geloescht (oder unter neuer UID ersetzt) - der Vorschlag
+      zeigt dann auf etwas, das es nicht mehr gibt, und liesse sich nicht einmal
+      mehr sinnvoll uebernehmen.
+    - Der Vorschlag ist inhaltlich leer geblieben. Das passiert bei einer Karte,
+      die Kontakte.app beim Klick auf "+" anlegt und die nie gefuellt wurde."""
+    vorhanden = set(vorhandene_namen)
+    zurueckgezogen = 0
+    for vorschlag in queries.list_vorschlaege(conn, status="offen", quelle="kontakte_app"):
+        if not (vorschlag["message_id"] or "").startswith("kontakte-app:"):
+            continue  # Aenderungs-/Loeschvorschlaege haben eigene Praefixe
+        rohdaten = vorschlag["rohdaten"] or {}
+        if rohdaten.get("typ") == "ordner":
+            continue
+        name = rohdaten.get("kontakte_app_vcf_name")
+        if name in vorhanden and not _ohne_inhalt(rohdaten):
+            continue
+        queries.set_vorschlag_status(conn, vorschlag["id"], "abgelehnt")
+        zurueckgezogen += 1
+    return zurueckgezogen
 
 
 def pruefe_ordner_mitgliedschaften(conn, client=None) -> dict:
@@ -382,6 +433,24 @@ def _vergleichswert(eintrag) -> str:
     )
 
 
+def _entspricht_der_datenbank(bestehend: dict, feld: str, wert) -> bool:
+    """Steht der Serverwert bereits so in Rubrica?
+
+    Dann ist es keine Aenderung aus Kontakte.app, sondern Rubricas eigener Stand -
+    und ein Vorschlag "uebernimm, was ohnehin schon dasteht" waere sinnlos.
+    Konkreter Anlass: die Umstellung der Telefon-Kategorien hat den Datenbankstand
+    veraendert. Der Schnappschuss stammte noch von davor, der Server hatte den
+    neuen Stand bereits - daraus wurden reihenweise Vorschlaege fuer Nummern, die
+    niemand angefasst hatte (Nutzer-Meldung)."""
+    if bestehend is None or feld not in bestehend:
+        return False
+    db_wert = bestehend[feld]
+    if isinstance(wert, list) or isinstance(db_wert, list):
+        return sorted(_vergleichswert(e) for e in (wert or [])) == \
+               sorted(_vergleichswert(e) for e in (db_wert or []))
+    return " ".join(str(wert or "").split()) == " ".join(str(db_wert or "").split())
+
+
 def _feld_unterschiede(alt: dict, neu: dict) -> dict:
     """Vergleicht zwei geparste Kontakte und liefert nur die abweichenden Felder.
 
@@ -430,7 +499,7 @@ def pruefe_kontakt_aenderungen(conn, client=None) -> dict:
     if client is None:
         return {"aktiv": False, "geprueft": 0, "neu": 0, "fehler": 0}
 
-    geprueft = neu = fehler = 0
+    geprueft = neu = fehler = zurueckgezogen = 0
     try:
         for eintrag in queries.kontakte_mit_gepushter_vcard(conn):
             kontakt_id = eintrag["id"]
@@ -460,23 +529,42 @@ def pruefe_kontakt_aenderungen(conn, client=None) -> dict:
                 continue
             if resp.status_code != 200:
                 continue  # nicht lesbar - kein Rueckschluss moeglich
-            if resp.text.strip() == (eintrag["vcard"] or "").strip():
-                continue  # unveraendert
 
-            geprueft += 1
-            alt = _erste_vcard(eintrag["vcard"] or "")
-            jetzt = _erste_vcard(resp.text)
-            if alt is None or jetzt is None:
-                fehler += 1
+            unterschiede = {}
+            jetzt = None
+            if resp.text.strip() != (eintrag["vcard"] or "").strip():
+                geprueft += 1
+                alt = _erste_vcard(eintrag["vcard"] or "")
+                jetzt = _erste_vcard(resp.text)
+                if alt is None or jetzt is None:
+                    fehler += 1
+                    continue
+                # Kein Unterschied heisst: nur Formatierung/Reihenfolge weichen ab.
+                unterschiede = _feld_unterschiede(alt, jetzt)
+                bestehend = queries.get_kontakt(conn, kontakt_id) if unterschiede else None
+                unterschiede = {
+                    feld: d for feld, d in unterschiede.items()
+                    if not _entspricht_der_datenbank(bestehend, feld, d["wert"])
+                }
+
+            message_id = None
+            if unterschiede:
+                rumpf = "|".join(f"{f}={d['neu']}" for f, d in sorted(unterschiede.items()))
+                message_id = f"kontakte-app-aenderung:{kontakt_id}:{hashlib.sha1(rumpf.encode()).hexdigest()[:12]}"
+
+            # Offene Vorschlaege zurueckziehen, die den aktuellen Stand nicht mehr
+            # abbilden: der Unterschied ist verschwunden (jemand hat ihn im Browser
+            # nachgezogen, oder er war nie einer - siehe die falschen
+            # Umkategorisierungen durch den kaputten vCard-Rueckweg), oder es steht
+            # inzwischen eine ANDERE Aenderung an. Ohne das blieben sie fuer immer
+            # in der Liste stehen und muessten von Hand einzeln weggeklickt werden.
+            for offener in queries.offene_aenderungs_vorschlaege(conn, kontakt_id):
+                if offener["message_id"] != message_id:
+                    queries.set_vorschlag_status(conn, offener["id"], "abgelehnt")
+                    zurueckgezogen += 1
+
+            if message_id is None:
                 continue
-
-            unterschiede = _feld_unterschiede(alt, jetzt)
-            if not unterschiede:
-                # Nur Formatierung/Reihenfolge abweichend - kein echter Inhaltswechsel.
-                continue
-
-            rumpf = "|".join(f"{f}={d['neu']}" for f, d in sorted(unterschiede.items()))
-            message_id = f"kontakte-app-aenderung:{kontakt_id}:{hashlib.sha1(rumpf.encode()).hexdigest()[:12]}"
             if queries.vorschlag_existiert_fuer_message_id(conn, message_id):
                 continue
 
@@ -493,7 +581,8 @@ def pruefe_kontakt_aenderungen(conn, client=None) -> dict:
         if eigener:
             client.close()
 
-    return {"aktiv": True, "geprueft": geprueft, "neu": neu, "fehler": fehler}
+    return {"aktiv": True, "geprueft": geprueft, "neu": neu,
+            "zurueckgezogen": zurueckgezogen, "fehler": fehler}
 
 
 def bestaetige_ordner_vorschlag(conn, vorschlag: dict) -> int:
@@ -584,6 +673,9 @@ def pruefe_und_beschreibe(conn) -> str:
             return "Kein Radicale-Server konfiguriert."
         text = (f"{ergebnis['geprueft']} neue Kontakte.app-Einträge geprüft, "
                 f"{ergebnis['neu']} neue Vorschläge angelegt.")
+        if ergebnis.get("zurueckgezogen"):
+            text += (f" {ergebnis['zurueckgezogen']} gegenstandslose Vorschläge "
+                     f"zurückgezogen.")
         if ergebnis["fehler"]:
             text += f" {ergebnis['fehler']} übersprungen (Fehler)."
     except Exception as exc:
@@ -604,6 +696,9 @@ def pruefe_und_beschreibe(conn) -> str:
         aenderungen = pruefe_kontakt_aenderungen(conn)
         if aenderungen["neu"]:
             text += f" {aenderungen['neu']} geänderte Kontakte gefunden."
+        if aenderungen.get("zurueckgezogen"):
+            text += (f" {aenderungen['zurueckgezogen']} Änderungsvorschläge "
+                     f"zurückgezogen (Unterschied besteht nicht mehr).")
     except Exception as exc:
         text += f" Änderungserkennung fehlgeschlagen: {type(exc).__name__}: {exc}"
     return text
