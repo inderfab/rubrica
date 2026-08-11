@@ -27,11 +27,13 @@
     <tbody>
         {% for v in vorschlaege %}
         {% set k = v.rohdaten %}
-        {% if k.typ in ("loeschung", "loeschung_ordner") %}
+        {# Kontakte kommen nicht mehr als Loeschvorschlag: Loeschen geht nur noch im
+           Browser (Nutzer-Entscheid), eine Loeschung in Kontakte.app wird
+           zurueckgeschrieben. Fuer ORDNER bleibt der Vorschlag - eine geloeschte
+           Gruppe ist eine bewusstere Handlung und betrifft keine Kontaktdaten. #}
+        {% if k.typ == "loeschung_ordner" %}
         <tr>
-            <td colspan="2">
-                {% if k.typ == "loeschung_ordner" %}📁 {{ k.name }}{% else %}{{ k.vorname }} {{ k.nachname }}{% endif %}
-            </td>
+            <td colspan="2">📁 {{ k.name }}</td>
             <td colspan="2">{{ k.firma }}</td>
             <td>Kontakte.app</td>
             <td>

@@ -34,11 +34,19 @@ Mitgliedschafts-Erkennung ist zweiseitig ("wenn moeglich", Nutzer-Vorgabe):
    Kontakt-Vorschlag noch nicht bestaetigt ist, werden dabei NICHT
    nachtraeglich verknuepft und muessen im Buero danach manuell per Drag&Drop
    ergaenzt werden.
-Race bewusst in Kauf genommen: pusht Rubrica einen bereits bestehenden Ordner
-(push_projekt) neu, BEVOR ein Scan laeuft, baut das die Mitgliederliste
-komplett aus der eigenen kontakte_projekte-Tabelle neu auf und ueberschreibt
-damit eine gerade erst in Kontakte.app hinzugefuegte Mitgliedschaft, ohne dass
-dieses Modul das noch sehen koennte.
+Dieser Wettlauf war lange bewusst in Kauf genommen: pusht Rubrica einen Ordner
+neu, BEVOR ein Scan laeuft, baut das die Mitgliederliste komplett aus der
+eigenen kontakte_projekte-Tabelle neu auf. Der Abnahmetest hat gezeigt, dass er
+nicht selten ist, sondern der Normalfall, sobald jemand einen Kontakt direkt in
+einer Gruppe anlegt - die Zuordnung war dann weg, bevor sie jemand lesen
+konnte. push_projekt schreibt fremde Mitglieder deshalb mit, solange ihr
+Vorschlag offen ist (siehe radicale._offene_fremde_mitglieder).
+
+Geloescht wird nur im Browser (Nutzer-Entscheid nach dem Abnahmetest):
+verschwindet eine kontakt-N.vcf aus Kontakte.app, schreibt Rubrica sie wieder
+hin, statt einen Loeschvorschlag vorzulegen. Fuer Ordner bleibt der Vorschlag -
+eine geloeschte Gruppe ist eine bewusstere Handlung und betrifft keine
+Kontaktdaten.
 """
 from __future__ import annotations
 
@@ -135,6 +143,38 @@ def _ohne_inhalt(kontakt: dict) -> bool:
     return not any(kontakt.get(feld) for feld in ("telefonnummern", "emails", "adressen", "urls"))
 
 
+def _inhalts_signatur(kontakt: dict) -> tuple:
+    """Was denselben Menschen ausmacht, unabhaengig davon, in welcher Datei er steht."""
+    return (
+        (kontakt.get("vorname") or "").strip().lower(),
+        (kontakt.get("nachname") or "").strip().lower(),
+        (kontakt.get("firma") or "").strip().lower(),
+        tuple(sorted(re.sub(r"\D", "", t.get("nummer") or "")
+                      for t in kontakt.get("telefonnummern") or [])),
+        tuple(sorted((e.get("email") or "").strip().lower()
+                      for e in kontakt.get("emails") or [])),
+    )
+
+
+def _gleicher_offener_vorschlag(conn, kontakt: dict) -> "dict | None":
+    """Steht derselbe Kontakt bereits als offener Vorschlag - nur aus einer anderen
+    Karteikarte?
+
+    Nutzer-Meldung im Abnahmetest: ein in Kontakte.app angelegter Kontakt kam
+    doppelt an. Der Dublettenschutz fragt bisher nur nach dem Dateinamen, und Apple
+    legt beim Anlegen unter Umstaenden eine zweite Karte mit neuer UID an, statt die
+    erste weiterzuverwenden. Dann sind es zwei Dateien mit identischem Inhalt - und
+    damit zwei Vorschlaege ueber dieselbe Person."""
+    signatur = _inhalts_signatur(kontakt)
+    for vorschlag in queries.list_vorschlaege(conn, status="offen", quelle="kontakte_app"):
+        rohdaten = vorschlag["rohdaten"] or {}
+        if rohdaten.get("typ") in ("ordner", "aenderung", "loeschung", "loeschung_ordner"):
+            continue
+        if _inhalts_signatur(rohdaten) == signatur:
+            return vorschlag
+    return None
+
+
 def pruefe_kontakte_app_neuzugaenge(conn) -> dict:
     """Scannt Radicale nach fremden vCards, legt fuer jede neue (noch nicht als
     Vorschlag erfasste) einen offenen Vorschlag mit quelle='kontakte_app' an -
@@ -143,16 +183,22 @@ def pruefe_kontakte_app_neuzugaenge(conn) -> dict:
     pruefe_und_beschreibe fuer die fehlertolerante Anzeige-Variante)."""
     client = radicale._client()
     if client is None:
-        return {"aktiv": False, "geprueft": 0, "neu": 0, "aktualisiert": 0, "fehler": 0}
+        return {"aktiv": False, "geprueft": 0, "neu": 0, "aktualisiert": 0,
+                "zurueckgezogen": 0, "zusammengefuehrt": 0, "fehler": 0}
 
-    geprueft = neu = fehler = aktualisiert = zurueckgezogen = 0
+    geprueft = neu = fehler = aktualisiert = zurueckgezogen = zusammengefuehrt = 0
     try:
         alle_namen = _fremde_vcf_namen(client)
         if alle_namen is None:
             return {"aktiv": True, "geprueft": 0, "neu": 0, "aktualisiert": 0,
-                    "zurueckgezogen": 0, "fehler": 1}
+                    "zurueckgezogen": 0, "zusammengefuehrt": 0, "fehler": 1}
+        # Karten, die bereits als Zweitkarte an einem offenen Vorschlag haengen:
+        # ohne das wuerden sie bei jedem Durchlauf erneut betrachtet.
+        schon_zugeordnet = queries.offene_kontakte_app_zweitkarten(conn)
         namen, nachzuziehen = [], []
         for n in alle_namen:
+            if n in schon_zugeordnet:
+                continue
             offener = queries.offener_vorschlag_fuer_message_id(conn, f"kontakte-app:{n}")
             if offener is not None:
                 # Wurde die vCard nach der Erfassung noch korrigiert (Tippfehler im
@@ -175,6 +221,11 @@ def pruefe_kontakte_app_neuzugaenge(conn) -> dict:
                     apple_uid = kontakt.get("apple_uid")
                     kontakt["erkannte_ordner_ids"] = mitgliedschaften.get(apple_uid, []) if apple_uid else []
                     kontakt["kontakte_app_vcf_name"] = name
+                    # Zweitkarten bleiben am Vorschlag haengen (siehe unten) - sie
+                    # duerfen beim Nachziehen des Inhalts nicht verlorengehen.
+                    weitere = (offener["rohdaten"] or {}).get("weitere_vcf_namen")
+                    if weitere:
+                        kontakt["weitere_vcf_namen"] = weitere
                     if kontakt != offener["rohdaten"]:
                         queries.update_vorschlag_rohdaten(conn, offener["id"], kontakt)
                         aktualisiert += 1
@@ -203,6 +254,19 @@ def pruefe_kontakte_app_neuzugaenge(conn) -> dict:
                     kontakt["kontakte_app_vcf_name"] = name
                     if _ohne_inhalt(kontakt):
                         continue
+                    doppelt = _gleicher_offener_vorschlag(conn, kontakt)
+                    if doppelt is not None:
+                        # Kein zweiter Vorschlag - stattdessen die zusaetzliche Karte
+                        # am bestehenden vermerken, damit beim Entscheid beide
+                        # verschwinden und keine als Karteileiche liegen bleibt.
+                        rohdaten = dict(doppelt["rohdaten"])
+                        weitere = list(rohdaten.get("weitere_vcf_namen") or [])
+                        if name not in weitere:
+                            weitere.append(name)
+                        rohdaten["weitere_vcf_namen"] = weitere
+                        queries.update_vorschlag_rohdaten(conn, doppelt["id"], rohdaten)
+                        zusammengefuehrt += 1
+                        continue
                     match_id = finde_match(conn, kontakt)
                     queries.create_vorschlag(conn, kontakt, kontakt_id=match_id,
                                               quelle="kontakte_app", message_id=message_id)
@@ -214,7 +278,8 @@ def pruefe_kontakte_app_neuzugaenge(conn) -> dict:
         client.close()
 
     return {"aktiv": True, "geprueft": geprueft, "neu": neu, "aktualisiert": aktualisiert,
-            "zurueckgezogen": zurueckgezogen, "fehler": fehler}
+            "zurueckgezogen": zurueckgezogen, "zusammengefuehrt": zusammengefuehrt,
+            "fehler": fehler}
 
 
 def _ziehe_verwaiste_vorschlaege_zurueck(conn, vorhandene_namen: list) -> int:
@@ -298,7 +363,7 @@ def pruefe_ordner_mitgliedschaften(conn, client=None) -> dict:
                     }, quelle="kontakte_app", message_id=message_id)
                 continue
 
-            server, server_name = roh
+            server, server_name, _fremde = roh
             # Umbenennung wirkt direkt - sie aendert keine Kontaktdaten, nur eine
             # Bezeichnung (dieselbe Ueberlegung wie beim Verschieben in Ordner).
             if server_name and server_name != projekt["name"]:
@@ -499,7 +564,7 @@ def pruefe_kontakt_aenderungen(conn, client=None) -> dict:
     if client is None:
         return {"aktiv": False, "geprueft": 0, "neu": 0, "fehler": 0}
 
-    geprueft = neu = fehler = zurueckgezogen = 0
+    geprueft = neu = fehler = zurueckgezogen = wiederhergestellt = 0
     try:
         for eintrag in queries.kontakte_mit_gepushter_vcard(conn):
             kontakt_id = eintrag["id"]
@@ -510,22 +575,16 @@ def pruefe_kontakt_aenderungen(conn, client=None) -> dict:
                 continue
             if resp.status_code == 404:
                 # Es gab einen bestaetigten Push, jetzt ist die vCard weg - jemand hat
-                # den Kontakt in Kontakte.app geloescht. Als Vorschlag vorlegen statt
-                # still zu ignorieren (sonst schriebe ihn der naechste Push wortlos
-                # zurueck und die Loeschung waere wirkungslos).
-                message_id = f"{LOESCHUNG_KONTAKT_PRAEFIX}{kontakt_id}"
-                if queries.vorschlag_existiert_fuer_message_id(conn, message_id):
-                    continue
-                bestehend = queries.get_kontakt(conn, kontakt_id)
-                if bestehend is None:
-                    continue
+                # den Kontakt in Kontakte.app geloescht. Rubrica schreibt ihn wieder
+                # hin (Nutzer-Entscheid: Loeschen nur noch im Browser, siehe
+                # docs/TESTABLAUF.md). Frueher kam das als Vorschlag mit "Behalten"
+                # oder "Auch in Rubrica loeschen" - das war der stoerungsanfaelligste
+                # Weg des ganzen Abgleichs: solange die Entscheidung offen war, musste
+                # der Push fuer diesen Kontakt gesperrt bleiben, sonst tauchte er in
+                # Kontakte.app sofort wieder auf und wurde erneut geloescht.
                 geprueft += 1
-                queries.create_vorschlag(conn, {
-                    "typ": "loeschung",
-                    "vorname": bestehend["vorname"], "nachname": bestehend["nachname"],
-                    "firma": bestehend["firma"],
-                }, kontakt_id=kontakt_id, quelle="kontakte_app", message_id=message_id)
-                neu += 1
+                if radicale.push_kontakt(conn, kontakt_id, client=client):
+                    wiederhergestellt += 1
                 continue
             if resp.status_code != 200:
                 continue  # nicht lesbar - kein Rueckschluss moeglich
@@ -582,7 +641,8 @@ def pruefe_kontakt_aenderungen(conn, client=None) -> dict:
             client.close()
 
     return {"aktiv": True, "geprueft": geprueft, "neu": neu,
-            "zurueckgezogen": zurueckgezogen, "fehler": fehler}
+            "zurueckgezogen": zurueckgezogen, "wiederhergestellt": wiederhergestellt,
+            "fehler": fehler}
 
 
 def bestaetige_ordner_vorschlag(conn, vorschlag: dict) -> int:
@@ -673,6 +733,9 @@ def pruefe_und_beschreibe(conn) -> str:
             return "Kein Radicale-Server konfiguriert."
         text = (f"{ergebnis['geprueft']} neue Kontakte.app-Einträge geprüft, "
                 f"{ergebnis['neu']} neue Vorschläge angelegt.")
+        if ergebnis.get("zusammengefuehrt"):
+            text += (f" {ergebnis['zusammengefuehrt']} Doppelkarten demselben Vorschlag "
+                     f"zugeordnet.")
         if ergebnis.get("zurueckgezogen"):
             text += (f" {ergebnis['zurueckgezogen']} gegenstandslose Vorschläge "
                      f"zurückgezogen.")
@@ -696,6 +759,9 @@ def pruefe_und_beschreibe(conn) -> str:
         aenderungen = pruefe_kontakt_aenderungen(conn)
         if aenderungen["neu"]:
             text += f" {aenderungen['neu']} geänderte Kontakte gefunden."
+        if aenderungen.get("wiederhergestellt"):
+            text += (f" {aenderungen['wiederhergestellt']} in Kontakte.app gelöschte "
+                     f"Kontakte wiederhergestellt (Löschen geht nur im Browser).")
         if aenderungen.get("zurueckgezogen"):
             text += (f" {aenderungen['zurueckgezogen']} Änderungsvorschläge "
                      f"zurückgezogen (Unterschied besteht nicht mehr).")

@@ -492,6 +492,23 @@ def hat_offenen_loeschvorschlag(conn: sqlite3.Connection, message_id: str) -> bo
     ).fetchone() is not None
 
 
+def offene_kontakte_app_apple_uids(conn: sqlite3.Connection) -> set:
+    """Apple-UIDs aller Kontakte.app-Vorschlaege, ueber die noch nicht entschieden
+    ist - Grundlage dafuer, deren Ordner-Zugehoerigkeit auf dem Server stehen zu
+    lassen (siehe sync.radicale._offene_fremde_mitglieder)."""
+    uids = set()
+    for row in conn.execute(
+        "SELECT rohdaten FROM vorschlaege WHERE status = 'offen' AND quelle = 'kontakte_app'"
+    ):
+        try:
+            uid = (json.loads(row["rohdaten"]) or {}).get("apple_uid")
+        except (TypeError, ValueError):
+            continue
+        if uid:
+            uids.add(uid)
+    return uids
+
+
 def offene_aenderungs_vorschlaege(conn: sqlite3.Connection, kontakt_id: int) -> list:
     """Alle offenen Aenderungsvorschlaege zu einem Kontakt - Grundlage dafuer, einen
     hinfaellig gewordenen wieder zurueckzuziehen (siehe
@@ -741,3 +758,19 @@ def bestaetige_vorschlag(conn: sqlite3.Connection, vorschlag_id: int,
     return kontakt_id
 
 
+
+
+def offene_kontakte_app_zweitkarten(conn: sqlite3.Connection) -> set:
+    """Dateinamen der Karteikarten, die bereits als Zweitkarte an einem offenen
+    Vorschlag haengen (siehe kontakte_app_intake._gleicher_offener_vorschlag).
+    Ohne diese Liste wuerde dieselbe Karte bei jedem Durchlauf erneut betrachtet."""
+    namen = set()
+    for row in conn.execute(
+        "SELECT rohdaten FROM vorschlaege WHERE status = 'offen' AND quelle = 'kontakte_app'"
+    ):
+        try:
+            rohdaten = json.loads(row["rohdaten"]) or {}
+        except (TypeError, ValueError):
+            continue
+        namen.update(rohdaten.get("weitere_vcf_namen") or [])
+    return namen

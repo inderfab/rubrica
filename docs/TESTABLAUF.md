@@ -3,9 +3,8 @@
 Vollständiger Durchlauf von der Installation bis zum Export. Gedacht zum Abhaken:
 jeder Punkt ist eine Handlung mit einer klaren Erwartung.
 
-**Stand:** zweiter Durchgang mit **v1.15.0** bis Abschnitt C. Die offenen Befunde daraus
-stehen in [Offene Befunde aus v1.15.0](#offene-befunde-aus-v1150) und sind der
-Startpunkt für die nächste Sitzung.
+**Stand:** zweiter Durchgang mit v1.15.0 bis Abschnitt C. Die drei Befunde daraus sind
+in **v1.16.0** behoben; die betroffenen Punkte stehen wieder auf 🔁. Ab dort weiter.
 
 | Zeichen | Bedeutung |
 |---|---|
@@ -62,8 +61,8 @@ kommt zuerst als **Vorschlag**.
 
 | | Status | Handlung | Erwartung | Befund |
 |---|---|---|---|---|
-| C1 | ❌ | Neuen Kontakt in Kontakte.app anlegen (im Rubrica-Account) | Erscheint **einmal** unter Vorschlägen, mit allen Feldern und mit der Ordner-Zuordnung | 1.15.0: Felder kommen an. Aber **doppelt** (derselbe Kontakt zweimal in der Liste), und die **Ordner-Zuordnung fehlt**, obwohl der Kontakt in Kontakte.app direkt in einem Ordner angelegt wurde → Befunde 1 und 2 |
-| C2 | 🔁 | Diesen Vorschlag mit **Übernehmen** bestätigen | Wird ein echter Kontakt; die Karteikarte in Kontakte.app bleibt bestehen | übernommen; wegen C1 ohne Ordner. Nach der Behebung von C1 nochmals prüfen, ob die Zuordnung mitkommt |
+| C1 | 🔁 | Neuen Kontakt in Kontakte.app **direkt in einem Ordner** anlegen | Erscheint **einmal** unter Vorschlägen, mit allen Feldern **und mit dem Ordner** | 1.15.0: kam doppelt und ohne Ordner — beides behoben |
+| C2 | 🔁 | Diesen Vorschlag mit **Übernehmen** bestätigen | Wird ein echter Kontakt **im richtigen Ordner**; in Kontakte.app bleibt genau eine Karteikarte übrig | prüfen, dass keine zweite Karte liegen bleibt |
 | C3 | ⬜ | Einen Vorschlag **Ablehnen** | Verschwindet aus den Vorschlägen und wird auch in Kontakte.app entfernt | |
 | C4 | ✅ | Vorschlag über **Bearbeiten** korrigieren, dann übernehmen | Die korrigierten Werte werden gespeichert, nicht die ursprünglichen | |
 | C5 | ✅ | Neue Gruppe in Kontakte.app anlegen | Kommt als Ordner-Vorschlag | |
@@ -71,10 +70,12 @@ kommt zuerst als **Vorschlag**.
 | C7 | ✅ | Bestehenden Kontakt in Kontakte.app in eine andere Gruppe ziehen | Zuordnung landet in Rubrica (ohne Rückfrage — Zuordnungen gelten als unkritisch) | |
 | C8 | ✅ | Bei einem bestehenden Kontakt in Kontakte.app die Telefonnummer ändern | Kommt als Änderungsvorschlag, alter und neuer Wert sind gegenübergestellt | |
 | C9 | 🔁 | Diesen Änderungsvorschlag ablehnen | Rubrica bleibt beim alten Wert und schreibt ihn nach Kontakte.app zurück | Notiz aus 1.15.0: „test test nicht 12345“ — nicht eindeutig lesbar, in der nächsten Sitzung mit klar unterscheidbaren Werten wiederholen |
-| C10 | ✅ | Kontakt in Kontakte.app löschen | Kommt als Löschvorschlag — der Kontakt bleibt in Rubrica, bis entschieden ist | |
-| C11 | ❌ | Löschvorschlag mit **Behalten** beantworten | Der Kontakt taucht in Kontakte.app wieder auf | Er taucht **nicht** wieder auf → Befund 3. Entscheid dazu: Löschen soll künftig nur noch im Browser möglich sein |
+| C10 | 🔁 | Kontakt in Kontakte.app löschen | **Kein Vorschlag mehr.** Der Kontakt taucht nach einigen Minuten von selbst wieder auf — löschen geht nur im Browser | neu ab 1.16.0 |
+| C11 | 🔁 | Denselben Kontakt im Browser löschen | Verschwindet auf allen Geräten und bleibt weg | ersetzt den früheren „Behalten"-Weg |
 | C12 | ✅ | Kontakt in Kontakte.app anlegen, aber **im privaten Account** (iCloud/„Auf meinem Mac“) | Kommt **nicht** in Rubrica an — Rubrica sieht nur seinen eigenen Account | |
 | C13 | ✅ | Nach der Installation einmal **Jetzt alles neu synchronisieren**, dann Vorschläge öffnen | Keine Änderungsvorschläge für Nummern, die niemand angefasst hat | Vorschlagsflut aus 1.14.0 ist weg |
+| C14 | ⬜ | Einen **Ordner** in Kontakte.app löschen | Kommt weiterhin als Vorschlag — nur Kontakte sind vom Löschverbot betroffen | |
+| C15 | ⬜ | Bestehenden Kontakt in Kontakte.app in einen Ordner ziehen, dann im Browser bei einem **anderen** Kontakt desselben Ordners etwas ändern | Beide Zuordnungen bleiben — der Push reisst die neue nicht heraus | Gegenprobe zu Befund 2 |
 
 ---
 
@@ -147,37 +148,25 @@ Der Fall, für den die Zusammenführung gebaut ist.
 
 ---
 
-## Offene Befunde aus v1.15.0
+## Behoben in v1.16.0
 
-Startpunkt für die nächste Sitzung. Alles drei betrifft den Weg von Kontakte.app
-nach Rubrica.
+Die drei Befunde aus dem Durchgang mit 1.15.0 und was daraus wurde:
 
-**1 — Vorschlag kommt doppelt (C1).** Derselbe in Kontakte.app angelegte Kontakt steht
-zweimal in der Liste, mit identischen Feldern. Die Meldung zählte dabei zwei geprüfte
-Einträge und zwei neue Vorschläge, es sind also zwei verschiedene Karteikarten auf dem
-Server. Erste Vermutung: Kontakte.app legt beim Speichern eine zweite Karte mit neuer
-UID an, statt die zuvor angelegte leere weiterzuverwenden — dann sieht Rubrica zwei
-Neuzugänge. Zu prüfen: welche `.vcf`-Dateien tatsächlich auf dem Server liegen, und ob
-sich zwei Karten desselben Kontakts über ihren Inhalt zusammenführen lassen, statt sich
-nur auf den Dateinamen zu verlassen.
+**1 — Vorschlag kam doppelt.** Der Dublettenschutz fragte nur nach dem Dateinamen.
+Legt Kontakte.app für dieselbe Person eine zweite Karte mit neuer UID an, waren es
+zwei Vorschläge. Jetzt wird zusätzlich der Inhalt verglichen (Name, Firma, Nummern,
+Adressen); die zweite Karte hängt sich an den bestehenden Vorschlag und wird beim
+Entscheid mitentfernt, statt als Karteileiche liegen zu bleiben. → **C1**
 
-**2 — Ordner-Zuordnung fehlt (C1/C2).** Der Kontakt wurde in Kontakte.app direkt in
-einem Ordner angelegt, der Vorschlag kam ohne diese Zuordnung an. Verdacht: der bereits
-dokumentierte Wettlauf (siehe Modul-Kommentar in `kontakte_app_intake.py`). Rubrica baut
-beim Pushen die Mitgliederliste eines Ordners komplett aus der eigenen Datenbank neu
-auf. Passiert das, bevor der Scan die in Kontakte.app hinzugefügte Mitgliedschaft
-gesehen hat, ist sie überschrieben, noch ehe sie jemand lesen konnte. Bisher war das als
-hinnehmbar eingestuft — der Test zeigt, dass es der Normalfall ist, wenn man einen
-Kontakt direkt in einer Gruppe anlegt.
+**2 — Ordner-Zuordnung fehlte.** Rubrica baute die Gruppen-vCard beim Pushen komplett
+aus der eigenen Datenbank neu auf und kannte die Apple-UID des noch nicht bestätigten
+Kontakts nicht — die Zugehörigkeit war weg, bevor der Scan sie lesen konnte. Fremde
+Mitglieder bleiben jetzt stehen, solange ihr Vorschlag offen ist. → **C1, C2, C15**
 
-**3 — Löschen: „Behalten“ stellt nicht wieder her (C11).** Nach dem Löschen in
-Kontakte.app und der Antwort „Behalten“ taucht der Kontakt dort nicht wieder auf.
-**Entscheid:** das Löschen von Kontakten soll künftig nur noch im Browser möglich sein.
-Damit fällt der ganze Löschvorschlags-Weg weg — eine Löschung in Kontakte.app wird
-einfach zurückgeschrieben. Das ist zugleich der einfachere und verlässlichere Weg als
-der Vorschlag mit zwei Antwortmöglichkeiten. Zu klären: wie deutlich muss das den
-Mitarbeitenden angezeigt werden (der Kontakt taucht ja nach ein paar Minuten wieder
-auf), und was in der Anleitung dazu steht.
+**3 — Löschen.** Der Vorschlagsweg mit „Löschen"/„Behalten" ist entfallen. Wer einen
+Kontakt in Kontakte.app löscht, sieht ihn nach einigen Minuten wieder; gelöscht wird
+im Browser. Bereits offene Löschvorschläge werden beim ersten Start geschlossen.
+Für **Ordner** bleibt der Vorschlag bestehen. → **C10, C11, C14**
 
 ---
 

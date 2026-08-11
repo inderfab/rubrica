@@ -336,44 +336,20 @@ def test_unvollstaendiger_vorschlag_wird_nicht_direkt_uebernommen(tmp_db):
     assert queries.get_vorschlag(tmp_db, vorschlag_id)["status"] == "offen"
 
 
-def test_loeschvorschlag_uebernehmen_loescht_den_kontakt(tmp_db, monkeypatch):
-    kontakt_id = queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster"})
-    vorschlag_id = queries.create_vorschlag(
-        tmp_db, {"typ": "loeschung", "vorname": "Anna", "nachname": "Muster", "firma": ""},
-        kontakt_id=kontakt_id, quelle="kontakte_app",
-        message_id=f"kontakte-app-loeschung:{kontakt_id}")
+def test_kontakt_loeschvorschlaege_gibt_es_nicht_mehr(tmp_db):
+    """Nutzer-Entscheid: Loeschen von Kontakten nur noch im Browser. Ein in
+    Kontakte.app geloeschter Kontakt wird zurueckgeschrieben statt zur Entscheidung
+    vorgelegt - die Vorschlagsseite kennt diesen Typ deshalb nicht mehr. Fuer ORDNER
+    bleibt der Vorschlag bestehen (bewusstere Handlung, keine Kontaktdaten)."""
+    projekt_id = queries.get_or_create_projekt(tmp_db, "Baustelle")
+    queries.create_vorschlag(
+        tmp_db, {"typ": "loeschung_ordner", "name": "Baustelle", "projekt_id": projekt_id},
+        quelle="kontakte_app", message_id=f"kontakte-app-ordner-loeschung:{projekt_id}")
 
-    monkeypatch.setattr(radicale, "_client", lambda: httpx.Client(
-        transport=httpx.MockTransport(lambda r: httpx.Response(204)), base_url="https://test/a/"))
-
-    _client().post(f"/vorschlaege/{vorschlag_id}/uebernehmen", follow_redirects=False)
-
-    assert queries.get_kontakt(tmp_db, kontakt_id) is None
-
-
-def test_loeschvorschlag_behalten_stellt_wieder_her(tmp_db, monkeypatch):
-    """Reihenfolge-Regression: solange der Loeschvorschlag offen ist, unterdrueckt
-    push_kontakt jeden Push. Wird der Status nicht VOR dem Push gesetzt, wird die
-    Wiederherstellung still verschluckt und der Kontakt bleibt auf den Geraeten weg."""
-    kontakt_id = queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster"})
-    vorschlag_id = queries.create_vorschlag(
-        tmp_db, {"typ": "loeschung", "vorname": "Anna", "nachname": "Muster", "firma": ""},
-        kontakt_id=kontakt_id, quelle="kontakte_app",
-        message_id=f"kontakte-app-loeschung:{kontakt_id}")
-
-    gesendet = []
-
-    def handler(request):
-        gesendet.append((request.method, request.url.path))
-        return httpx.Response(201)
-
-    monkeypatch.setattr(radicale, "_client", lambda: httpx.Client(
-        transport=httpx.MockTransport(handler), base_url="https://test/a/"))
-
-    _client().post(f"/vorschlaege/{vorschlag_id}/ablehnen", follow_redirects=False)
-
-    assert queries.get_kontakt(tmp_db, kontakt_id) is not None
-    assert ("PUT", f"/a/kontakt-{kontakt_id}.vcf") in gesendet
+    r = _client().get("/vorschlaege")
+    assert r.status_code == 200
+    assert "In Kontakte.app gelöscht" in r.text
+    assert "📁 Baustelle" in r.text
 
 
 def test_mail_vorschlag_zeigt_ursprungstext_im_flyover(tmp_db):
@@ -410,3 +386,25 @@ def test_aenderung_bearbeiten_zeigt_neue_werte(tmp_db):
     assert r.status_code == 200
     assert 'value="Neu AG"' in r.text          # neuer Wert vorbefuellt
     assert 'value="Architektin"' in r.text     # bestehende Funktion bleibt sichtbar
+
+
+def test_alte_loeschvorschlaege_werden_beim_start_geschlossen(tmp_db):
+    """Beim Umstellen auf "Loeschen nur im Browser" duerfen bereits offene
+    Kontakt-Loeschvorschlaege nicht stehenbleiben: die Liste kennt den Typ nicht
+    mehr, sie fielen in den Zweig fuer neue Kontakte und "Übernehmen" legte einen
+    Kontakt an, statt einen zu löschen."""
+    from db import connection
+
+    kontakt_id = queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster"})
+    vorschlag_id = queries.create_vorschlag(
+        tmp_db, {"typ": "loeschung", "vorname": "Anna", "nachname": "Muster", "firma": ""},
+        kontakt_id=kontakt_id, quelle="kontakte_app",
+        message_id=f"kontakte-app-loeschung:{kontakt_id}")
+    # Migration von Hand zurücksetzen, um den Zustand vor der Umstellung nachzustellen.
+    tmp_db.execute("DELETE FROM _migrations WHERE id = '2026-08-07_keine_kontakt_loeschvorschlaege_mehr'")
+    tmp_db.execute("UPDATE vorschlaege SET status = 'offen' WHERE id = ?", (vorschlag_id,))
+    tmp_db.commit()
+
+    connection.init_schema()
+
+    assert queries.get_vorschlag(tmp_db, vorschlag_id)["status"] == "abgelehnt"

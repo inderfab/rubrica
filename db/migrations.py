@@ -118,6 +118,19 @@ _MIGRATIONS: list[tuple[str, str]] = [
             WHERE typ NOT IN ('Direkt', 'Allgemein', 'Privat');
         """,
     ),
+    (
+        "2026-08-07_keine_kontakt_loeschvorschlaege_mehr",
+        """
+        -- Nutzer-Entscheid nach dem Abnahmetest: Kontakte loeschen geht nur noch im
+        -- Browser; eine Loeschung in Kontakte.app wird zurueckgeschrieben. Der Typ
+        -- "loeschung" entsteht damit nicht mehr - bereits offene Vorschlaege dieser
+        -- Art muessen weg, sonst stehen sie ohne passende Darstellung in der Liste
+        -- und "Uebernehmen" liefe in den falschen Zweig (Kontakt neu anlegen).
+        -- Ordner-Loeschungen bleiben unberuehrt.
+        UPDATE vorschlaege SET status = 'abgelehnt'
+            WHERE status = 'offen' AND message_id LIKE 'kontakte-app-loeschung:%';
+        """,
+    ),
 ]
 
 

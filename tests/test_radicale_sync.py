@@ -119,8 +119,10 @@ def test_push_projekt_sendet_mitgliederliste(tmp_db, monkeypatch):
 
     radicale.push_projekt(tmp_db, projekt_id)
 
-    assert len(empfangen) == 1
-    body = empfangen[0].content
+    # Lesen vor Schreiben: erst den Serverstand holen (Mitglieder eines Kollegen und
+    # noch offene Kontakte.app-Karten), dann schreiben.
+    assert [r.method for r in empfangen] == ["GET", "PUT"]
+    body = empfangen[-1].content
     assert f"kontakt-{k1}".encode() in body
     assert f"kontakt-{k2}".encode() in body
 

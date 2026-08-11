@@ -162,8 +162,13 @@ def kontakt_zu_vcard(kontakt: dict) -> str:
     return "\r\n".join(_fold(z) for z in zeilen) + "\r\n"
 
 
-def projekt_zu_gruppen_vcard(projekt: dict, mitglieder_ids: list) -> str:
-    """Baut eine Apple-Gruppen-vCard (proprietaeres X-ADDRESSBOOKSERVER-Format)."""
+def projekt_zu_gruppen_vcard(projekt: dict, mitglieder_ids: list, fremde_uids=()) -> str:
+    """Baut eine Apple-Gruppen-vCard (proprietaeres X-ADDRESSBOOKSERVER-Format).
+
+    `fremde_uids` sind Mitglieder, die (noch) kein Rubrica-Kontakt sind: in
+    Kontakte.app angelegte Karten, deren Vorschlag im Buero noch offen ist. Sie
+    muessen mitgeschrieben werden, sonst reisst der naechste Push die gerade erst
+    gesetzte Zugehoerigkeit wieder heraus (siehe push_projekt)."""
     zeilen = [
         "BEGIN:VCARD",
         "VERSION:3.0",
@@ -174,6 +179,8 @@ def projekt_zu_gruppen_vcard(projekt: dict, mitglieder_ids: list) -> str:
     ]
     for kontakt_id in mitglieder_ids:
         zeilen.append(f"X-ADDRESSBOOKSERVER-MEMBER:urn:uuid:kontakt-{kontakt_id}")
+    for uid in fremde_uids:
+        zeilen.append(f"X-ADDRESSBOOKSERVER-MEMBER:urn:uuid:{uid}")
     zeilen.append("END:VCARD")
     return "\r\n".join(_fold(z) for z in zeilen) + "\r\n"
 
@@ -293,10 +300,10 @@ def _remote_vcf_namen(client: "httpx.Client | None" = None) -> list:
 
 def gruppen_vcard_auf_server(projekt_id: int,
                               client: "httpx.Client | None" = None) -> "tuple | None":
-    """Liest Mitglieder und Anzeigenamen aus der Gruppen-vCard auf Radicale und gibt
-    (mitglieder_ids, name) zurueck. None, wenn die vCard nicht existiert, nicht
-    lesbar ist oder kein Client vorhanden ist - der Aufrufer darf daraus NIE "keine
-    Mitglieder" ableiten, sonst gilt ein fehlgeschlagener Abruf als "alle entfernt"."""
+    """Liest die Gruppen-vCard auf Radicale und gibt (mitglieder_ids, name,
+    fremde_uids) zurueck. None, wenn die vCard nicht existiert, nicht lesbar ist oder
+    kein Client vorhanden ist - der Aufrufer darf daraus NIE "keine Mitglieder"
+    ableiten, sonst gilt ein fehlgeschlagener Abruf als "alle entfernt"."""
     if client is None:
         return None
     try:
@@ -306,9 +313,13 @@ def gruppen_vcard_auf_server(projekt_id: int,
         return None
     if resp.status_code != 200:
         return None
-    mitglieder = {int(i) for i in re.findall(r"X-ADDRESSBOOKSERVER-MEMBER:urn:uuid:kontakt-(\d+)", resp.text)}
+    alle = re.findall(r"X-ADDRESSBOOKSERVER-MEMBER:urn:uuid:([^\r\n]+)", resp.text)
+    mitglieder = {int(m.group(1)) for m in (re.match(r"^kontakt-(\d+)$", u.strip()) for u in alle) if m}
+    # Alles, was nicht dem eigenen Namensmuster folgt, gehoert zu einer in
+    # Kontakte.app angelegten Karte, ueber die im Buero noch nicht entschieden ist.
+    fremde = [u.strip() for u in alle if not re.match(r"^kontakt-\d+$", u.strip())]
     treffer = re.search(r"^FN:(.+)$", resp.text, re.MULTILINE)
-    return mitglieder, (treffer.group(1).strip() if treffer else "")
+    return mitglieder, (treffer.group(1).strip() if treffer else ""), fremde
 
 
 def gruppen_mitglieder_auf_server(projekt_id: int,
@@ -319,7 +330,7 @@ def gruppen_mitglieder_auf_server(projekt_id: int,
 
 
 def _zusammengefuehrte_mitglieder(conn: sqlite3.Connection, projekt_id: int,
-                                   db_ids: set, client: "httpx.Client | None") -> set:
+                                   db_ids: set, server: "set | None") -> set:
     """Fuehrt den Datenbankstand mit dem zusammen, was seit dem letzten eigenen Push
     auf dem Server passiert ist (jemand hat in Kontakte.app einen Kontakt in diese
     Gruppe gezogen oder daraus entfernt).
@@ -336,7 +347,6 @@ def _zusammengefuehrte_mitglieder(conn: sqlite3.Connection, projekt_id: int,
     schnappschuss = queries.hole_gepushte_mitglieder(conn, projekt_id)
     if schnappschuss is None:
         return db_ids
-    server = gruppen_mitglieder_auf_server(projekt_id, client=client)
     if server is None:
         return db_ids
 
@@ -359,11 +369,9 @@ def push_kontakt(conn: sqlite3.Connection, kontakt_id: int,
     kontakt = queries.get_kontakt(conn, kontakt_id)
     if kontakt is None:
         return False
-    if queries.hat_offenen_loeschvorschlag(conn, f"kontakte-app-loeschung:{kontakt_id}"):
-        # In Kontakte.app geloescht, Entscheidung steht noch aus: nicht zurueckschreiben,
-        # sonst taucht der Kontakt dort binnen Minuten wieder auf und wird erneut
-        # geloescht - eine Endlosschleife aus Vorschlaegen.
-        return True
+    # Keine Push-Sperre mehr fuer geloeschte Kontakte: Loeschen geht nur noch im
+    # Browser (Nutzer-Entscheid), eine Loeschung in Kontakte.app wird bewusst
+    # zurueckgeschrieben (siehe kontakte_app_intake.pruefe_kontakt_aenderungen).
     vcard = kontakt_zu_vcard(kontakt)
     erfolg = _put(f"kontakt-{kontakt_id}.vcf", vcard, client=client)
     if erfolg:
@@ -385,6 +393,25 @@ def _ist_z_ordner(name: str) -> bool:
     Apple-Gruppe auf die Geraete synchronisiert werden sollen (Nutzer-Vorgabe) -
     Fallunterscheidung bewusst grosszuegig (nur der erste Buchstabe zaehlt)."""
     return (name or "").strip().lower().startswith("z")
+
+
+def _offene_fremde_mitglieder(conn: sqlite3.Connection, fremde_uids: list) -> list:
+    """Von den fremden Mitgliedern einer Gruppen-vCard nur die behalten, ueber die im
+    Buero noch nicht entschieden ist.
+
+    Anlass (Nutzer-Meldung im Abnahmetest): wird ein Kontakt in Kontakte.app direkt
+    in einer Gruppe angelegt, traegt Apple ihn dort mit seiner eigenen UID ein.
+    Rubrica baute die Gruppen-vCard beim naechsten Push komplett aus der eigenen
+    Datenbank neu auf - die kennt diese UID nicht, die Zugehoerigkeit war weg, noch
+    bevor der Scan sie lesen konnte. Der Vorschlag kam dann ohne Ordner an.
+
+    Nach dem Entscheid faellt die UID von selbst raus: beim Uebernehmen wird der
+    Kontakt ein regulaeres Mitglied (kontakt-N), beim Ablehnen verschwindet er ganz.
+    So bleibt kein Verweis auf eine Karte stehen, die es nicht mehr gibt."""
+    if not fremde_uids:
+        return []
+    offene = queries.offene_kontakte_app_apple_uids(conn)
+    return [uid for uid in fremde_uids if uid in offene]
 
 
 def push_projekt(conn: sqlite3.Connection, projekt_id: int,
@@ -418,14 +445,17 @@ def push_projekt(conn: sqlite3.Connection, projekt_id: int,
     if eigener:
         client = _client()
     try:
-        soll = _zusammengefuehrte_mitglieder(conn, projekt_id, db_ids, client)
+        stand = gruppen_vcard_auf_server(projekt_id, client=client)
+        soll = _zusammengefuehrte_mitglieder(conn, projekt_id, db_ids,
+                                              stand[0] if stand else None)
         if soll != db_ids:
             # Datenbank an den zusammengefuehrten Stand angleichen, sonst wuerde der
             # naechste Push die fremde Aenderung erneut verwerfen.
             queries.setze_kontakt_projekt_zuordnungen(conn, projekt_id, soll)
         mitglieder_ids = sorted(soll)
+        fremde = _offene_fremde_mitglieder(conn, stand[2] if stand else [])
         erfolg = _put(f"projekt-{projekt_id}.vcf",
-                       projekt_zu_gruppen_vcard(projekt, mitglieder_ids), client=client)
+                       projekt_zu_gruppen_vcard(projekt, mitglieder_ids, fremde), client=client)
         if erfolg:
             # Nur nach einem BESTAETIGTEN Push festhalten, was auf dem Server steht - sonst
             # wuerde ein fehlgeschlagener Push einen falschen Referenzpunkt setzen und der

@@ -57,9 +57,13 @@ def _fremde_vcard_entfernen(vorschlag: dict) -> None:
     No-op."""
     if vorschlag["quelle"] != "kontakte_app":
         return
-    name = vorschlag["rohdaten"].get("kontakte_app_vcf_name")
-    if name:
-        kontakte_app_intake.loesche_fremde_vcard(name)
+    # "weitere_vcf_namen": Kontakte.app legt fuer denselben Kontakt mitunter eine
+    # zweite Karte an (siehe kontakte_app_intake). Alle zugehoerigen entfernen,
+    # sonst bleibt eine davon als Karteileiche liegen.
+    for name in [vorschlag["rohdaten"].get("kontakte_app_vcf_name"),
+                 *(vorschlag["rohdaten"].get("weitere_vcf_namen") or [])]:
+        if name:
+            kontakte_app_intake.loesche_fremde_vcard(name)
 
 
 def _pseudo_kontakt(conn_ordner: list, vorschlag: dict) -> dict:
@@ -120,11 +124,7 @@ def vorschlag_uebernehmen(request: Request, vorschlag_id: int):
         vorschlag = queries.get_vorschlag(conn, vorschlag_id)
         typ = vorschlag["rohdaten"].get("typ") if vorschlag else None
 
-        if typ == "loeschung":
-            queries.delete_kontakt(conn, vorschlag["kontakt_id"])
-            queries.set_vorschlag_status(conn, vorschlag_id, "bestaetigt")
-            # Die vCard ist bereits weg (deshalb der Vorschlag) - kein Push noetig.
-        elif typ == "loeschung_ordner":
+        if typ == "loeschung_ordner":
             queries.delete_projekt(conn, vorschlag["rohdaten"]["projekt_id"])
             queries.set_vorschlag_status(conn, vorschlag_id, "bestaetigt")
         elif typ == "aenderung":
@@ -183,10 +183,7 @@ def vorschlag_ablehnen(vorschlag_id: int):
         queries.set_vorschlag_status(conn, vorschlag_id, "abgelehnt")
         typ = vorschlag["rohdaten"].get("typ") if vorschlag else None
 
-        if typ == "loeschung":
-            radicale.push_kontakt_mit_ordnern(conn, vorschlag["kontakt_id"])
-            vorschlag = None
-        elif typ == "loeschung_ordner":
+        if typ == "loeschung_ordner":
             radicale.push_projekt(conn, vorschlag["rohdaten"]["projekt_id"])
             vorschlag = None
         elif typ == "aenderung":

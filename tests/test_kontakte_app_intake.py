@@ -558,35 +558,30 @@ def test_fehlgeschlagener_push_setzt_keinen_vergleichsstand(tmp_db, monkeypatch)
 
 # ── Loeschungen, Umbenennung, nachtraegliche Korrektur ───────────────────────
 
-def test_geloeschter_kontakt_wird_als_vorschlag_erfasst(tmp_db, monkeypatch):
-    """Vorher wurde die Loeschung nicht erkannt und beim naechsten Push
-    stillschweigend rueckgaengig gemacht - der Kontakt tauchte wieder auf."""
+def test_in_kontakte_app_geloeschter_kontakt_wird_wiederhergestellt(tmp_db, monkeypatch):
+    """Nutzer-Entscheid nach dem Abnahmetest: Loeschen von Kontakten geht nur noch im
+    Browser. Verschwindet eine Karte aus Kontakte.app, schreibt Rubrica sie wieder
+    hin, statt einen Vorschlag mit "Loeschen"/"Behalten" vorzulegen - dieser Weg war
+    der stoerungsanfaelligste des ganzen Abgleichs und "Behalten" stellte den Kontakt
+    nachweislich nicht wieder her."""
     kontakt_id = _kontakt_mit_push(tmp_db, monkeypatch)
-    _mock_client(monkeypatch, lambda request: httpx.Response(404))
-
-    ergebnis = kontakte_app_intake.pruefe_kontakt_aenderungen(tmp_db)
-
-    assert ergebnis["neu"] == 1
-    v = queries.list_vorschlaege(tmp_db, quelle="kontakte_app")[0]
-    assert v["rohdaten"]["typ"] == "loeschung"
-    assert v["kontakt_id"] == kontakt_id
-
-
-def test_push_sperre_solange_loeschvorschlag_offen(tmp_db, monkeypatch):
-    """Ohne Sperre taucht der geloeschte Kontakt binnen Minuten wieder auf, wird
-    erneut geloescht - und jeder Durchgang erzeugt einen weiteren Vorschlag."""
-    kontakt_id = _kontakt_mit_push(tmp_db, monkeypatch)
-    queries.create_vorschlag(
-        tmp_db, {"typ": "loeschung", "vorname": "Anna", "nachname": "Muster", "firma": ""},
-        kontakt_id=kontakt_id, quelle="kontakte_app",
-        message_id=f"kontakte-app-loeschung:{kontakt_id}")
 
     gesendet = []
-    _mock_client(monkeypatch, lambda r: (gesendet.append(r.method), httpx.Response(201))[1])
 
-    radicale.push_kontakt(tmp_db, kontakt_id)
+    def handler(request: httpx.Request) -> httpx.Response:
+        gesendet.append((request.method, request.url.path))
+        return httpx.Response(404) if request.method == "GET" else httpx.Response(201)
 
-    assert "PUT" not in gesendet
+    _mock_client(monkeypatch, handler)
+    ergebnis = kontakte_app_intake.pruefe_kontakt_aenderungen(tmp_db)
+
+    assert ergebnis["wiederhergestellt"] == 1
+    assert ergebnis["neu"] == 0
+    assert ("PUT", f"/a/kontakt-{kontakt_id}.vcf") in gesendet
+    # Kein Loeschvorschlag mehr - es gibt nichts zu entscheiden.
+    assert queries.list_vorschlaege(tmp_db, quelle="kontakte_app") == []
+    # Und der Kontakt steht unveraendert in Rubrica.
+    assert queries.get_kontakt(tmp_db, kontakt_id) is not None
 
 
 def test_geloeschter_ordner_wird_als_vorschlag_erfasst(tmp_db, monkeypatch):
@@ -972,3 +967,134 @@ def test_echte_aenderung_wird_davon_nicht_verdeckt(tmp_db, monkeypatch):
         httpx.Response(200, text=geaendert) if r.method == "GET" else httpx.Response(201)))
 
     assert kontakte_app_intake.pruefe_kontakt_aenderungen(tmp_db)["neu"] == 1
+
+
+def test_in_kontakte_app_angelegter_kontakt_behaelt_seinen_ordner(tmp_db, monkeypatch):
+    """Regression (Nutzer-Meldung im Abnahmetest): "zuordnung fehlt (ich habe sie in
+    einem ordner erstellt gehabt)". Apple trägt einen dort neu angelegten Kontakt mit
+    seiner eigenen UID in die Gruppen-vCard ein. Rubrica baute die Gruppe beim
+    nächsten Push komplett aus der Datenbank neu auf - die kennt diese UID nicht, die
+    Zugehörigkeit war weg, bevor der Scan sie lesen konnte."""
+    projekt_id = queries.get_or_create_projekt(tmp_db, "Baustelle Muster")
+    gruppe = {"text": (
+        f"BEGIN:VCARD\r\nVERSION:3.0\r\nUID:projekt-{projekt_id}\r\nFN:Baustelle Muster\r\n"
+        "X-ADDRESSBOOKSERVER-KIND:group\r\n"
+        "X-ADDRESSBOOKSERVER-MEMBER:urn:uuid:ABC-123-FREMD\r\nEND:VCARD\r\n")}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "PROPFIND":
+            return httpx.Response(207, text=_propfind_xml(["ABC-123-FREMD.vcf"]))
+        if request.method == "PUT":
+            gruppe["text"] = request.content.decode()
+            return httpx.Response(201)
+        if request.url.path.endswith("ABC-123-FREMD.vcf"):
+            return httpx.Response(200, text=_FREMDE_VCARD)
+        return httpx.Response(200, text=gruppe["text"])
+
+    monkeypatch.setattr(radicale, "_client", lambda: httpx.Client(
+        transport=httpx.MockTransport(handler), base_url="https://test/a/"))
+
+    kontakte_app_intake.pruefe_kontakte_app_neuzugaenge(tmp_db)
+    vorschlaege = queries.list_vorschlaege(tmp_db, quelle="kontakte_app")
+    assert vorschlaege[0]["rohdaten"]["erkannte_ordner_ids"] == [projekt_id]
+
+    # Ein Push des Ordners (z.B. weil im Browser jemand etwas anderes geaendert hat)
+    # darf die noch offene Mitgliedschaft nicht herausreissen.
+    radicale.push_projekt(tmp_db, projekt_id)
+    assert "urn:uuid:ABC-123-FREMD" in gruppe["text"]
+
+    # Und der Scan findet sie danach immer noch.
+    kontakte_app_intake.pruefe_kontakte_app_neuzugaenge(tmp_db)
+    assert queries.list_vorschlaege(tmp_db, quelle="kontakte_app")[0]["rohdaten"]["erkannte_ordner_ids"] \
+        == [projekt_id]
+
+
+def test_entschiedener_vorschlag_hinterlaesst_keinen_verweis(tmp_db, monkeypatch):
+    """Gegenprobe: nach dem Entscheid darf die fremde UID nicht ewig weitergeschrieben
+    werden - sonst zeigt die Gruppe dauerhaft auf eine Karte, die es nicht mehr gibt."""
+    projekt_id = queries.get_or_create_projekt(tmp_db, "Baustelle Muster")
+    gruppe = {"text": (
+        f"BEGIN:VCARD\r\nVERSION:3.0\r\nUID:projekt-{projekt_id}\r\nFN:Baustelle Muster\r\n"
+        "X-ADDRESSBOOKSERVER-KIND:group\r\n"
+        "X-ADDRESSBOOKSERVER-MEMBER:urn:uuid:ABC-123-FREMD\r\nEND:VCARD\r\n")}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "PUT":
+            gruppe["text"] = request.content.decode()
+            return httpx.Response(201)
+        return httpx.Response(200, text=gruppe["text"])
+
+    monkeypatch.setattr(radicale, "_client", lambda: httpx.Client(
+        transport=httpx.MockTransport(handler), base_url="https://test/a/"))
+
+    # Kein offener Vorschlag zu dieser UID -> es gibt nichts mehr zu bewahren.
+    radicale.push_projekt(tmp_db, projekt_id)
+    assert "ABC-123-FREMD" not in gruppe["text"]
+
+
+def test_zwei_karten_derselben_person_ergeben_einen_vorschlag(tmp_db, monkeypatch):
+    """Regression (Nutzer-Meldung im Abnahmetest): "Vorschläge kommen an, aber
+    doppelt". Der Dublettenschutz fragte nur nach dem Dateinamen; legt Kontakte.app
+    beim Speichern eine zweite Karte mit neuer UID an, sind es zwei Dateien mit
+    identischem Inhalt - und damit zwei Vorschläge über dieselbe Person."""
+    zweite = _FREMDE_VCARD.replace("UID:ABC-123-FREMD", "UID:DEF-456-FREMD")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "PROPFIND":
+            return httpx.Response(207, text=_propfind_xml(["ABC-123-FREMD.vcf", "DEF-456-FREMD.vcf"]))
+        if request.url.path.endswith("DEF-456-FREMD.vcf"):
+            return httpx.Response(200, text=zweite)
+        return httpx.Response(200, text=_FREMDE_VCARD)
+
+    monkeypatch.setattr(radicale, "_client", lambda: httpx.Client(
+        transport=httpx.MockTransport(handler), base_url="https://test/a/"))
+
+    ergebnis = kontakte_app_intake.pruefe_kontakte_app_neuzugaenge(tmp_db)
+
+    assert ergebnis["neu"] == 1
+    assert ergebnis["zusammengefuehrt"] == 1
+    vorschlaege = queries.list_vorschlaege(tmp_db, quelle="kontakte_app")
+    assert len(vorschlaege) == 1
+    # Beide Karten haengen am Vorschlag, damit keine als Karteileiche liegen bleibt.
+    assert vorschlaege[0]["rohdaten"]["weitere_vcf_namen"] == ["DEF-456-FREMD.vcf"]
+
+
+def test_zweitkarte_wird_nicht_bei_jedem_durchlauf_neu_betrachtet(tmp_db, monkeypatch):
+    zweite = _FREMDE_VCARD.replace("UID:ABC-123-FREMD", "UID:DEF-456-FREMD")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "PROPFIND":
+            return httpx.Response(207, text=_propfind_xml(["ABC-123-FREMD.vcf", "DEF-456-FREMD.vcf"]))
+        if request.url.path.endswith("DEF-456-FREMD.vcf"):
+            return httpx.Response(200, text=zweite)
+        return httpx.Response(200, text=_FREMDE_VCARD)
+
+    monkeypatch.setattr(radicale, "_client", lambda: httpx.Client(
+        transport=httpx.MockTransport(handler), base_url="https://test/a/"))
+
+    kontakte_app_intake.pruefe_kontakte_app_neuzugaenge(tmp_db)
+    zweiter_lauf = kontakte_app_intake.pruefe_kontakte_app_neuzugaenge(tmp_db)
+
+    assert zweiter_lauf["zusammengefuehrt"] == 0
+    assert len(queries.list_vorschlaege(tmp_db, quelle="kontakte_app")) == 1
+
+
+def test_verschiedene_personen_bleiben_zwei_vorschlaege(tmp_db, monkeypatch):
+    """Gegenprobe: die Zusammenführung darf nicht zwei echte Neuzugänge verschlucken."""
+    andere = (_FREMDE_VCARD.replace("UID:ABC-123-FREMD", "UID:DEF-456-FREMD")
+                            .replace("Max", "Moritz").replace("max@", "moritz@"))
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "PROPFIND":
+            return httpx.Response(207, text=_propfind_xml(["ABC-123-FREMD.vcf", "DEF-456-FREMD.vcf"]))
+        if request.url.path.endswith("DEF-456-FREMD.vcf"):
+            return httpx.Response(200, text=andere)
+        return httpx.Response(200, text=_FREMDE_VCARD)
+
+    monkeypatch.setattr(radicale, "_client", lambda: httpx.Client(
+        transport=httpx.MockTransport(handler), base_url="https://test/a/"))
+
+    ergebnis = kontakte_app_intake.pruefe_kontakte_app_neuzugaenge(tmp_db)
+
+    assert ergebnis["neu"] == 2
+    assert len(queries.list_vorschlaege(tmp_db, quelle="kontakte_app")) == 2
