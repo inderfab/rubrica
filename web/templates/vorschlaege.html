@@ -119,11 +119,20 @@
             </td>
             <td class="actions">
                 {% if v.bestehender_kontakt %}
+                {# Drei Wege statt zwei (Nutzer-Meldung): der Treffer ist nur ein Verdacht -
+                   eine gemeinsame Zentralennummer genuegt schon. Ohne die dritte Moeglichkeit
+                   blieb beim Zusammenfuehren ein Kontakt mit den Nummern der ganzen Firma
+                   uebrig, und wer das nicht wollte, musste den Umweg ueber Bearbeiten gehen. #}
                 <button type="button"
                         hx-post="/vorschlaege/{{ v.id }}/uebernehmen"
                         hx-target="#mail-modal-inhalt" hx-swap="innerHTML"
-                        hx-confirm="Möglicher Duplikat: {{ v.bestehender_kontakt.vorname }} {{ v.bestehender_kontakt.nachname }} ist bereits vorhanden. Mit diesem Kontakt zusammenführen?">
-                    Übernehmen
+                        hx-confirm="Mit „{{ v.bestehender_kontakt.vorname }} {{ v.bestehender_kontakt.nachname }}“ zusammenführen?&#10;&#10;Die Angaben dieses Vorschlags werden dort ergänzt.">
+                    Zusammenführen
+                </button>
+                <button type="button" class="secondary"
+                        hx-post="/vorschlaege/{{ v.id }}/uebernehmen-als-neu"
+                        hx-target="#mail-modal-inhalt" hx-swap="innerHTML">
+                    Als neuen Kontakt
                 </button>
                 <a href="/kontakte/{{ v.bestehender_kontakt.id }}/bearbeiten" class="btn secondary">Bestehenden ansehen</a>
                 {% else %}

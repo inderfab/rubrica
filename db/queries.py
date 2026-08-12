@@ -774,3 +774,13 @@ def offene_kontakte_app_zweitkarten(conn: sqlite3.Connection) -> set:
             continue
         namen.update(rohdaten.get("weitere_vcf_namen") or [])
     return namen
+
+
+def loese_duplikat_verknuepfung(conn: sqlite3.Connection, vorschlag_id: int) -> None:
+    """Loest die vermutete Verknuepfung eines Vorschlags zu einem bestehenden Kontakt.
+
+    Danach legt das Uebernehmen einen eigenstaendigen Kontakt an, statt in den
+    vermeintlichen Duplikat-Treffer hineinzumergen (siehe
+    web/vorschlaege.py: vorschlag_uebernehmen_als_neu)."""
+    with conn:
+        conn.execute("UPDATE vorschlaege SET kontakt_id = NULL WHERE id = ?", (vorschlag_id,))

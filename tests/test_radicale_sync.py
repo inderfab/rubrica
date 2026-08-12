@@ -357,3 +357,46 @@ def test_alte_vcards_mit_kategorie_als_typ_bleiben_lesbar():
            "END:VCARD\r\n")
     typen = [t["typ"] for t in vcard_modul._parse_kontakt(vobject.readOne(alt))["telefonnummern"]]
     assert typen == ["Privat Handy", "Direkt Handy", "Privat"]
+
+
+def test_push_projekt_schreibt_nicht_wenn_sich_nichts_geaendert_hat(tmp_db, monkeypatch):
+    """Jede Speicherung eines Kontakts pusht alle seine Ordner mit. Schreibt das die
+    Mitgliederliste auch dann neu, wenn sie unverändert ist, ist jedes dieser
+    überflüssigen Schreiben eine Gelegenheit, eine gerade erst in Kontakte.app
+    gesetzte, aber noch nicht hochgeladene Zuordnung zu überschreiben."""
+    k1 = queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster"})
+    projekt_id = queries.get_or_create_projekt(tmp_db, "Testprojekt")
+    queries.set_kontakt_projekte(tmp_db, k1, [projekt_id])
+
+    server = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "PUT":
+            server[request.url.path] = request.content.decode()
+            return httpx.Response(201)
+        text = server.get(request.url.path)
+        return httpx.Response(200, text=text) if text else httpx.Response(404)
+
+    monkeypatch.setattr(radicale, "_client", lambda: httpx.Client(
+        transport=httpx.MockTransport(handler), base_url="https://test/a/"))
+
+    radicale.push_projekt(tmp_db, projekt_id)
+    vorher = server[f"/a/projekt-{projekt_id}.vcf"]
+
+    geschrieben = []
+    original_put = radicale._put
+
+    def zaehlendes_put(pfad, vcard, client=None):
+        geschrieben.append(pfad)
+        return original_put(pfad, vcard, client=client)
+
+    monkeypatch.setattr(radicale, "_put", zaehlendes_put)
+    assert radicale.push_projekt(tmp_db, projekt_id) is True
+    assert geschrieben == [], "unveränderte Mitgliederliste wurde erneut geschrieben"
+
+    # Aendert sich tatsaechlich etwas, wird selbstverstaendlich geschrieben.
+    k2 = queries.create_kontakt(tmp_db, {"vorname": "Bob", "nachname": "Beispiel"})
+    queries.set_kontakt_projekte(tmp_db, k2, [projekt_id])
+    radicale.push_projekt(tmp_db, projekt_id)
+    assert geschrieben == [f"projekt-{projekt_id}.vcf"]
+    assert server[f"/a/projekt-{projekt_id}.vcf"] != vorher

@@ -113,6 +113,23 @@ def vorschlaege_pruefen():
     return RedirectResponse(url=f"/vorschlaege?meldung={quote(text)}", status_code=303)
 
 
+@router.post("/vorschlaege/{vorschlag_id}/uebernehmen-als-neu")
+def vorschlag_uebernehmen_als_neu(request: Request, vorschlag_id: int):
+    """Uebernimmt trotz Duplikat-Verdacht als eigenstaendigen Kontakt.
+
+    Der Verdacht entsteht schon bei einer gemeinsamen Telefonnummer - bei einer
+    Firmenzentrale trifft das auf jede dort erfasste Person zu. Ohne diesen Weg
+    blieb nur das Zusammenfuehren (und damit ein Kontakt mit den Nummern der
+    ganzen Firma) oder der Umweg ueber Bearbeiten und Speichern (Nutzer-Meldung
+    im Abnahmetest)."""
+    conn = get_connection()
+    try:
+        queries.loese_duplikat_verknuepfung(conn, vorschlag_id)
+    finally:
+        conn.close()
+    return vorschlag_uebernehmen(request, vorschlag_id)
+
+
 @router.post("/vorschlaege/{vorschlag_id}/uebernehmen")
 def vorschlag_uebernehmen(request: Request, vorschlag_id: int):
     """Wird per htmx abgeschickt: fehlen Pflichtfelder, kommt statt einer Meldung

@@ -408,3 +408,60 @@ def test_alte_loeschvorschlaege_werden_beim_start_geschlossen(tmp_db):
     connection.init_schema()
 
     assert queries.get_vorschlag(tmp_db, vorschlag_id)["status"] == "abgelehnt"
+
+
+def test_uebernehmen_als_neu_legt_eigenstaendigen_kontakt_an(tmp_db):
+    """Nutzer-Meldung: ein in Kontakte.app angelegter Kontakt wurde beim Übernehmen
+    mit einer Firma zusammengeführt, weil er deren Zentralennummer trug — im
+    Ergebnis stand er mit den Nummern der ganzen Firma da. Der Duplikat-Verdacht
+    ist nur ein Hinweis; es muss möglich sein, trotzdem einen eigenen Kontakt
+    anzulegen, ohne den Umweg über Bearbeiten und Speichern."""
+    firma_id = queries.create_kontakt(tmp_db, {
+        "vorname": "", "nachname": "", "firma": "Bauamt Muster",
+        "telefonnummern": [{"typ": "Direkt", "nummer": "+41 52 111 11 11"},
+                           {"typ": "Direkt", "nummer": "+41 52 111 11 12"}],
+    })
+    projekt_id = queries.get_or_create_projekt(tmp_db, "Testprojekt")
+    vorschlag_id = queries.create_vorschlag(tmp_db, _vollstaendig(
+        vorname="Anna", nachname="Neu", erkannte_ordner_ids=[projekt_id],
+        telefonnummern=[{"typ": "Direkt", "nummer": "+41 52 111 11 11"}],
+    ), kontakt_id=firma_id, quelle="kontakte_app")
+
+    r = _client().post(f"/vorschlaege/{vorschlag_id}/uebernehmen-als-neu", follow_redirects=False)
+    assert r.status_code == 303
+
+    kontakte = queries.list_kontakte(tmp_db)
+    assert len(kontakte) == 2
+    neu = [k for k in kontakte if k["nachname"] == "Neu"][0]
+    assert len(neu["telefonnummern"]) == 1
+    # Der bestehende Kontakt bleibt unangetastet.
+    firma = queries.get_kontakt(tmp_db, firma_id)
+    assert firma["firma"] == "Bauamt Muster"
+    assert len(firma["telefonnummern"]) == 2
+
+
+def test_uebernehmen_fuehrt_weiterhin_zusammen(tmp_db):
+    """Gegenprobe: der reguläre Weg soll weiterhin mergen."""
+    bestehender_id = queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster"})
+    projekt_id = queries.get_or_create_projekt(tmp_db, "Testprojekt")
+    vorschlag_id = queries.create_vorschlag(
+        tmp_db, _vollstaendig(erkannte_ordner_ids=[projekt_id],
+                              telefonnummern=[{"typ": "Direkt", "nummer": "+41 52 111 11 11"}]),
+        kontakt_id=bestehender_id, quelle="kontakte_app")
+
+    _client().post(f"/vorschlaege/{vorschlag_id}/uebernehmen", follow_redirects=False)
+
+    assert len(queries.list_kontakte(tmp_db)) == 1
+    assert len(queries.get_kontakt(tmp_db, bestehender_id)["telefonnummern"]) == 1
+
+
+def test_duplikat_zeigt_beide_wege_an(tmp_db):
+    bestehender_id = queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster"})
+    vorschlag_id = queries.create_vorschlag(
+        tmp_db, {"vorname": "Anna", "nachname": "Muster", "telefonnummern": [], "emails": []},
+        kontakt_id=bestehender_id, quelle="kontakte_app")
+
+    r = _client().get("/vorschlaege")
+    assert f"/vorschlaege/{vorschlag_id}/uebernehmen-als-neu" in r.text
+    assert "Zusammenführen" in r.text
+    assert "Als neuen Kontakt" in r.text

@@ -454,6 +454,18 @@ def push_projekt(conn: sqlite3.Connection, projekt_id: int,
             queries.setze_kontakt_projekt_zuordnungen(conn, projekt_id, soll)
         mitglieder_ids = sorted(soll)
         fremde = _offene_fremde_mitglieder(conn, stand[2] if stand else [])
+
+        # Nicht schreiben, wenn drueben schon dasselbe steht. Jede Speicherung eines
+        # Kontakts pusht alle seine Ordner mit (push_kontakt_mit_ordnern) und
+        # ueberschrieb deren Mitgliederliste bisher auch dann, wenn sich an ihr
+        # nichts geaendert hat. Jedes dieser ueberfluessigen Schreiben ist eine
+        # Gelegenheit, eine gerade erst in Kontakte.app gesetzte, aber noch nicht
+        # hochgeladene Zuordnung zu ueberschreiben (Nutzer-Meldung im Abnahmetest).
+        if stand is not None and stand[0] == soll and stand[1] == projekt["name"] \
+                and list(stand[2]) == list(fremde):
+            queries.setze_gepushte_mitglieder(conn, projekt_id, mitglieder_ids)
+            return True
+
         erfolg = _put(f"projekt-{projekt_id}.vcf",
                        projekt_zu_gruppen_vcard(projekt, mitglieder_ids, fremde), client=client)
         if erfolg:
