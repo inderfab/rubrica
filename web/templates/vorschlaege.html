@@ -27,31 +27,7 @@
     <tbody>
         {% for v in vorschlaege %}
         {% set k = v.rohdaten %}
-        {# Kontakte kommen nicht mehr als Loeschvorschlag: Loeschen geht nur noch im
-           Browser (Nutzer-Entscheid), eine Loeschung in Kontakte.app wird
-           zurueckgeschrieben. Fuer ORDNER bleibt der Vorschlag - eine geloeschte
-           Gruppe ist eine bewusstere Handlung und betrifft keine Kontaktdaten. #}
-        {% if k.typ == "loeschung_ordner" %}
-        <tr>
-            <td colspan="2">📁 {{ k.name }}</td>
-            <td colspan="2">{{ k.firma }}</td>
-            <td>Kontakte.app</td>
-            <td>
-                <span class="tag" style="background:#fff1f0; border:1px solid #ffa39e">
-                    In Kontakte.app gelöscht
-                </span>
-            </td>
-            <td class="actions">
-                <form method="post" action="/vorschlaege/{{ v.id }}/uebernehmen"
-                      onsubmit="return confirm('Auch in Rubrica löschen?\n\nDas lässt sich nicht rückgängig machen.')">
-                    <button type="submit">Löschen</button>
-                </form>
-                <form method="post" action="/vorschlaege/{{ v.id }}/ablehnen">
-                    <button type="submit" class="secondary">Behalten</button>
-                </form>
-            </td>
-        </tr>
-        {% elif k.typ == "aenderung" %}
+        {% if k.typ == "aenderung" %}
         <tr>
             <td>{{ k.vorname }} {{ k.nachname }}</td>
             <td>{{ k.firma }}</td>

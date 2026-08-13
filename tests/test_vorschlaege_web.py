@@ -336,20 +336,17 @@ def test_unvollstaendiger_vorschlag_wird_nicht_direkt_uebernommen(tmp_db):
     assert queries.get_vorschlag(tmp_db, vorschlag_id)["status"] == "offen"
 
 
-def test_kontakt_loeschvorschlaege_gibt_es_nicht_mehr(tmp_db):
-    """Nutzer-Entscheid: Loeschen von Kontakten nur noch im Browser. Ein in
-    Kontakte.app geloeschter Kontakt wird zurueckgeschrieben statt zur Entscheidung
-    vorgelegt - die Vorschlagsseite kennt diesen Typ deshalb nicht mehr. Fuer ORDNER
-    bleibt der Vorschlag bestehen (bewusstere Handlung, keine Kontaktdaten)."""
-    projekt_id = queries.get_or_create_projekt(tmp_db, "Baustelle")
-    queries.create_vorschlag(
-        tmp_db, {"typ": "loeschung_ordner", "name": "Baustelle", "projekt_id": projekt_id},
-        quelle="kontakte_app", message_id=f"kontakte-app-ordner-loeschung:{projekt_id}")
+def test_loeschvorschlaege_gibt_es_nicht_mehr(tmp_db):
+    """Nutzer-Entscheid: Loeschen nur noch im Browser - fuer Kontakte wie fuer
+    Ordner. Beides wird in Kontakte.app zurueckgeschrieben statt zur Entscheidung
+    vorgelegt; die Vorschlagsseite kennt diese Typen deshalb nicht mehr."""
+    import web.vorschlaege as modul
+    quelltext = open(modul.__file__, encoding="utf-8").read()
+    assert "loeschung_ordner" not in quelltext
+    assert '"loeschung"' not in quelltext
 
-    r = _client().get("/vorschlaege")
-    assert r.status_code == 200
-    assert "In Kontakte.app gelöscht" in r.text
-    assert "📁 Baustelle" in r.text
+    vorlage = open("web/templates/vorschlaege.html", encoding="utf-8").read()
+    assert "loeschung" not in vorlage
 
 
 def test_mail_vorschlag_zeigt_ursprungstext_im_flyover(tmp_db):

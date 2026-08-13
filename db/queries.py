@@ -480,18 +480,6 @@ def offener_vorschlag_fuer_message_id(conn: sqlite3.Connection, message_id: str)
     return v
 
 
-def hat_offenen_loeschvorschlag(conn: sqlite3.Connection, message_id: str) -> bool:
-    """Prueft, ob zu einem Loeschvorschlag noch eine Entscheidung aussteht.
-
-    Gebraucht als Push-Sperre: solange offen, darf Rubrica den geloeschten Eintrag
-    NICHT wieder auf die Geraete schreiben. Sonst taucht er dort binnen Minuten
-    wieder auf, der Mitarbeitende loescht ihn erneut - und jeder Durchgang erzeugt
-    einen weiteren Vorschlag."""
-    return conn.execute(
-        "SELECT 1 FROM vorschlaege WHERE message_id = ? AND status = 'offen' LIMIT 1", (message_id,)
-    ).fetchone() is not None
-
-
 def offene_kontakte_app_apple_uids(conn: sqlite3.Connection) -> set:
     """Apple-UIDs aller Kontakte.app-Vorschlaege, ueber die noch nicht entschieden
     ist - Grundlage dafuer, deren Ordner-Zugehoerigkeit auf dem Server stehen zu

@@ -42,11 +42,10 @@ einer Gruppe anlegt - die Zuordnung war dann weg, bevor sie jemand lesen
 konnte. push_projekt schreibt fremde Mitglieder deshalb mit, solange ihr
 Vorschlag offen ist (siehe radicale._offene_fremde_mitglieder).
 
-Geloescht wird nur im Browser (Nutzer-Entscheid nach dem Abnahmetest):
-verschwindet eine kontakt-N.vcf aus Kontakte.app, schreibt Rubrica sie wieder
-hin, statt einen Loeschvorschlag vorzulegen. Fuer Ordner bleibt der Vorschlag -
-eine geloeschte Gruppe ist eine bewusstere Handlung und betrifft keine
-Kontaktdaten.
+Geloescht wird nur im Browser (Nutzer-Entscheid nach dem Abnahmetest) - fuer
+Kontakte wie fuer Ordner: verschwindet eine kontakt-N.vcf oder projekt-N.vcf aus
+Kontakte.app, schreibt Rubrica sie wieder hin, statt einen Loeschvorschlag
+vorzulegen ("wenn man lokal loescht soll es diese aenderung nie annehmen").
 """
 from __future__ import annotations
 
@@ -59,10 +58,6 @@ from sync import radicale
 
 _EIGENES_MUSTER = re.compile(r"^(kontakt|projekt)-\d+\.vcf$")
 
-# message_id-Praefixe: zugleich Dublettenschutz und - bei den Loeschungen - Schluessel
-# fuer die Push-Sperre (siehe queries.hat_offenen_loeschvorschlag).
-LOESCHUNG_KONTAKT_PRAEFIX = "kontakte-app-loeschung:"
-LOESCHUNG_ORDNER_PRAEFIX = "kontakte-app-ordner-loeschung:"
 _GRUPPEN_MUSTER = re.compile(r"X-ADDRESSBOOKSERVER-KIND:\s*group", re.IGNORECASE)
 
 
@@ -168,7 +163,7 @@ def _gleicher_offener_vorschlag(conn, kontakt: dict) -> "dict | None":
     signatur = _inhalts_signatur(kontakt)
     for vorschlag in queries.list_vorschlaege(conn, status="offen", quelle="kontakte_app"):
         rohdaten = vorschlag["rohdaten"] or {}
-        if rohdaten.get("typ") in ("ordner", "aenderung", "loeschung", "loeschung_ordner"):
+        if rohdaten.get("typ") in ("ordner", "aenderung"):
             continue
         if _inhalts_signatur(rohdaten) == signatur:
             return vorschlag
@@ -223,6 +218,7 @@ def pruefe_kontakte_app_neuzugaenge(conn) -> dict:
                     kontakt["kontakte_app_vcf_name"] = name
                     # Zweitkarten bleiben am Vorschlag haengen (siehe unten) - sie
                     # duerfen beim Nachziehen des Inhalts nicht verlorengehen.
+                    kontakt["kontakte_app_rohtext"] = resp.text[:4000]
                     weitere = (offener["rohdaten"] or {}).get("weitere_vcf_namen")
                     if weitere:
                         kontakt["weitere_vcf_namen"] = weitere
@@ -252,6 +248,7 @@ def pruefe_kontakte_app_neuzugaenge(conn) -> dict:
                     apple_uid = kontakt.get("apple_uid")
                     kontakt["erkannte_ordner_ids"] = mitgliedschaften.get(apple_uid, []) if apple_uid else []
                     kontakt["kontakte_app_vcf_name"] = name
+                    kontakt["kontakte_app_rohtext"] = resp.text[:4000]
                     if _ohne_inhalt(kontakt):
                         continue
                     doppelt = _gleicher_offener_vorschlag(conn, kontakt)
@@ -337,9 +334,11 @@ def pruefe_ordner_mitgliedschaften(conn, client=None) -> dict:
     if eigener:
         client = radicale._client()
     if client is None:
-        return {"aktiv": False, "geprueft": 0, "hinzugefuegt": 0, "entfernt": 0, "umbenannt": 0, "fehler": 0}
+        return {"aktiv": False, "geprueft": 0, "hinzugefuegt": 0, "entfernt": 0,
+                "umbenannt": 0, "wiederhergestellt": 0, "fehler": 0}
 
     geprueft = hinzugefuegt_gesamt = entfernt_gesamt = fehler = umbenannt = 0
+    wiederhergestellt = 0
     geaenderte_projekte: list[int] = []
     try:
         projekte = [dict(r) for r in conn.execute("SELECT id, name FROM projekte")]
@@ -353,14 +352,13 @@ def pruefe_ordner_mitgliedschaften(conn, client=None) -> dict:
             roh = radicale.gruppen_vcard_auf_server(projekt_id, client=client)
             if roh is None:
                 # Es gab einen bestaetigten Push, jetzt ist die Gruppe weg - in
-                # Kontakte.app geloescht. Als Vorschlag vorlegen (siehe
-                # pruefe_kontakt_aenderungen fuer dieselbe Ueberlegung bei Kontakten).
-                message_id = f"{LOESCHUNG_ORDNER_PRAEFIX}{projekt_id}"
-                if not queries.vorschlag_existiert_fuer_message_id(conn, message_id):
-                    queries.create_vorschlag(conn, {
-                        "typ": "loeschung_ordner", "name": projekt["name"],
-                        "projekt_id": projekt_id,
-                    }, quelle="kontakte_app", message_id=message_id)
+                # Kontakte.app geloescht. Wie beim Kontakt wird sie zurueckgeschrieben
+                # statt zur Entscheidung vorgelegt (Nutzer-Vorgabe: "wenn man lokal
+                # loescht soll es diese aenderung nie annehmen, loeschen geht nur vom
+                # browser"). Der Vorschlagsweg mit "Loeschen"/"Behalten" ist damit
+                # ueberall verschwunden.
+                if radicale.push_projekt(conn, projekt_id, client=client):
+                    wiederhergestellt += 1
                 continue
 
             server, server_name, _fremde = roh
@@ -418,7 +416,8 @@ def pruefe_ordner_mitgliedschaften(conn, client=None) -> dict:
             client.close()
 
     return {"aktiv": True, "geprueft": geprueft, "hinzugefuegt": hinzugefuegt_gesamt,
-            "entfernt": entfernt_gesamt, "umbenannt": umbenannt, "fehler": fehler}
+            "entfernt": entfernt_gesamt, "umbenannt": umbenannt,
+            "wiederhergestellt": wiederhergestellt, "fehler": fehler}
 
 
 # Felder, die aus einer vCard verlaesslich zurueckgelesen werden koennen. Bewusst

@@ -141,10 +141,7 @@ def vorschlag_uebernehmen(request: Request, vorschlag_id: int):
         vorschlag = queries.get_vorschlag(conn, vorschlag_id)
         typ = vorschlag["rohdaten"].get("typ") if vorschlag else None
 
-        if typ == "loeschung_ordner":
-            queries.delete_projekt(conn, vorschlag["rohdaten"]["projekt_id"])
-            queries.set_vorschlag_status(conn, vorschlag_id, "bestaetigt")
-        elif typ == "aenderung":
+        if typ == "aenderung":
             kontakt_id = kontakte_app_intake.bestaetige_aenderungs_vorschlag(conn, vorschlag)
             queries.set_vorschlag_status(conn, vorschlag_id, "bestaetigt")
             # Push aktualisiert zugleich den Vergleichsstand, damit dieselbe
@@ -200,10 +197,7 @@ def vorschlag_ablehnen(vorschlag_id: int):
         queries.set_vorschlag_status(conn, vorschlag_id, "abgelehnt")
         typ = vorschlag["rohdaten"].get("typ") if vorschlag else None
 
-        if typ == "loeschung_ordner":
-            radicale.push_projekt(conn, vorschlag["rohdaten"]["projekt_id"])
-            vorschlag = None
-        elif typ == "aenderung":
+        if typ == "aenderung":
             # Hier wird nichts geloescht, sondern Rubricas Stand wiederhergestellt -
             # sonst bliebe die verworfene Aenderung auf allen Geraeten sichtbar.
             kontakte_app_intake.verwerfe_aenderungs_vorschlag(conn, vorschlag)

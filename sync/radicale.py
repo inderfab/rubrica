@@ -420,8 +420,6 @@ def push_projekt(conn: sqlite3.Connection, projekt_id: int,
     if row is None:
         return False
     projekt = dict(row)
-    if queries.hat_offenen_loeschvorschlag(conn, f"kontakte-app-ordner-loeschung:{projekt_id}"):
-        return True  # siehe push_kontakt: keine Wiederauferstehung waehrend der Entscheidung
     if _ist_z_ordner(projekt["name"]):
         # Aktiv loeschen statt nur zu ueberspringen: Regression (Nutzer-Feedback) - ein
         # Ordner, der VOR der Umbenennung ins Archiv (Z-Praefix) bereits unter dem alten

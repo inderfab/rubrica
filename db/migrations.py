@@ -131,6 +131,16 @@ _MIGRATIONS: list[tuple[str, str]] = [
             WHERE status = 'offen' AND message_id LIKE 'kontakte-app-loeschung:%';
         """,
     ),
+    (
+        "2026-08-07_keine_ordner_loeschvorschlaege_mehr",
+        """
+        -- Nachtrag zum Entscheid oben: er gilt auch fuer Ordner ("wenn man lokal
+        -- loescht soll es diese aenderung nie annehmen"). Eine in Kontakte.app
+        -- geloeschte Gruppe wird zurueckgeschrieben, nicht vorgelegt.
+        UPDATE vorschlaege SET status = 'abgelehnt'
+            WHERE status = 'offen' AND message_id LIKE 'kontakte-app-ordner-loeschung:%';
+        """,
+    ),
 ]
 
 

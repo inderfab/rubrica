@@ -15,6 +15,21 @@
 </div>
 {% endif %}
 
+{% if kontakt.kontakte_app_rohtext %}
+{# Die Karteikarte so, wie Kontakte.app sie geschickt hat. Zeigt auf einen Blick,
+   ob ein Feld gar nicht angekommen ist oder nur nicht richtig gelesen wurde -
+   ohne diese Ansicht bleibt bei einer Meldung wie "die Telefonnummer ist leer"
+   nur Raten (Nutzer-Meldung zu einer eigenen Kategorie, die nicht ankam). #}
+<details style="margin-bottom:1rem">
+    <summary style="cursor:pointer; color:var(--text-hell); font-size:0.85rem">
+        Karteikarte aus Kontakte.app im Original
+    </summary>
+    <pre style="white-space:pre-wrap; word-break:break-word; margin:0.5rem 0 0; font-size:0.75rem;
+                max-height:14rem; overflow-y:auto; background:#f7f7f7; padding:0.6rem; border-radius:6px;"
+    >{{ kontakt.kontakte_app_rohtext }}</pre>
+</details>
+{% endif %}
+
 {% include "_kontakt_bearbeiten_form.html" %}
 
 {% if auto_oeffnen %}

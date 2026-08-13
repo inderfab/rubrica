@@ -584,18 +584,27 @@ def test_in_kontakte_app_geloeschter_kontakt_wird_wiederhergestellt(tmp_db, monk
     assert queries.get_kontakt(tmp_db, kontakt_id) is not None
 
 
-def test_geloeschter_ordner_wird_als_vorschlag_erfasst(tmp_db, monkeypatch):
+def test_in_kontakte_app_geloeschter_ordner_wird_wiederhergestellt(tmp_db, monkeypatch):
+    """Nutzer-Vorgabe: "wenn man lokal loescht soll es diese aenderung nie annehmen,
+    loeschen geht nur vom browser" - fuer Ordner genauso wie fuer Kontakte."""
     k1 = queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster"})
     projekt_id = queries.get_or_create_projekt(tmp_db, "Baustelle")
     queries.set_kontakt_projekte(tmp_db, k1, [projekt_id])
     queries.setze_gepushte_mitglieder(tmp_db, projekt_id, [k1])
 
-    _mock_client(monkeypatch, lambda request: httpx.Response(404))
-    kontakte_app_intake.pruefe_ordner_mitgliedschaften(tmp_db)
+    gesendet = []
 
-    v = queries.list_vorschlaege(tmp_db, quelle="kontakte_app")[0]
-    assert v["rohdaten"]["typ"] == "loeschung_ordner"
-    assert v["rohdaten"]["projekt_id"] == projekt_id
+    def handler(request: httpx.Request) -> httpx.Response:
+        gesendet.append((request.method, request.url.path))
+        return httpx.Response(404) if request.method == "GET" else httpx.Response(201)
+
+    _mock_client(monkeypatch, handler)
+    ergebnis = kontakte_app_intake.pruefe_ordner_mitgliedschaften(tmp_db)
+
+    assert ergebnis["wiederhergestellt"] == 1
+    assert ("PUT", f"/a/projekt-{projekt_id}.vcf") in gesendet
+    assert queries.list_vorschlaege(tmp_db, quelle="kontakte_app") == []
+    assert any(o["id"] == projekt_id for o in queries.list_projekte(tmp_db))
 
 
 def test_in_kontakte_app_umbenannter_ordner_wird_uebernommen(tmp_db, monkeypatch):
@@ -1098,3 +1107,20 @@ def test_verschiedene_personen_bleiben_zwei_vorschlaege(tmp_db, monkeypatch):
 
     assert ergebnis["neu"] == 2
     assert len(queries.list_vorschlaege(tmp_db, quelle="kontakte_app")) == 2
+
+
+def test_rohtext_der_karteikarte_wird_mitgefuehrt(tmp_db, monkeypatch):
+    """Damit sich bei einer Meldung wie "die Telefonnummer ist leer" nachsehen
+    lässt, was Kontakte.app überhaupt geschickt hat, statt zu raten."""
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "PROPFIND":
+            return httpx.Response(207, text=_propfind_xml(["ABC-123-FREMD.vcf"]))
+        return httpx.Response(200, text=_FREMDE_VCARD)
+
+    monkeypatch.setattr(radicale, "_client", lambda: httpx.Client(
+        transport=httpx.MockTransport(handler), base_url="https://test/a/"))
+
+    kontakte_app_intake.pruefe_kontakte_app_neuzugaenge(tmp_db)
+
+    rohtext = queries.list_vorschlaege(tmp_db, quelle="kontakte_app")[0]["rohdaten"]["kontakte_app_rohtext"]
+    assert "BEGIN:VCARD" in rohtext and "Mustermann" in rohtext
