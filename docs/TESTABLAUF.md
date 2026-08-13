@@ -3,9 +3,8 @@
 Vollständiger Durchlauf von der Installation bis zum Export. Gedacht zum Abhaken:
 jeder Punkt ist eine Handlung mit einer klaren Erwartung.
 
-**Stand:** dritter Durchgang mit v1.16.0/1.17.0 durch C und den Anfang von D. Die
-offenen Befunde stehen in [Offene Befunde](#offene-befunde). Nächster Schritt: **1.18.0
-installieren**, dann C10, C14, C15 und ab D3 weiter.
+**Stand:** Abschnitt C ist durch (bis auf C11, C14, C15, C17), von D fehlen noch
+D5–D9 und D11. Offene Befunde siehe unten. Nächster Schritt: **1.19.0 installieren**.
 
 | Zeichen | Bedeutung |
 |---|---|
@@ -71,13 +70,14 @@ kommt zuerst als **Vorschlag**.
 | C7 | ✅ | Bestehenden Kontakt in Kontakte.app in eine andere Gruppe ziehen | Zuordnung landet in Rubrica (ohne Rückfrage — Zuordnungen gelten als unkritisch) | |
 | C8 | ✅ | Bei einem bestehenden Kontakt in Kontakte.app die Telefonnummer ändern | Kommt als Änderungsvorschlag, alter und neuer Wert sind gegenübergestellt | |
 | C9 | ✅ | Diesen Änderungsvorschlag ablehnen | Rubrica bleibt beim alten Wert und schreibt ihn nach Kontakte.app zurück | |
-| C10 | 🔁 | Kontakt in Kontakte.app löschen | **Kein Vorschlag mehr.** Der Kontakt taucht nach einigen Minuten von selbst wieder auf — löschen geht nur im Browser | beim letzten Versuch kam er trotz „Behalten“ nicht zurück; mit 1.18.0 nochmals |
+| C10 | ✅ | Kontakt in Kontakte.app löschen | **Kein Vorschlag mehr.** Der Kontakt taucht nach einigen Minuten von selbst wieder auf — löschen geht nur im Browser | |
 | C11 | 🔁 | Denselben Kontakt im Browser löschen | Verschwindet auf allen Geräten und bleibt weg | |
 | C12 | ✅ | Kontakt in Kontakte.app anlegen, aber **im privaten Account** (iCloud/„Auf meinem Mac“) | Kommt **nicht** in Rubrica an — Rubrica sieht nur seinen eigenen Account | |
 | C13 | ✅ | Nach der Installation einmal **Jetzt alles neu synchronisieren**, dann Vorschläge öffnen | Keine Änderungsvorschläge für Nummern, die niemand angefasst hat | Vorschlagsflut aus 1.14.0 ist weg |
 | C14 | 🔁 | Einen **Ordner** in Kontakte.app löschen (falls dort überhaupt möglich) | Der Ordner kommt von selbst zurück — auch Ordner löscht man nur im Browser | in Kontakte.app scheint es gar nicht zu gehen; Punkt bleibt für iPhone o. ä. |
 | C15 | 🔁 | Bestehenden Kontakt in Kontakte.app in einen Ordner ziehen, **einige Minuten warten**, dann im Browser einen anderen in denselben Ordner | Beide Zuordnungen bleiben | ohne Wartezeit ging die lokale Zuordnung verloren — siehe Befund „Zeitfenster“ |
-| C16 | 🔁 | Vorschlag übernehmen, den Rubrica als **möglichen Duplikat** markiert | Drei Wege: **Zusammenführen**, **Als neuen Kontakt**, **Bestehenden ansehen** | vorher gab es nur Zusammenführen oder den Umweg über Bearbeiten und Speichern |
+| C16 | ✅ | Vorschlag übernehmen, den Rubrica als **möglichen Duplikat** markiert | Drei Wege: **Zusammenführen**, **Als neuen Kontakt**, **Bestehenden ansehen** | |
+| C17 | ⬜ | Einen Duplikat-Vorschlag **Zusammenführen**, bei dem der bestehende Kontakt einen Namen hat | Der Name des bestehenden Kontakts bleibt; nur Nummern, Adressen und Mails kommen dazu | neu ab 1.19.0 — genau hier gingen Kontakte verloren |
 
 ---
 
@@ -87,14 +87,14 @@ kommt zuerst als **Vorschlag**.
 |---|---|---|---|
 | D1 | ✅ | Kontaktformular öffnen, Kategoriefeld anklicken | Reine Auswahlliste, kein freier Text möglich |
 | D2 | ✅ | Erste Telefonnummer ausfüllen | Darunter erscheint automatisch eine zweite Zeile mit der nächsten Kategorie |
-| D3 | ❌ | In Kontakte.app eine Nummer mit **eigener Bezeichnung** („Sekretariat“) anlegen | Bezeichnung bleibt erhalten und erscheint unter Einstellungen → Kategorien als Wert im Bestand |
-| D4 | ⬜ | Diesen Wert dort einer bestehenden Kategorie zuordnen | Alle betroffenen Einträge wechseln die Kategorie |
+| D3 | ✅ | In Kontakte.app eine Nummer mit **eigener Bezeichnung** („Sekretariat“) anlegen | Bezeichnung bleibt erhalten und erscheint unter Einstellungen → Kategorien als Wert im Bestand |
+| D4 | ✅ | Diesen Wert dort einer bestehenden Kategorie zuordnen | Alle betroffenen Einträge wechseln die Kategorie |
 | D5 | ⬜ | In Kontakte.app eine als **privat** markierte E-Mail anlegen | Landet in Rubrica als „Privat“, nicht als „Direkt“ |
 | D6 | ⬜ | Einstellungen → Kategorien: neue Kategorie hinzufügen | Steht danach im Kontaktformular zur Auswahl |
 | D7 | ⬜ | Eine Kategorie umbenennen, die in Verwendung ist | Rückfrage mit Anzahl; danach tragen alle betroffenen Einträge den neuen Namen |
 | D8 | ⬜ | Eine Kategorie entfernen, die noch benutzt wird | Wird abgelehnt mit Hinweis auf die Anzahl der Einträge |
 | D9 | ⬜ | Eine Kategorie ohne Einträge entfernen | Verschwindet aus der Auswahl |
-| D10 | ⬜ | Reihenfolge mit den Pfeilen ändern, speichern | Das Kontaktformular schlägt die Kategorien in dieser Reihenfolge vor |
+| D10 | ✅ | Reihenfolge mit den Pfeilen ändern, speichern | Das Kontaktformular schlägt die Kategorien in dieser Reihenfolge vor |
 | D11 | ⬜ | In Kontakte.app die Kategorie einer Nummer ansehen, die in Rubrica „Privat Handy“ heisst | Kontakte.app zeigt „Privat Handy“ im Klartext als Bezeichnung |
 
 ---
@@ -152,17 +152,12 @@ Der Fall, für den die Zusammenführung gebaut ist.
 
 ## Offene Befunde
 
-**D3 — eigene Kategorie kommt nicht an.** Neuer Kontakt in Kontakte.app mit einer
-selbst benannten Kategorie („testkategorie") für eine Telefonnummer: im Vorschlag ist
-die Nummer leer und die Kategorie fehlt ganz. Zusätzlich war der Kontakt in
-Kontakte.app anschliessend nicht mehr sichtbar.
-
-Zwei mögliche Ursachen, noch nicht auseinandergehalten: die Karteikarte war beim
-Einlesen erst halb gefüllt (Kontakte.app lädt sie beim Tippen mehrfach hoch), oder das
-eigene Label wird anders abgelegt als erwartet. Für genau diese Frage zeigt der
-Bearbeiten-Dialog eines Kontakte.app-Vorschlags ab 1.18.0 die **Karteikarte im
-Original** — dort steht schwarz auf weiss, was angekommen ist. Beim nächsten Versuch
-bitte einmal aufklappen.
+**Zusammengeführte Kontakte aus dem Bestand (ausserhalb des Testablaufs).** Zwei
+Personen derselben Firma wurden zu einer zusammengefasst, die zweite fehlt seither.
+Ursache gefunden und in 1.19.0 behoben: beim Zusammenführen gewann der Name aus dem
+Vorschlag und überschrieb den bestehenden Kontakt. Was bereits verloren ging, findet
+`scripts/fehlende_kontakte.py` — Vergleich der alten vCard-Exporte gegen die
+Datenbank, fehlende Kontakte werden als einzelne Karten herausgeschrieben.
 
 **Zeitfenster bei Ordner-Zuordnungen (C15).** Verschiebt jemand in Kontakte.app einen
 Kontakt in einen Ordner und ändert kurz darauf jemand im Browser denselben Ordner,
@@ -174,7 +169,7 @@ es sich nicht. **Praktisch:** Zuordnungen für einen Ordner in einem Durchgang m
 
 ---
 
-## Behoben in v1.16.0 / v1.17.0 / v1.18.0
+## Behoben in v1.16.0 bis v1.19.0
 
 - **Vorschlag kam doppelt** — Dublettenschutz vergleicht jetzt auch den Inhalt, nicht
   nur den Dateinamen. Die zweite Karte hängt am Vorschlag und wird mitentfernt.
@@ -186,6 +181,10 @@ es sich nicht. **Praktisch:** Zuordnungen für einen Ordner in einem Durchgang m
   sämtlichen Nummern da.
 - **Löschen** — Kontakte *und* Ordner werden zurückgeschrieben, wenn sie in
   Kontakte.app verschwinden. Gelöscht wird ausschliesslich im Browser.
+- **Zusammenführen überschrieb den Namen** — der bestehende Kontakt behält seinen
+  Namen; nur ein namenloser Firmeneintrag bekommt den Namen aus dem Vorschlag.
+- **Eigene Kategorie aus Kontakte.app** (D3) — funktioniert; im Bearbeiten-Dialog
+  lässt sich zusätzlich die Karteikarte im Original aufklappen.
 
 ---
 
