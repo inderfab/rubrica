@@ -3,8 +3,9 @@
 Vollständiger Durchlauf von der Installation bis zum Export. Gedacht zum Abhaken:
 jeder Punkt ist eine Handlung mit einer klaren Erwartung.
 
-**Stand:** Abschnitt C ist durch (bis auf C11, C14, C15, C17), von D fehlen noch
-D5–D9 und D11. Offene Befunde siehe unten. Nächster Schritt: **1.19.0 installieren**.
+**Stand:** Abschnitt C ist durch (bis auf C11, C14, C17), von D fehlen noch
+D5–D9 und D11, in B neu B11. Offene Befunde siehe unten. Nächster Schritt:
+**1.20.0 installieren**.
 
 | Zeichen | Bedeutung |
 |---|---|
@@ -51,6 +52,7 @@ synchronisieren** urteilen.
 | B8 | ✅ | Ordner umbenennen | Gruppe in Kontakte.app heisst neu, die Mitglieder bleiben |
 | B9 | ✅ | Mehrere Kontakte auswählen → Sammelbearbeiten | Änderung greift bei allen ausgewählten |
 | B10 | ✅ | Kontakt per Drag & Drop auf einen Ordner ziehen | Zuordnung wird übernommen |
+| B11 | ⬜ | Kontakt anlegen, der **nur eine Firma** ist (Namensfelder leer) | Lässt sich speichern; als Bezeichnung genügt Name **oder** Firma | neu ab 1.20.0 |
 
 ---
 
@@ -75,7 +77,7 @@ kommt zuerst als **Vorschlag**.
 | C12 | ✅ | Kontakt in Kontakte.app anlegen, aber **im privaten Account** (iCloud/„Auf meinem Mac“) | Kommt **nicht** in Rubrica an — Rubrica sieht nur seinen eigenen Account | |
 | C13 | ✅ | Nach der Installation einmal **Jetzt alles neu synchronisieren**, dann Vorschläge öffnen | Keine Änderungsvorschläge für Nummern, die niemand angefasst hat | Vorschlagsflut aus 1.14.0 ist weg |
 | C14 | 🔁 | Einen **Ordner** in Kontakte.app löschen (falls dort überhaupt möglich) | Der Ordner kommt von selbst zurück — auch Ordner löscht man nur im Browser | in Kontakte.app scheint es gar nicht zu gehen; Punkt bleibt für iPhone o. ä. |
-| C15 | 🔁 | Bestehenden Kontakt in Kontakte.app in einen Ordner ziehen, **einige Minuten warten**, dann im Browser einen anderen in denselben Ordner | Beide Zuordnungen bleiben | ohne Wartezeit ging die lokale Zuordnung verloren — siehe Befund „Zeitfenster“ |
+| C15 | ✅ | Bestehenden Kontakt in Kontakte.app in einen Ordner ziehen, **einige Minuten warten**, dann im Browser einen anderen in denselben Ordner | Beide Zuordnungen bleiben | gleichzeitig gewinnt weiterhin der Browser — bekannte Grenze, siehe Befund „Zeitfenster“ |
 | C16 | ✅ | Vorschlag übernehmen, den Rubrica als **möglichen Duplikat** markiert | Drei Wege: **Zusammenführen**, **Als neuen Kontakt**, **Bestehenden ansehen** | |
 | C17 | ⬜ | Einen Duplikat-Vorschlag **Zusammenführen**, bei dem der bestehende Kontakt einen Namen hat | Der Name des bestehenden Kontakts bleibt; nur Nummern, Adressen und Mails kommen dazu | neu ab 1.19.0 — genau hier gingen Kontakte verloren |
 

@@ -193,10 +193,16 @@ def _validiere_pflichtfelder(daten: dict, ordner_ids: list) -> dict:
     Formular-Templates (_kontakt_felder.html, _kontakt_bearbeiten_form.html) zum
     roten Hervorheben der jeweiligen Eingabe nutzen."""
     fehlend = {}
-    if not daten.get("vorname", "").strip():
+    # Entweder ein Personenname ODER eine Firma - nicht zwingend beides.
+    # Nutzer-Meldung: ein reiner Firmeneintrag (Zentrale, Sekretariat, Amt) liess
+    # sich gar nicht anlegen, weil Vor- und Nachname verlangt wurden. Kontakte.app
+    # kennt dafuer die Ankreuzbox "Firma" und setzt den Firmennamen als Namen ein;
+    # in Rubrica bleibt das Namensfeld einfach leer.
+    hat_namen = bool(daten.get("vorname", "").strip() and daten.get("nachname", "").strip())
+    if not hat_namen and not daten.get("firma", "").strip():
         fehlend["vorname"] = True
-    if not daten.get("nachname", "").strip():
         fehlend["nachname"] = True
+        fehlend["firma"] = True
     if not daten.get("kategorie", "").strip():
         fehlend["kategorie"] = True
     if not any(t.get("nummer", "").strip() for t in daten.get("telefonnummern", [])):

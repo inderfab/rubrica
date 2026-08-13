@@ -483,3 +483,42 @@ def test_neuanlage_hat_feste_kategorien_als_dropdown(tmp_db):
     assert r.text.count('name="email_adresse"') == 1
     # Freitext-Combobox darf fuer diese Felder nicht mehr auftauchen
     assert 'name="telefon_typ" autocomplete' not in r.text
+
+
+def test_reiner_firmeneintrag_laesst_sich_anlegen(tmp_db):
+    """Nutzer-Meldung: eine Adresse, die nur eine Firma ist (Zentrale, Amt,
+    Sekretariat), liess sich nicht anlegen - Vor- und Nachname waren Pflicht.
+    Kontakte.app kennt dafür die Ankreuzbox „Firma“."""
+    from db import queries
+    projekt_id = queries.get_or_create_projekt(tmp_db, "Testprojekt")
+
+    r = TestClient(app).post("/kontakte/neu", data={
+        "vorname": "", "nachname": "", "firma": "Muster Bauamt", "kategorie": "Behörde/Amt",
+        "telefon_typ": "Direkt", "telefon_nummer": "+41 52 111 11 11",
+        "email_typ": "Direkt", "email_adresse": "info@beispiel.ch",
+        "adresse_typ": "arbeit", "adresse_strasse": "Musterstrasse 1",
+        "adresse_plz": "8000", "adresse_ort": "Zürich", "adresse_region": "", "adresse_land": "",
+        "ordner_ids": str(projekt_id),
+    }, follow_redirects=False)
+
+    assert r.status_code == 303, "reiner Firmeneintrag wurde abgelehnt"
+    kontakte = queries.list_kontakte(tmp_db)
+    assert len(kontakte) == 1 and kontakte[0]["firma"] == "Muster Bauamt"
+
+
+def test_ganz_ohne_name_und_firma_bleibt_abgelehnt(tmp_db):
+    """Gegenprobe: irgendeine Bezeichnung braucht ein Kontakt."""
+    from db import queries
+    projekt_id = queries.get_or_create_projekt(tmp_db, "Testprojekt")
+
+    r = TestClient(app).post("/kontakte/neu", data={
+        "vorname": "", "nachname": "", "firma": "", "kategorie": "Behörde/Amt",
+        "telefon_typ": "Direkt", "telefon_nummer": "+41 52 111 11 11",
+        "email_typ": "Direkt", "email_adresse": "info@beispiel.ch",
+        "adresse_typ": "arbeit", "adresse_strasse": "Musterstrasse 1",
+        "adresse_plz": "8000", "adresse_ort": "Zürich", "adresse_region": "", "adresse_land": "",
+        "ordner_ids": str(projekt_id),
+    }, follow_redirects=False)
+
+    assert r.status_code == 200  # Formular mit roten Feldern statt Weiterleitung
+    assert queries.list_kontakte(tmp_db) == []

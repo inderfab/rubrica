@@ -11,7 +11,8 @@
 {% set fehlende_felder = fehlende_felder | default({}) %}
 
 {% if fehlende_felder %}
-<p class="pflichtfeld-hinweis">Bitte die rot markierten Pflichtfelder ausfüllen.</p>
+<p class="pflichtfeld-hinweis">Bitte die rot markierten Pflichtfelder ausfüllen.{% if fehlende_felder.firma %}
+    Bei Name und Firma genügt eines von beiden – für einen reinen Firmeneintrag den Namen leer lassen.{% endif %}</p>
 {% endif %}
 
 <div class="grid-2">
@@ -27,7 +28,8 @@
     </div>
     <div class="field">
         <label>Firma</label>
-        <input type="text" name="firma" value="{{ kontakt.firma if kontakt else '' }}">
+        <input type="text" name="firma" value="{{ kontakt.firma if kontakt else '' }}"
+               class="{{ 'feld-fehler' if fehlende_felder.firma }}">
     </div>
     <div class="field">
         <label>Funktion</label>
