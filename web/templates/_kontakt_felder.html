@@ -84,8 +84,14 @@
 
 <fieldset class="{{ 'feld-fehler' if fehlende_felder.adresse }}">
     <legend>Adresse</legend>
-    <input type="hidden" name="adresse_typ" value="arbeit">
-    <div class="grid-adresse">
+    <div class="grid-adresse-art">
+        <div class="field">
+            <label>Art</label>
+            <select name="adresse_typ" class="typ-auswahl" style="width:100%">
+                {% for opt in typ_optionen(adresse_typen, adr.typ if adr else '') %}<option value="{{ opt }}"
+                    {{ 'selected' if adr and adr.typ == opt }}>{{ opt }}</option>{% endfor %}
+            </select>
+        </div>
         <div class="field">
             <label>Strasse</label>
             <input type="text" name="adresse_strasse" value="{{ adr.strasse if adr else '' }}">

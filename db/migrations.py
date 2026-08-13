@@ -199,11 +199,32 @@ def _kontakte_zuletzt_gepushte_vcard(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE kontakte ADD COLUMN zuletzt_gepushte_vcard TEXT")
 
 
+def _feste_adress_kategorien(conn: sqlite3.Connection) -> None:
+    """Adressen bekommen dieselbe feste Auswahl wie Telefon und E-Mail
+    (Nutzer-Vorgabe): Arbeit / Privat / Baustelle statt kleingeschriebenem Freitext
+    aus den Importen. Grossgeschrieben, weil die Kategorie in der Oberflaeche und im
+    Export sichtbar ist.
+
+    Als Funktion statt als SQL-String, weil sehr alte Installationen die Tabelle
+    "adressen" noch gar nicht haben - ein blindes UPDATE liefe dort auf einen
+    Fehler und blockierte alle folgenden Migrationen."""
+    tabellen = {r["name"] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+    if "adressen" not in tabellen:
+        return
+    conn.execute("UPDATE adressen SET typ = 'Privat' "
+                 "WHERE lower(typ) IN ('home', 'privat', 'private', 'zuhause')")
+    conn.execute("UPDATE adressen SET typ = 'Baustelle' "
+                 "WHERE lower(typ) IN ('baustelle', 'site', 'bauplatz')")
+    conn.execute("UPDATE adressen SET typ = 'Arbeit' "
+                 "WHERE typ NOT IN ('Arbeit', 'Privat', 'Baustelle')")
+
+
 _PYTHON_MIGRATIONEN: list[tuple[str, "callable"]] = [
     ("2026-07-30_kontakte_apple_uid", _kontakte_apple_uid),
     ("2026-07-30_projekte_apple_gruppe_uid", _projekte_apple_gruppe_uid),
     ("2026-08-04_projekte_zuletzt_gepushte_mitglieder", _projekte_zuletzt_gepushte_mitglieder),
     ("2026-08-05_kontakte_zuletzt_gepushte_vcard", _kontakte_zuletzt_gepushte_vcard),
+    ("2026-08-13_feste_adress_kategorien", _feste_adress_kategorien),
 ]
 
 

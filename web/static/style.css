@@ -378,6 +378,7 @@ input.gemischt::placeholder, textarea.gemischt::placeholder { color: var(--text-
 .formular-schmal .grid-2 > fieldset { margin-bottom: 0; }
 .formular-schmal .grid-2 .typ-auswahl { width: 7.5rem; }
 .grid-adresse { display: grid; grid-template-columns: 1fr 6rem 1fr; gap: 0.5rem 0.75rem; }
+.grid-adresse-art { display: grid; grid-template-columns: 7.5rem 1fr 6rem 1fr; gap: 0.5rem 0.75rem; }
 .formular-schmal .actions { margin-top: 0.8rem; }
 
 /* Kategorie-Verwaltung (Einstellungen): eine Zeile je Kategorie, Reihenfolge per
@@ -421,5 +422,5 @@ label.ankreuz { display: flex; align-items: center; gap: 0.4rem; font-size: 0.9r
 @media (max-width: 900px) {
     .formular-schmal .grid-2 { grid-template-columns: 1fr; }
     .formular-schmal .grid-2 > fieldset { margin-bottom: 0.6rem; }
-    .grid-adresse { grid-template-columns: 1fr; }
+    .grid-adresse, .grid-adresse-art { grid-template-columns: 1fr; }
 }

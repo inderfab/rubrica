@@ -84,6 +84,9 @@ _STANDARD_TEL_TYPEN = {
 _STANDARD_MAIL_TYPEN = {
     "direkt": ("WORK",), "allgemein": ("WORK",), "privat": ("HOME",),
 }
+_STANDARD_ADR_TYPEN = {
+    "arbeit": ("WORK",), "privat": ("HOME",), "baustelle": ("WORK",),
+}
 
 
 def _geratener_standardtyp(kategorie: str) -> tuple:
@@ -150,10 +153,17 @@ def kontakt_zu_vcard(kontakt: dict) -> str:
     for mail in kontakt.get("emails", []):
         zeilen += _beschriftete_zeilen(gruppe, "EMAIL", mail["typ"], mail["email"], _STANDARD_MAIL_TYPEN)
     for adr in kontakt.get("adressen", []):
+        # Wie bei Telefon/E-Mail: die Kategorie als Bezeichnung, nicht als Typ -
+        # "Baustelle" ist kein vCard-Typ und kaeme sonst nicht zurueck.
+        praefix = gruppe.naechste()
+        typen = _STANDARD_ADR_TYPEN.get((adr["typ"] or "").strip().lower()) \
+            or _geratener_standardtyp(adr["typ"])
         zeilen.append(
-            f"ADR;TYPE={_escape(adr['typ']).upper()}:;;{_escape(adr['strasse'])};"
+            f"{praefix}.ADR" + "".join(f";TYPE={t}" for t in typen)
+            + f":;;{_escape(adr['strasse'])};"
             f"{_escape(adr['ort'])};{_escape(adr['region'])};{_escape(adr['plz'])};{_escape(adr['land'])}"
         )
+        zeilen.append(f"{praefix}.X-ABLabel:{_escape(adr['typ'])}")
     for url in kontakt.get("urls", []):
         zeilen.append(f"URL;TYPE={_escape(url['typ']).upper()}:{url['url']}")
     if kontakt.get("notizen"):

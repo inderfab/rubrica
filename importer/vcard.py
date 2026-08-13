@@ -107,13 +107,15 @@ _EMAIL_TYP_MAPPING = {
 # inhaltlich nichts anders war (Nutzer-Meldung). Gleiches Muster wie bei Telefon
 # und E-Mail.
 _ADRESSE_TYP_MAPPING = {
-    "work": "arbeit", "arbeit": "arbeit", "office": "arbeit", "business": "arbeit",
-    "home": "privat", "privat": "privat", "private": "privat",
+    "work": "Arbeit", "arbeit": "Arbeit", "office": "Arbeit", "business": "Arbeit",
+    "home": "Privat", "privat": "Privat", "private": "Privat",
+    "baustelle": "Baustelle", "site": "Baustelle",
 }
 
 
-def _adresse_typ_normalisieren(rohtyp: str) -> str:
-    return _ADRESSE_TYP_MAPPING.get((rohtyp or "").lower(), "arbeit")
+def _adresse_typ_normalisieren(rohtyp: str, label: str = "") -> str:
+    typen = settings.adresse_typen()
+    return _typ_normalisieren(rohtyp, label, _ADRESSE_TYP_MAPPING, typen, typen[0])
 
 
 def _bekannte_schreibweise(label: str, konfigurierte: list) -> str:
@@ -126,7 +128,8 @@ def _bekannte_schreibweise(label: str, konfigurierte: list) -> str:
     return label
 
 
-def _typ_normalisieren(rohtyp: str, label: str, mapping: dict, konfigurierte: list) -> str:
+def _typ_normalisieren(rohtyp: str, label: str, mapping: dict, konfigurierte: list,
+                        standard: str = "Direkt") -> str:
     """Ein TYPE-Parameter ist eine technische vCard-Angabe und wird auf unsere
     Kategorien abgebildet. Eine selbst vergebene Bezeichnung (X-ABLabel) sind
     dagegen die Worte des Nutzers und bleiben erhalten - sonst faellt in
@@ -152,7 +155,7 @@ def _typ_normalisieren(rohtyp: str, label: str, mapping: dict, konfigurierte: li
     for kategorie in konfigurierte:
         if kategorie.lower() == roh:
             return kategorie
-    return "Direkt"
+    return standard
 
 
 def _telefon_typ_normalisieren(rohtyp: str, label: str = "") -> str:
@@ -182,7 +185,7 @@ def _parse_kontakt(vcard) -> dict:
     ]
     adressen = [
         {
-            "typ": _adresse_typ_normalisieren(_typ_von(adr)),
+            "typ": _adresse_typ_normalisieren(_typ_von(adr), _eigenes_label(adr, labels)),
             "strasse": (adr.value.street or "").strip(),
             "plz": (adr.value.code or "").strip(),
             "ort": (adr.value.city or "").strip(),

@@ -28,6 +28,17 @@ def _schweizer_telefonformat(nummer: str) -> str:
     return "+41 " + rest
 
 
+def _vergleichsform(text: str) -> str:
+    """Kleingeschrieben, Mehrfach-Leerzeichen zusammengezogen - fuer den Vergleich,
+    nie fuer die Anzeige. "Musterstrasse 1" und "musterstrasse  1" sind dieselbe
+    Adresse und duerfen beim Zusammenfuehren nicht zweimal entstehen."""
+    return " ".join((text or "").split()).lower()
+
+
+def _nur_ziffern(nummer: str) -> str:
+    return re.sub(r"\D", "", nummer or "")
+
+
 def _kontakt_row_to_dict(conn: sqlite3.Connection, row: sqlite3.Row) -> dict:
     kontakt = dict(row)
     kontakt["telefonnummern"] = [
@@ -168,7 +179,7 @@ def update_kontakt_felder(conn: sqlite3.Connection, kontakt_id: int, felder: dic
         )
 
 
-_KATEGORIE_TABELLEN = {"telefon": "telefonnummern", "email": "emails"}
+_KATEGORIE_TABELLEN = {"telefon": "telefonnummern", "email": "emails", "adresse": "adressen"}
 
 
 def kategorie_umstellen(conn: sqlite3.Connection, feld: str, kontakt_id: int, von: str, nach: str) -> None:
@@ -295,25 +306,30 @@ def merge_kontakt(conn: sqlite3.Connection, kontakt_id: int, daten: dict) -> Non
                 _now(), kontakt_id,
             ),
         )
-        bestehende_nummern = {t["nummer"] for t in bestehend["telefonnummern"]}
+        # Vergleich bewusst unempfindlich gegen Schreibweise: der Vorschlag kommt
+        # aus einer anderen Quelle und schreibt dieselbe Angabe oft anders. Sonst
+        # steht nach dem Zusammenfuehren dieselbe Adresse zweimal da, einmal gross
+        # und einmal klein geschrieben (Nutzer-Meldung).
+        bestehende_nummern = {_nur_ziffern(t["nummer"]) for t in bestehend["telefonnummern"]}
         for tel in daten.get("telefonnummern", []):
-            if tel.get("nummer") and tel["nummer"] not in bestehende_nummern:
+            if tel.get("nummer") and _nur_ziffern(tel["nummer"]) not in bestehende_nummern:
                 conn.execute(
                     "INSERT INTO telefonnummern (kontakt_id, typ, nummer) VALUES (?, ?, ?)",
                     (kontakt_id, tel.get("typ", "mobil"), _schweizer_telefonformat(tel["nummer"])),
                 )
-        bestehende_mails = {e["email"] for e in bestehend["emails"]}
+        bestehende_mails = {_vergleichsform(e["email"]) for e in bestehend["emails"]}
         for mail in daten.get("emails", []):
-            if mail.get("email") and mail["email"] not in bestehende_mails:
+            if mail.get("email") and _vergleichsform(mail["email"]) not in bestehende_mails:
                 conn.execute(
                     "INSERT INTO emails (kontakt_id, typ, email) VALUES (?, ?, ?)",
                     (kontakt_id, mail.get("typ", "arbeit"), mail["email"]),
                 )
         bestehende_adressen = {
-            (a["strasse"], a["plz"], a["ort"]) for a in bestehend["adressen"]
+            tuple(_vergleichsform(a[f]) for f in ("strasse", "plz", "ort"))
+            for a in bestehend["adressen"]
         }
         for adr in daten.get("adressen", []):
-            schluessel = (adr.get("strasse", ""), adr.get("plz", ""), adr.get("ort", ""))
+            schluessel = tuple(_vergleichsform(adr.get(f, "")) for f in ("strasse", "plz", "ort"))
             if any(schluessel) and schluessel not in bestehende_adressen:
                 conn.execute(
                     """INSERT INTO adressen (kontakt_id, typ, strasse, plz, ort, region, land)
@@ -321,9 +337,9 @@ def merge_kontakt(conn: sqlite3.Connection, kontakt_id: int, daten: dict) -> Non
                     (kontakt_id, adr.get("typ", "arbeit"), adr.get("strasse", ""),
                      adr.get("plz", ""), adr.get("ort", ""), adr.get("region", ""), adr.get("land", "")),
                 )
-        bestehende_urls = {u["url"] for u in bestehend["urls"]}
+        bestehende_urls = {_vergleichsform(u["url"]).rstrip("/") for u in bestehend["urls"]}
         for u in daten.get("urls", []):
-            if u.get("url") and u["url"] not in bestehende_urls:
+            if u.get("url") and _vergleichsform(u["url"]).rstrip("/") not in bestehende_urls:
                 conn.execute(
                     "INSERT INTO urls (kontakt_id, typ, url) VALUES (?, ?, ?)",
                     (kontakt_id, u.get("typ", "homepage"), u["url"]),

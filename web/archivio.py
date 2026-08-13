@@ -20,6 +20,7 @@ from db.connection import get_connection
 from sync import radicale
 from web.contacts import (
     FELDER_MEHRFACHBEARBEITUNG,
+    _adresse_typ_optionen,
     _email_typ_optionen,
     _funktion_optionen,
     _parse_kontakt_form,
@@ -249,6 +250,7 @@ def archivio_bearbeiten_flyover(request: Request, email: str, postfaecher: List[
         funktionen = _funktion_optionen(conn)
         telefon_typen = _telefon_typ_optionen(conn)
         email_typen = _email_typ_optionen(conn)
+        adresse_typen = _adresse_typ_optionen(conn)
     finally:
         conn.close()
     daten = next(
@@ -267,6 +269,7 @@ def archivio_bearbeiten_flyover(request: Request, email: str, postfaecher: List[
     return templates.TemplateResponse("archivio_bearbeiten_modal.html", {
         "request": request, "kontakt": pseudo_kontakt, "ordner": ordner, "funktionen": funktionen,
         "telefon_typen": telefon_typen, "email_typen": email_typen,
+        "adresse_typen": adresse_typen,
         "action": f"/archivio-import/uebernehmen-bearbeitet?absender_email={quote_plus(absender_email)}{postfach_query}",
         "modal": True, "zurueck_ordner_id": "", "hx_target": "archivio-modal-inhalt",
     })
@@ -302,6 +305,7 @@ async def archivio_uebernehmen_bearbeitet(
                 "request": request, "kontakt": pseudo_kontakt, "ordner": ordner,
                 "funktionen": _funktion_optionen(conn),
                 "telefon_typen": _telefon_typ_optionen(conn), "email_typen": _email_typ_optionen(conn),
+                "adresse_typen": _adresse_typ_optionen(conn),
                 "action": f"/archivio-import/uebernehmen-bearbeitet?absender_email={quote_plus(absender_email)}{postfach_query}",
                 "modal": True, "zurueck_ordner_id": "", "hx_target": "archivio-modal-inhalt",
                 "fehlende_felder": fehlende_felder,

@@ -241,7 +241,7 @@ def test_parse_vcf_extrahiert_adresse_url_notizen():
     assert len(kontakte) == 1
     k = kontakte[0]
     assert k["adressen"] == [{
-        "typ": "arbeit", "strasse": "Musterstrasse 1", "plz": "8000",
+        "typ": "Arbeit", "strasse": "Musterstrasse 1", "plz": "8000",
         "ort": "Zuerich", "region": "ZH", "land": "Schweiz",
     }]
     assert k["urls"] == [{"typ": "home", "url": "https://carla-beispiel.ch"}]
@@ -416,3 +416,47 @@ def test_merge_fuellt_den_namen_bei_einem_namenlosen_firmeneintrag(tmp_db):
 
     kontakt = queries.get_kontakt(tmp_db, firma)
     assert (kontakt["vorname"], kontakt["nachname"], kontakt["firma"]) == ("Anna", "Muster", "Muster AG")
+
+
+def test_merge_verdoppelt_keine_adresse_wegen_schreibweise(tmp_db):
+    """Nutzer-Meldung: beim Zusammenführen standen danach zwei identische Adressen
+    da — einmal gross, einmal klein geschrieben. Der Vorschlag kommt aus einer
+    anderen Quelle und schreibt dieselbe Angabe oft anders."""
+    from db import queries
+
+    kontakt_id = queries.create_kontakt(tmp_db, {
+        "vorname": "Anna", "nachname": "Muster",
+        "adressen": [{"typ": "Arbeit", "strasse": "Musterstrasse 1", "plz": "8000",
+                      "ort": "Zürich", "region": "", "land": ""}],
+        "emails": [{"typ": "Direkt", "email": "Anna@Beispiel.CH"}],
+        "telefonnummern": [{"typ": "Direkt", "nummer": "+41 52 111 11 11"}],
+    })
+
+    queries.merge_kontakt(tmp_db, kontakt_id, {
+        "adressen": [{"typ": "Arbeit", "strasse": "musterstrasse  1", "plz": "8000",
+                      "ort": "zürich", "region": "", "land": ""}],
+        "emails": [{"typ": "Direkt", "email": "anna@beispiel.ch"}],
+        "telefonnummern": [{"typ": "Direkt", "nummer": "+41 52 111 1111"}],
+    })
+
+    kontakt = queries.get_kontakt(tmp_db, kontakt_id)
+    assert len(kontakt["adressen"]) == 1, "Adresse wegen Schreibweise verdoppelt"
+    assert len(kontakt["emails"]) == 1, "E-Mail wegen Schreibweise verdoppelt"
+    assert len(kontakt["telefonnummern"]) == 1, "Nummer wegen Formatierung verdoppelt"
+
+
+def test_merge_ergaenzt_eine_wirklich_andere_adresse(tmp_db):
+    """Gegenprobe: eine echte Zweitadresse muss dazukommen."""
+    from db import queries
+
+    kontakt_id = queries.create_kontakt(tmp_db, {
+        "vorname": "Anna", "nachname": "Muster",
+        "adressen": [{"typ": "Arbeit", "strasse": "Musterstrasse 1", "plz": "8000",
+                      "ort": "Zürich", "region": "", "land": ""}],
+    })
+    queries.merge_kontakt(tmp_db, kontakt_id, {
+        "adressen": [{"typ": "Baustelle", "strasse": "Baustellenweg 9", "plz": "8400",
+                      "ort": "Winterthur", "region": "", "land": ""}],
+    })
+
+    assert len(queries.get_kontakt(tmp_db, kontakt_id)["adressen"]) == 2

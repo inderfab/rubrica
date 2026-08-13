@@ -74,8 +74,8 @@ const ROW_SPECS = {
     tel: {cls: 'tel-row', typInput: 'telefon_typ', fields: [['telefon_nummer', 'Nummer', null]]},
     mail: {cls: 'mail-row', typInput: 'email_typ', fields: [['email_adresse', 'E-Mail', null]]},
     url: {cls: 'mail-row', fields: [['url_typ', 'Typ', '6rem'], ['url_adresse', 'https://…', null]]},
-    adr: {cls: 'tel-row', fields: [
-        ['adresse_typ', 'Typ', '5rem'], ['adresse_strasse', 'Strasse', null],
+    adr: {cls: 'tel-row', typInput: 'adresse_typ', fields: [
+        ['adresse_strasse', 'Strasse', null],
         ['adresse_plz', 'PLZ', '4.5rem'], ['adresse_ort', 'Ort', null],
         ['adresse_region', 'Kanton', '5rem'], ['adresse_land', 'Land', '6rem'],
     ]},
@@ -92,7 +92,7 @@ function addRow(containerId, kind, button) {
         // jeder neuen Zeile ein beliebiger Wert entstehen koennen (Nutzer-Vorgabe,
         // siehe Migration 2026-08-06). Adresse/URL nutzen weiterhin Freitext.
         const optionen = JSON.parse((button && button.dataset.optionen) || '[]');
-        if (spec.typInput === 'telefon_typ' || spec.typInput === 'email_typ') {
+        if (spec.typInput !== 'url_typ') {
             const auswahl = document.createElement('select');
             auswahl.name = spec.typInput;
             auswahl.className = 'typ-auswahl';

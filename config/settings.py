@@ -17,6 +17,7 @@ LOGO_STAMM = "export-logo"
 # das Kontaktformular weitere Zeilen anbietet.
 TELEFON_TYPEN_STANDARD = ["Direkt", "Direkt Handy", "Privat", "Privat Handy"]
 EMAIL_TYPEN_STANDARD = ["Direkt", "Allgemein", "Privat"]
+ADRESSE_TYPEN_STANDARD = ["Arbeit", "Privat", "Baustelle"]
 
 
 def daten_verzeichnis() -> Path:
@@ -90,6 +91,10 @@ def telefon_typen() -> list:
 
 def email_typen() -> list:
     return _kategorien("email", EMAIL_TYPEN_STANDARD)
+
+
+def adresse_typen() -> list:
+    return _kategorien("adresse", ADRESSE_TYPEN_STANDARD)
 
 
 def save(updates: dict):

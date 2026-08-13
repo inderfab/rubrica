@@ -20,6 +20,7 @@ from db import queries
 from db.connection import get_connection
 from sync import radicale
 from web.contacts import (
+    _adresse_typ_optionen,
     _email_typ_optionen,
     _funktion_optionen,
     _parse_kontakt_form,
@@ -165,6 +166,7 @@ def vorschlag_uebernehmen(request: Request, vorschlag_id: int):
                     "ordner": ordner, "funktionen": _funktion_optionen(conn),
                     "telefon_typen": _telefon_typ_optionen(conn),
                     "email_typen": _email_typ_optionen(conn),
+                    "adresse_typen": _adresse_typ_optionen(conn),
                     "action": f"/vorschlaege/{vorschlag_id}/uebernehmen-bearbeitet",
                     "modal": True, "zurueck_ordner_id": "", "hx_target": "mail-modal-inhalt",
                     "fehlende_felder": fehlende, "auto_oeffnen": True,
@@ -223,6 +225,7 @@ def vorschlag_bearbeiten_flyover(request: Request, vorschlag_id: int):
         funktionen = _funktion_optionen(conn)
         telefon_typen = _telefon_typ_optionen(conn)
         email_typen = _email_typ_optionen(conn)
+        adresse_typen = _adresse_typ_optionen(conn)
     finally:
         conn.close()
     if vorschlag is None:
@@ -233,6 +236,7 @@ def vorschlag_bearbeiten_flyover(request: Request, vorschlag_id: int):
     return templates.TemplateResponse("archivio_bearbeiten_modal.html", {
         "request": request, "kontakt": pseudo_kontakt, "ordner": ordner, "funktionen": funktionen,
         "telefon_typen": telefon_typen, "email_typen": email_typen,
+        "adresse_typen": adresse_typen,
         "action": f"/vorschlaege/{vorschlag_id}/uebernehmen-bearbeitet",
         "modal": True, "zurueck_ordner_id": "", "hx_target": "mail-modal-inhalt",
         "auto_oeffnen": True,
@@ -263,6 +267,7 @@ async def vorschlag_uebernehmen_bearbeitet(request: Request, vorschlag_id: int):
                 "request": request, "kontakt": pseudo_kontakt, "ordner": ordner,
                 "funktionen": _funktion_optionen(conn),
                 "telefon_typen": _telefon_typ_optionen(conn), "email_typen": _email_typ_optionen(conn),
+                "adresse_typen": _adresse_typ_optionen(conn),
                 "action": f"/vorschlaege/{vorschlag_id}/uebernehmen-bearbeitet",
                 "modal": True, "zurueck_ordner_id": "", "hx_target": "mail-modal-inhalt",
                 "fehlende_felder": fehlende_felder,

@@ -33,7 +33,8 @@ def test_kontakt_zu_vcard_enthaelt_alle_felder():
     assert "item1.X-ABLabel:mobil" in vcard
     assert "item2.EMAIL;TYPE=WORK:anna@example.com" in vcard
     assert "item2.X-ABLabel:arbeit" in vcard
-    assert "ADR;TYPE=ARBEIT:;;Teststrasse 1;Zuerich;ZH;8000;Schweiz" in vcard
+    assert "item3.ADR;TYPE=WORK:;;Teststrasse 1;Zuerich;ZH;8000;Schweiz" in vcard
+    assert "item3.X-ABLabel:arbeit" in vcard
     assert "URL;TYPE=HOMEPAGE:https://example.com" in vcard
     assert "NOTE:Testnotiz" in vcard
 

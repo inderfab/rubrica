@@ -84,10 +84,12 @@
 
     <fieldset class="{{ 'feld-fehler' if fehlende_felder.adresse }}">
         <legend>Adressen</legend>
-        <div id="adr-rows">
+        <div id="adr-rows" data-optionen='{{ adresse_typen|tojson }}'>
             {% for a in (kontakt.adressen if kontakt else []) %}
             <div class="tel-row">
-                <input type="text" name="adresse_typ" value="{{ a.typ }}" placeholder="Typ" style="width: 5rem;">
+                <select name="adresse_typ" class="typ-auswahl" style="width:7.5rem">
+                    {% for opt in typ_optionen(adresse_typen, a.typ) %}<option value="{{ opt }}" {{ 'selected' if a.typ == opt }}>{{ opt }}</option>{% endfor %}
+                </select>
                 <input type="text" name="adresse_strasse" value="{{ a.strasse }}" placeholder="Strasse">
                 <input type="text" name="adresse_plz" value="{{ a.plz }}" placeholder="PLZ" style="width: 4.5rem;">
                 <input type="text" name="adresse_ort" value="{{ a.ort }}" placeholder="Ort">
@@ -97,7 +99,8 @@
             </div>
             {% endfor %}
         </div>
-        <button type="button" class="secondary" onclick="addRow('adr-rows', 'adr')">+ Adresse</button>
+        <button type="button" class="secondary" data-optionen='{{ adresse_typen|tojson }}'
+                onclick="addRow('adr-rows', 'adr', this)">+ Adresse</button>
     </fieldset>
 
     <fieldset>

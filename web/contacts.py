@@ -133,6 +133,10 @@ def _email_typ_optionen(conn) -> list:
     return settings.email_typen()
 
 
+def _adresse_typ_optionen(conn) -> list:
+    return settings.adresse_typen()
+
+
 def _parse_kontakt_form(form) -> dict:
     telefon_typen = form.getlist("telefon_typ")
     telefon_nummern = form.getlist("telefon_nummer")
@@ -270,11 +274,13 @@ def kontakt_neu_form(request: Request):
         funktionen = _funktion_optionen(conn)
         telefon_typen = _telefon_typ_optionen(conn)
         email_typen = _email_typ_optionen(conn)
+        adresse_typen = _adresse_typ_optionen(conn)
     finally:
         conn.close()
     return templates.TemplateResponse("contact_new.html", {
         "request": request, "ordner": ordner, "funktionen": funktionen,
         "telefon_typen": telefon_typen, "email_typen": email_typen,
+        "adresse_typen": adresse_typen,
         "kontakt": None, "ausgewaehlte_ordner": [],
     })
 
@@ -291,11 +297,13 @@ async def kontakt_signatur_parsen(request: Request):
         funktionen = _funktion_optionen(conn)
         telefon_typen = _telefon_typ_optionen(conn)
         email_typen = _email_typ_optionen(conn)
+        adresse_typen = _adresse_typ_optionen(conn)
     finally:
         conn.close()
     return templates.TemplateResponse("_kontakt_felder.html", {
         "request": request, "kontakt": daten, "ordner": ordner,
         "funktionen": funktionen, "telefon_typen": telefon_typen, "email_typen": email_typen,
+        "adresse_typen": adresse_typen,
         "ausgewaehlte_ordner": [],
     })
 
@@ -313,6 +321,7 @@ async def kontakt_neu_speichern(request: Request):
                 "request": request, "ordner": queries.list_projekte(conn),
                 "funktionen": _funktion_optionen(conn),
                 "telefon_typen": _telefon_typ_optionen(conn), "email_typen": _email_typ_optionen(conn),
+                "adresse_typen": _adresse_typ_optionen(conn),
                 "kontakt": daten, "ausgewaehlte_ordner": ordner_ids,
                 "fehlende_felder": fehlende_felder,
             })
@@ -323,6 +332,7 @@ async def kontakt_neu_speichern(request: Request):
                     "request": request, "ordner": queries.list_projekte(conn),
                     "funktionen": _funktion_optionen(conn),
                     "telefon_typen": _telefon_typ_optionen(conn), "email_typen": _email_typ_optionen(conn),
+                "adresse_typen": _adresse_typ_optionen(conn),
                     "kontakt": daten, "ausgewaehlte_ordner": ordner_ids,
                     "dublette": queries.get_kontakt(conn, dublette_id),
                 })
@@ -353,11 +363,13 @@ def kontakt_bearbeiten_form(request: Request, kontakt_id: int, ordner_id: str = 
         funktionen = _funktion_optionen(conn)
         telefon_typen = _telefon_typ_optionen(conn)
         email_typen = _email_typ_optionen(conn)
+        adresse_typen = _adresse_typ_optionen(conn)
     finally:
         conn.close()
     return templates.TemplateResponse("contact_form.html", {
         "request": request, "kontakt": kontakt, "ordner": ordner, "funktionen": funktionen,
         "telefon_typen": telefon_typen, "email_typen": email_typen,
+        "adresse_typen": adresse_typen,
         "action": f"/kontakte/{kontakt_id}/bearbeiten", "modal": False,
         "zurueck_ordner_id": ordner_id,
     })
@@ -374,11 +386,13 @@ def kontakt_bearbeiten_flyover(request: Request, kontakt_id: int, ordner_id: str
         funktionen = _funktion_optionen(conn)
         telefon_typen = _telefon_typ_optionen(conn)
         email_typen = _email_typ_optionen(conn)
+        adresse_typen = _adresse_typ_optionen(conn)
     finally:
         conn.close()
     return templates.TemplateResponse("kontakt_bearbeiten_modal.html", {
         "request": request, "kontakt": kontakt, "ordner": ordner, "funktionen": funktionen,
         "telefon_typen": telefon_typen, "email_typen": email_typen,
+        "adresse_typen": adresse_typen,
         "action": f"/kontakte/{kontakt_id}/bearbeiten", "modal": True,
         "zurueck_ordner_id": ordner_id,
     })
@@ -400,6 +414,7 @@ async def kontakt_bearbeiten_speichern(request: Request, kontakt_id: int):
                 "request": request, "kontakt": pseudo_kontakt, "ordner": queries.list_projekte(conn),
                 "funktionen": _funktion_optionen(conn),
                 "telefon_typen": _telefon_typ_optionen(conn), "email_typen": _email_typ_optionen(conn),
+                "adresse_typen": _adresse_typ_optionen(conn),
                 "action": f"/kontakte/{kontakt_id}/bearbeiten", "modal": False,
                 "zurueck_ordner_id": zurueck_ordner_id, "fehlende_felder": fehlende_felder,
             })
@@ -442,6 +457,7 @@ def kontakte_bulk_bearbeiten_flyover(request: Request, ids: List[int] = Query(..
         funktionen = _funktion_optionen(conn)
         telefon_typen = _telefon_typ_optionen(conn)
         email_typen = _email_typ_optionen(conn)
+        adresse_typen = _adresse_typ_optionen(conn)
     finally:
         conn.close()
 
@@ -457,6 +473,7 @@ def kontakte_bulk_bearbeiten_flyover(request: Request, ids: List[int] = Query(..
         "request": request, "kontakte": kontakte, "ids": ids, "felder": felder,
         "ordner": ordner, "funktionen": funktionen, "zurueck_ordner_id": ordner_id,
         "telefon_typen": telefon_typen, "email_typen": email_typen,
+        "adresse_typen": adresse_typen,
     })
 
 

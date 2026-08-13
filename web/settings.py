@@ -74,7 +74,8 @@ def einstellungen_ca_zertifikat():
                          filename="rubrica-ca.pem")
 
 
-_KATEGORIE_FELDER = {"telefon": settings.telefon_typen, "email": settings.email_typen}
+_KATEGORIE_FELDER = {"telefon": settings.telefon_typen, "email": settings.email_typen,
+                     "adresse": settings.adresse_typen}
 
 
 def _kategorie_ansicht(conn, feld: str) -> dict:
@@ -121,10 +122,12 @@ def kategorien_uebersicht(request: Request, meldung: str = ""):
     try:
         telefon = _kategorie_ansicht(conn, "telefon")
         email = _kategorie_ansicht(conn, "email")
+        adresse = _kategorie_ansicht(conn, "adresse")
     finally:
         conn.close()
     return templates.TemplateResponse("kategorien.html", {
-        "request": request, "telefon": telefon, "email": email, "meldung": meldung,
+        "request": request, "telefon": telefon, "email": email, "adresse": adresse,
+        "meldung": meldung,
     })
 
 
