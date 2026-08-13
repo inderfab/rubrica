@@ -379,3 +379,40 @@ def test_eigene_bezeichnung_uebernimmt_bestehende_schreibweise(tmp_db, monkeypat
     """Damit "direkt" aus Kontakte.app nicht als zweiter Wert neben "Direkt" steht."""
     kontakt = _karte("item1.TEL:+41 44 222 22 22\r\nitem1.X-ABLabel:pRIVAT hANDY\r\n")
     assert kontakt["telefonnummern"][0]["typ"] == "Privat Handy"
+
+
+def test_merge_behaelt_den_namen_des_bestehenden_kontakts(tmp_db):
+    """Regression mit Datenverlust (Nutzer-Meldung): zwei Personen derselben Firma
+    wurden zu einer zusammengefasst, die zweite war anschliessend verschwunden. Ein
+    Merge entsteht aus einem Duplikat-VERDACHT - eine gemeinsame Zentralennummer
+    genügt. Gewinnt dabei der Name aus dem Vorschlag, überschreibt er
+    stillschweigend die Identität eines bestehenden Kontakts."""
+    from db import queries
+
+    bestehender = queries.create_kontakt(tmp_db, {
+        "vorname": "Anna", "nachname": "Muster", "firma": "Muster AG",
+        "telefonnummern": [{"typ": "Direkt", "nummer": "+41 52 111 11 11"}],
+    })
+
+    queries.merge_kontakt(tmp_db, bestehender, {
+        "vorname": "Bruno", "nachname": "Beispiel", "firma": "Muster AG",
+        "telefonnummern": [{"typ": "Direkt", "nummer": "+41 52 111 11 11"}],
+        "emails": [{"typ": "Direkt", "email": "bruno@beispiel.ch"}],
+    })
+
+    kontakt = queries.get_kontakt(tmp_db, bestehender)
+    assert (kontakt["vorname"], kontakt["nachname"]) == ("Anna", "Muster")
+    # Die mitgebrachten Kontaktdaten kommen weiterhin dazu.
+    assert any(e["email"] == "bruno@beispiel.ch" for e in kontakt["emails"])
+
+
+def test_merge_fuellt_den_namen_bei_einem_namenlosen_firmeneintrag(tmp_db):
+    """Gegenprobe: ein Eintrag, der nur die Firma trägt (typische Zentrale), soll
+    den Namen aus dem Vorschlag durchaus bekommen."""
+    from db import queries
+
+    firma = queries.create_kontakt(tmp_db, {"vorname": "", "nachname": "", "firma": "Muster AG"})
+    queries.merge_kontakt(tmp_db, firma, {"vorname": "Anna", "nachname": "Muster", "firma": ""})
+
+    kontakt = queries.get_kontakt(tmp_db, firma)
+    assert (kontakt["vorname"], kontakt["nachname"], kontakt["firma"]) == ("Anna", "Muster", "Muster AG")

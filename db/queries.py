@@ -274,9 +274,18 @@ def merge_kontakt(conn: sqlite3.Connection, kontakt_id: int, daten: dict) -> Non
             """UPDATE kontakte SET vorname = ?, nachname = ?, firma = ?, rolle = ?,
                kategorie = ?, notizen = ?, apple_uid = ?, updated_at = ? WHERE id = ?""",
             (
-                daten.get("vorname") or bestehend["vorname"],
-                daten.get("nachname") or bestehend["nachname"],
-                daten.get("firma") or bestehend["firma"],
+                # Der NAME des bestehenden Kontakts gewinnt - anders als bei den
+                # uebrigen Feldern. Ein Merge entsteht aus einem Duplikat-VERDACHT,
+                # und der genuegt schon bei einer gemeinsamen Zentralennummer. Gewann
+                # der Name aus dem Vorschlag, wurde beim Uebernehmen eines Vorschlags
+                # fuer einen Kollegen derselben Firma stillschweigend der bestehende
+                # Kontakt umbenannt - die urspruengliche Person war damit weg
+                # (Nutzer-Meldung; dabei gingen mehrere Kontakte verloren). Ein
+                # namenloser Firmeneintrag bekommt weiterhin den Namen aus dem
+                # Vorschlag.
+                bestehend["vorname"] or daten.get("vorname") or "",
+                bestehend["nachname"] or daten.get("nachname") or "",
+                bestehend["firma"] or daten.get("firma") or "",
                 daten.get("rolle") or bestehend["rolle"],
                 daten.get("kategorie") or bestehend["kategorie"],
                 notizen,
