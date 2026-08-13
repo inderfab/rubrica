@@ -99,11 +99,13 @@
                    eine gemeinsame Zentralennummer genuegt schon. Ohne die dritte Moeglichkeit
                    blieb beim Zusammenfuehren ein Kontakt mit den Nummern der ganzen Firma
                    uebrig, und wer das nicht wollte, musste den Umweg ueber Bearbeiten gehen. #}
+                {# Vorschau statt sofortigem Zusammenfuehren (Nutzer-Vorgabe): erst
+                   sehen, was dazukommt, dann speichern. #}
                 <button type="button"
-                        hx-post="/vorschlaege/{{ v.id }}/uebernehmen"
+                        hx-get="/vorschlaege/{{ v.id }}/zusammenfuehren-flyover"
                         hx-target="#mail-modal-inhalt" hx-swap="innerHTML"
-                        hx-confirm="Mit „{{ v.bestehender_kontakt.vorname }} {{ v.bestehender_kontakt.nachname }}“ zusammenführen?&#10;&#10;Die Angaben dieses Vorschlags werden dort ergänzt.">
-                    Zusammenführen
+                        onclick="rubricaMailModalOeffnen()">
+                    Zusammenführen …
                 </button>
                 <button type="button" class="secondary"
                         hx-post="/vorschlaege/{{ v.id }}/uebernehmen-als-neu"

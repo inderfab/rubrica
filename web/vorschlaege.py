@@ -114,6 +114,128 @@ def vorschlaege_pruefen():
     return RedirectResponse(url=f"/vorschlaege?meldung={quote(text)}", status_code=303)
 
 
+# Welche Felder eine Zusammenfuehrung anfasst - Grundlage fuer die Farbmarkierung
+# in der Vorschau (Nutzer-Vorgabe: "alles was schon da war soll gruen sein, alles
+# was geaendert wurde orange und alles was fehlt wie bisher rot").
+_LISTENFELDER = {
+    "telefonnummern": ("telefon", lambda e: queries._nur_ziffern(e.get("nummer", ""))),
+    "emails": ("email", lambda e: queries._vergleichsform(e.get("email", ""))),
+    "adressen": ("adresse", lambda e: tuple(
+        queries._vergleichsform(e.get(f, "")) for f in ("strasse", "plz", "ort"))),
+    "urls": ("url", lambda e: queries._vergleichsform(e.get("url", "")).rstrip("/")),
+}
+_SCALARFELDER = ("vorname", "nachname", "firma", "rolle", "kategorie", "notizen")
+
+
+def _zusammenfuehrung_vorschau(bestehend: dict, neu: dict) -> tuple:
+    """Baut das Ergebnis der Zusammenfuehrung und dazu, Feld fuer Feld, woher es
+    kommt: "bestehend" fuer alles, was schon im Kontakt stand, "neu" fuer alles,
+    was der Vorschlag beisteuert.
+
+    Bewusst dieselben Vergleichsregeln wie queries.merge_kontakt - die Vorschau
+    muss zeigen, was das Speichern tatsaechlich tut, nicht etwas Aehnliches."""
+    ergebnis = dict(bestehend)
+    status: dict = {}
+
+    for feld in _SCALARFELDER:
+        alt = (bestehend.get(feld) or "").strip()
+        zusatz = (neu.get(feld) or "").strip()
+        # Name und Firma des bestehenden Kontakts gewinnen (siehe merge_kontakt),
+        # die uebrigen Felder fuellt der Vorschlag nur, wenn sie leer sind.
+        ergebnis[feld] = alt or zusatz
+        status[feld] = "neu" if (not alt and zusatz) else "bestehend"
+
+    for feld, (name, schluessel) in _LISTENFELDER.items():
+        vorhandene = list(bestehend.get(feld) or [])
+        bekannt = {schluessel(e) for e in vorhandene}
+        markierung = ["bestehend"] * len(vorhandene)
+        for eintrag in neu.get(feld) or []:
+            if not any(schluessel(eintrag)):
+                continue
+            if schluessel(eintrag) in bekannt:
+                continue  # gleiche Angabe in anderer Schreibweise
+            bekannt.add(schluessel(eintrag))
+            vorhandene.append(eintrag)
+            markierung.append("neu")
+        ergebnis[feld] = vorhandene
+        status[name] = markierung
+
+    return ergebnis, status
+
+
+@router.get("/vorschlaege/{vorschlag_id}/zusammenfuehren-flyover")
+def vorschlag_zusammenfuehren_flyover(request: Request, vorschlag_id: int):
+    """Zeigt das ERGEBNIS der Zusammenfuehrung, bevor sie geschieht.
+
+    Nutzer-Meldung: nach dem Zusammenfuehren standen zwei identische Adressen im
+    Kontakt, eine davon nur anders geschrieben. Wer vorher sieht, was dazukommt,
+    bemerkt so etwas sofort - und kann es im selben Fenster korrigieren."""
+    conn = get_connection()
+    try:
+        vorschlag = queries.get_vorschlag(conn, vorschlag_id)
+        bestehend = queries.get_kontakt(conn, vorschlag["kontakt_id"]) if vorschlag else None
+        if vorschlag is None or bestehend is None:
+            return Response(status_code=404)
+        ergebnis, status = _zusammenfuehrung_vorschau(bestehend, vorschlag["rohdaten"])
+        ordner = queries.list_projekte(conn)
+        erkannte = set(vorschlag["rohdaten"].get("erkannte_ordner_ids") or [])
+        vorhandene_ordner = {p["id"] for p in bestehend["projekte"]}
+        ergebnis["projekte"] = [{"id": oid} for oid in vorhandene_ordner | erkannte]
+        return templates.TemplateResponse("archivio_bearbeiten_modal.html", {
+            "request": request, "kontakt": ergebnis, "ordner": ordner,
+            "funktionen": _funktion_optionen(conn),
+            "telefon_typen": _telefon_typ_optionen(conn),
+            "email_typen": _email_typ_optionen(conn),
+            "adresse_typen": _adresse_typ_optionen(conn),
+            "action": f"/vorschlaege/{vorschlag_id}/zusammenfuehren-speichern",
+            "modal": True, "zurueck_ordner_id": "", "hx_target": "mail-modal-inhalt",
+            "feld_status": status, "zusammenfuehrung_mit": bestehend,
+        })
+    finally:
+        conn.close()
+
+
+@router.post("/vorschlaege/{vorschlag_id}/zusammenfuehren-speichern")
+async def vorschlag_zusammenfuehren_speichern(request: Request, vorschlag_id: int):
+    """Schreibt das in der Vorschau geprueffte Ergebnis auf den bestehenden Kontakt.
+
+    Bewusst update_kontakt statt merge_kontakt: was im Formular steht, ist bereits
+    das fertige Ergebnis - ein erneutes Mergen wuerde gerade geloeschte Dubletten
+    wieder hereinholen."""
+    form = await request.form()
+    daten = _parse_kontakt_form(form)
+    ordner_ids = {int(o) for o in form.getlist("ordner_ids")}
+
+    conn = get_connection()
+    try:
+        vorschlag = queries.get_vorschlag(conn, vorschlag_id)
+        fehlende_felder = _validiere_pflichtfelder(daten, list(ordner_ids))
+        if fehlende_felder or vorschlag is None or not vorschlag["kontakt_id"]:
+            pseudo = dict(daten)
+            pseudo["projekte"] = [{"id": oid} for oid in ordner_ids]
+            return templates.TemplateResponse("archivio_bearbeiten_modal.html", {
+                "request": request, "kontakt": pseudo, "ordner": queries.list_projekte(conn),
+                "funktionen": _funktion_optionen(conn),
+                "telefon_typen": _telefon_typ_optionen(conn),
+                "email_typen": _email_typ_optionen(conn),
+                "adresse_typen": _adresse_typ_optionen(conn),
+                "action": f"/vorschlaege/{vorschlag_id}/zusammenfuehren-speichern",
+                "modal": True, "zurueck_ordner_id": "", "hx_target": "mail-modal-inhalt",
+                "fehlende_felder": fehlende_felder or {"vorname": True},
+            })
+        kontakt_id = vorschlag["kontakt_id"]
+        queries.update_kontakt(conn, kontakt_id, daten)
+        queries.set_kontakt_projekte(conn, kontakt_id, list(ordner_ids))
+        queries.set_vorschlag_status(conn, vorschlag_id, "bestaetigt")
+        radicale.push_kontakt_mit_ordnern(conn, kontakt_id)
+        _fremde_vcard_entfernen(vorschlag)
+    finally:
+        conn.close()
+    if request.headers.get("HX-Request") == "true":
+        return Response(status_code=200, headers={"HX-Redirect": "/vorschlaege"})
+    return RedirectResponse(url="/vorschlaege", status_code=303)
+
+
 @router.post("/vorschlaege/{vorschlag_id}/uebernehmen-als-neu")
 def vorschlag_uebernehmen_als_neu(request: Request, vorschlag_id: int):
     """Uebernimmt trotz Duplikat-Verdacht als eigenstaendigen Kontakt.

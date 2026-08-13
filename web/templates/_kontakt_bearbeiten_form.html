@@ -9,9 +9,21 @@
    erfolgreiches Speichern den zugrundeliegenden Filter (z.B. Postfach-Auswahl bei
    Archivio-Import) nicht durch einen vollen Seitenwechsel verliert. #}
 {% set fehlende_felder = fehlende_felder | default({}) %}
+{# feld_status kommt nur aus der Zusammenfuehrungs-Vorschau: markiert je Feld, ob
+   der Wert schon im Kontakt stand ("bestehend", gruen) oder vom Vorschlag kommt
+   ("neu", orange). Fehlende Pflichtfelder bleiben rot. #}
+{% set feld_status = feld_status | default({}) %}
+{% macro markierung(feld, index=None) %}{% if feld_status %}{% set wert = feld_status.get(feld) %}{% if index is not none and wert %}{{ ' wert-' ~ wert[index] if index < wert|length else '' }}{% elif wert is string %}{{ ' wert-' ~ wert }}{% endif %}{% endif %}{% endmacro %}
 <form method="post" action="{{ action }}"
       {% if hx_target %}hx-post="{{ action }}" hx-target="#{{ hx_target }}" hx-swap="innerHTML"{% endif %}>
     <input type="hidden" name="zurueck_ordner_id" value="{{ zurueck_ordner_id or '' }}">
+    {% if zusammenfuehrung_mit %}
+    <p class="zusammenfuehrung-hinweis">
+        Zusammenführen mit <strong>{{ zusammenfuehrung_mit.vorname }} {{ zusammenfuehrung_mit.nachname }}</strong>{% if zusammenfuehrung_mit.firma %}, {{ zusammenfuehrung_mit.firma }}{% endif %}.
+        <span class="wert-bestehend-punkt"></span> war schon da,
+        <span class="wert-neu-punkt"></span> kommt neu dazu. Erst mit „Speichern“ wird es übernommen.
+    </p>
+    {% endif %}
     {% if fehlende_felder %}
     <p class="pflichtfeld-hinweis">Bitte die rot markierten Pflichtfelder ausfüllen.{% if fehlende_felder.firma %}
         Bei Name und Firma genügt eines von beiden – für einen reinen Firmeneintrag den Namen leer lassen.{% endif %}</p>
@@ -20,17 +32,17 @@
         <div class="field">
             <label>Vorname</label>
             <input type="text" name="vorname" value="{{ kontakt.vorname if kontakt else '' }}"
-                   class="{{ 'feld-fehler' if fehlende_felder.vorname }}">
+                   class="{{ 'feld-fehler' if fehlende_felder.vorname }}{{ markierung("vorname") }}">
         </div>
         <div class="field">
             <label>Nachname</label>
             <input type="text" name="nachname" value="{{ kontakt.nachname if kontakt else '' }}"
-                   class="{{ 'feld-fehler' if fehlende_felder.nachname }}">
+                   class="{{ 'feld-fehler' if fehlende_felder.nachname }}{{ markierung("nachname") }}">
         </div>
         <div class="field">
             <label>Firma</label>
             <input type="text" name="firma" value="{{ kontakt.firma if kontakt else '' }}"
-               class="{{ 'feld-fehler' if fehlende_felder.firma }}">
+               class="{{ 'feld-fehler' if fehlende_felder.firma }}{{ markierung("firma") }}">
         </div>
         <div class="field">
             <label>Rolle</label>
@@ -52,7 +64,7 @@
         <legend>Telefonnummern</legend>
         <div id="tel-rows" data-optionen='{{ telefon_typen|tojson }}'>
             {% for t in (kontakt.telefonnummern if kontakt else []) %}
-            <div class="tel-row">
+            <div class="tel-row{{ markierung("telefon", loop.index0) }}">
                 <select name="telefon_typ" class="typ-auswahl">
                     {% for opt in typ_optionen(telefon_typen, t.typ) %}<option value="{{ opt }}" {{ 'selected' if t.typ == opt }}>{{ opt }}</option>{% endfor %}
                 </select>
@@ -69,7 +81,7 @@
         <legend>E-Mails</legend>
         <div id="mail-rows" data-optionen='{{ email_typen|tojson }}'>
             {% for e in (kontakt.emails if kontakt else []) %}
-            <div class="mail-row">
+            <div class="mail-row{{ markierung("email", loop.index0) }}">
                 <select name="email_typ" class="typ-auswahl">
                     {% for opt in typ_optionen(email_typen, e.typ) %}<option value="{{ opt }}" {{ 'selected' if e.typ == opt }}>{{ opt }}</option>{% endfor %}
                 </select>
@@ -86,7 +98,7 @@
         <legend>Adressen</legend>
         <div id="adr-rows" data-optionen='{{ adresse_typen|tojson }}'>
             {% for a in (kontakt.adressen if kontakt else []) %}
-            <div class="tel-row">
+            <div class="tel-row{{ markierung("adresse", loop.index0) }}">
                 <select name="adresse_typ" class="typ-auswahl" style="width:7.5rem">
                     {% for opt in typ_optionen(adresse_typen, a.typ) %}<option value="{{ opt }}" {{ 'selected' if a.typ == opt }}>{{ opt }}</option>{% endfor %}
                 </select>
@@ -107,7 +119,7 @@
         <legend>Homepage / URLs</legend>
         <div id="url-rows">
             {% for u in (kontakt.urls if kontakt else []) %}
-            <div class="mail-row">
+            <div class="mail-row{{ markierung("url", loop.index0) }}">
                 <input type="text" name="url_typ" value="{{ u.typ }}" placeholder="Typ" style="width: 6rem;">
                 <input type="text" name="url_adresse" value="{{ u.url }}" placeholder="https://…">
                 <button type="button" class="secondary" onclick="this.parentElement.remove()">Entfernen</button>

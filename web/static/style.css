@@ -424,3 +424,30 @@ label.ankreuz { display: flex; align-items: center; gap: 0.4rem; font-size: 0.9r
     .formular-schmal .grid-2 > fieldset { margin-bottom: 0.6rem; }
     .grid-adresse, .grid-adresse-art { grid-template-columns: 1fr; }
 }
+
+
+/* ── Zusammenfuehrungs-Vorschau ───────────────────────────────────────────
+   Nutzer-Vorgabe: "alles was schon da war soll gruen sein, alles was geaendert
+   wurde orange und alles was fehlt wie bisher rot". Gefaerbt wird der linke Rand
+   der Zeile bzw. des Felds - kraeftig genug zum Erkennen, ruhig genug, um das
+   Formular nicht zu einem Farbkasten zu machen. */
+.zusammenfuehrung-hinweis {
+    background: #f4f8ff;
+    border: 1px solid #cfe0ff;
+    border-radius: 6px;
+    padding: 0.6rem 0.8rem;
+    margin: 0 0 0.9rem;
+    font-size: 0.85rem;
+    line-height: 1.6;
+}
+.wert-bestehend-punkt, .wert-neu-punkt {
+    display: inline-block; width: 0.7rem; height: 0.7rem; border-radius: 2px;
+    vertical-align: -1px;
+}
+.wert-bestehend-punkt { background: #1a7f37; }
+.wert-neu-punkt { background: #d97706; }
+
+.tel-row.wert-bestehend, .mail-row.wert-bestehend { border-left: 3px solid #1a7f37; padding-left: 0.5rem; }
+.tel-row.wert-neu, .mail-row.wert-neu { border-left: 3px solid #d97706; padding-left: 0.5rem; }
+input.wert-neu, textarea.wert-neu { border-color: #d97706; background: #fffbf3; }
+input.wert-bestehend { border-color: #bcd9c4; }

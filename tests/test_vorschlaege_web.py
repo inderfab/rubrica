@@ -462,3 +462,62 @@ def test_duplikat_zeigt_beide_wege_an(tmp_db):
     assert f"/vorschlaege/{vorschlag_id}/uebernehmen-als-neu" in r.text
     assert "Zusammenführen" in r.text
     assert "Als neuen Kontakt" in r.text
+
+
+def test_zusammenfuehren_zeigt_erst_die_vorschau(tmp_db):
+    """Nutzer-Vorgabe: „wenn man zusammenführen klickt soll das bearbeiten fenster
+    aufgehen und man sieht was angepasst wurde". Grün war schon da, orange kommt
+    dazu — so fallen Verdoppelungen auf, bevor sie entstehen."""
+    projekt_id = queries.get_or_create_projekt(tmp_db, "Testprojekt")
+    bestehender_id = queries.create_kontakt(tmp_db, {
+        "vorname": "Anna", "nachname": "Muster", "kategorie": "Architektin",
+        "adressen": [{"typ": "Arbeit", "strasse": "Musterstrasse 1", "plz": "8000",
+                      "ort": "Zürich", "region": "", "land": ""}],
+        "telefonnummern": [{"typ": "Direkt", "nummer": "+41 52 111 11 11"}],
+    })
+    queries.set_kontakt_projekte(tmp_db, bestehender_id, [projekt_id])
+    vorschlag_id = queries.create_vorschlag(tmp_db, {
+        "vorname": "Anna", "nachname": "Muster",
+        # gleiche Adresse, nur klein geschrieben - darf NICHT ein zweites Mal auftauchen
+        "adressen": [{"typ": "Arbeit", "strasse": "musterstrasse 1", "plz": "8000",
+                      "ort": "zürich", "region": "", "land": ""}],
+        "telefonnummern": [{"typ": "Direkt", "nummer": "+41 52 999 99 99"}],
+        "emails": [{"typ": "Direkt", "email": "neu@beispiel.ch"}],
+    }, kontakt_id=bestehender_id, quelle="mail")
+
+    r = _client().get(f"/vorschlaege/{vorschlag_id}/zusammenfuehren-flyover")
+    assert r.status_code == 200
+    assert "Zusammenführen mit" in r.text
+    # Der Kontakt ist unveraendert - gespeichert wird erst im Formular.
+    assert len(queries.get_kontakt(tmp_db, bestehender_id)["telefonnummern"]) == 1
+    # Bestehendes gruen, Neues orange, die Dublette gar nicht.
+    assert "tel-row wert-bestehend" in r.text
+    assert "tel-row wert-neu" in r.text
+    assert r.text.count('name="adresse_strasse"') == 1
+    assert "musterstrasse 1" not in r.text
+
+
+def test_zusammenfuehren_speichern_schreibt_auf_den_bestehenden_kontakt(tmp_db):
+    projekt_id = queries.get_or_create_projekt(tmp_db, "Testprojekt")
+    bestehender_id = queries.create_kontakt(tmp_db, {
+        "vorname": "Anna", "nachname": "Muster",
+        "telefonnummern": [{"typ": "Direkt", "nummer": "+41 52 111 11 11"}],
+    })
+    vorschlag_id = queries.create_vorschlag(
+        tmp_db, {"vorname": "Anna", "nachname": "Muster", "telefonnummern": [], "emails": []},
+        kontakt_id=bestehender_id, quelle="mail")
+
+    r = _client().post(f"/vorschlaege/{vorschlag_id}/zusammenfuehren-speichern", data={
+        "vorname": "Anna", "nachname": "Muster", "firma": "", "kategorie": "Architektin", "rolle": "",
+        "telefon_typ": "Direkt", "telefon_nummer": "+41 52 111 11 11",
+        "email_typ": "Direkt", "email_adresse": "anna@beispiel.ch",
+        "adresse_typ": "Arbeit", "adresse_strasse": "Musterstrasse 1", "adresse_plz": "8000",
+        "adresse_ort": "Zürich", "adresse_region": "", "adresse_land": "",
+        "ordner_ids": str(projekt_id),
+    }, follow_redirects=False)
+
+    assert r.status_code == 303
+    assert len(queries.list_kontakte(tmp_db)) == 1, "es darf kein zweiter Kontakt entstehen"
+    kontakt = queries.get_kontakt(tmp_db, bestehender_id)
+    assert kontakt["kategorie"] == "Architektin"
+    assert queries.get_vorschlag(tmp_db, vorschlag_id)["status"] == "bestaetigt"
