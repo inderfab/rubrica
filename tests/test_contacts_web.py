@@ -35,6 +35,26 @@ def test_unvollstaendige_kontakte_filter_zeigt_nur_kontakte_mit_fehlenden_pflich
     assert "Bob" in r2.text and "Anna" in r2.text  # ohne Filter beide sichtbar
 
 
+def test_kontaktliste_zeigt_alle_funktion_rolle_paare(tmp_db):
+    """Regression: die Tabelle las k.kategorie/k.rolle direkt - seit
+    kontakt_funktionen nur noch die (nie mehr befuellten) Alt-Spalten. Ein frisch
+    angelegter oder bearbeiteter Kontakt zeigte Funktion/Rolle danach als leer,
+    obwohl beides gesetzt war."""
+    queries.create_kontakt(tmp_db, {
+        "vorname": "Anna", "nachname": "Muster",
+        "funktionen": [
+            {"funktion": "291 Architekt/in", "rolle": "Projektleiterin"},
+            {"funktion": "291 Bauleitung", "rolle": "Gestalterische Bauleitung"},
+        ],
+    })
+    r = _client(tmp_db).get("/kontakte")
+    assert r.status_code == 200
+    assert "291 Architekt/in" in r.text
+    assert "291 Bauleitung" in r.text
+    assert "Projektleiterin" in r.text
+    assert "Gestalterische Bauleitung" in r.text
+
+
 def test_neu_formular_erreichbar(tmp_db):
     r = _client(tmp_db).get("/kontakte/neu")
     assert r.status_code == 200

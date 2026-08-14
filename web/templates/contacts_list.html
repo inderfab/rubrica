@@ -93,8 +93,8 @@
                             {{ k.vorname }} {{ k.nachname }}
                         </td>
                         <td>{{ k.firma }}</td>
-                        <td class="{{ 'zelle-fehler' if k.fehlende_felder.kategorie }}">{{ k.kategorie }}</td>
-                        <td>{{ k.rolle }}</td>
+                        <td class="{{ 'zelle-fehler' if k.fehlende_felder.kategorie }}">{% for f in k.funktionen %}{{ f.funktion }}{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
+                        <td>{% for f in k.funktionen %}{{ f.rolle }}{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
                         <td class="{{ 'zelle-fehler' if k.fehlende_felder.telefon }}">{% for t in k.telefonnummern %}<a href="tel:{{ t.nummer }}">{{ t.nummer }}</a>{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
                         <td class="{{ 'zelle-fehler' if k.fehlende_felder.email }}">{% for e in k.emails %}<a href="mailto:{{ e.email }}">{{ e.email }}</a>{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
                         <td class="{{ 'zelle-fehler' if k.fehlende_felder.ordner }}">{% for o in k.projekte %}<span class="tag">{{ o.name }}</span>{% endfor %}</td>
