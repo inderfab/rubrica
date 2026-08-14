@@ -575,8 +575,23 @@ def sync_alle(conn: sqlite3.Connection) -> dict:
                 else:
                     fehler.append(f"Konnte verwaiste {name} nicht entfernen")
 
+        # Kontakte mit einer offenen, noch unbestaetigten Aenderung aus Kontakte.app
+        # NICHT zurueckpushen: pruefe_kontakt_aenderungen() hat die Aenderung soeben
+        # als Vorschlag festgehalten, aber genau dieser Push wuerde sie im selben
+        # Durchlauf mit dem alten DB-Stand wieder ueberschreiben - der Vorschlag
+        # wuerde beim naechsten Abgleich gegenstandslos und automatisch zurueckgezogen,
+        # ohne dass im Buero je jemand darueber entschieden haette (Nutzer-Meldung:
+        # eine gerade angepasste Adresse "ist jetzt wieder alt"). Der Kontakt bleibt
+        # bis zur Entscheidung auf der Vorschlaege-Seite unangetastet auf Radicale
+        # stehen - dasselbe "Lesen vor Schreiben"-Prinzip wie bei push_projekt oben.
+        offene_aenderungen = queries.kontakte_ids_mit_offenen_aenderungen(conn)
+
         kontakte_ok = 0
+        uebersprungen = 0
         for kontakt_id in kontakt_ids:
+            if kontakt_id in offene_aenderungen:
+                uebersprungen += 1
+                continue
             if push_kontakt(conn, kontakt_id, client=client):
                 kontakte_ok += 1
             elif len(fehler) < 5:
@@ -597,4 +612,4 @@ def sync_alle(conn: sqlite3.Connection) -> dict:
         fehler.insert(0, f"Grund: {_letzter_fehler}")
 
     return {"aktiv": True, "kontakte": kontakte_ok, "ordner": ordner_ok,
-            "entfernt": entfernt, "fehler": fehler}
+            "entfernt": entfernt, "uebersprungen": uebersprungen, "fehler": fehler}

@@ -298,6 +298,40 @@ def test_sync_alle_pusht_alle_und_entfernt_verwaiste(tmp_db, monkeypatch):
     assert len(client_aufrufe) == 1
 
 
+def test_sync_alle_pusht_kontakt_mit_offener_aenderung_nicht(tmp_db, monkeypatch):
+    """Regression (Nutzer-Meldung): eine in Kontakte.app geaenderte Adresse wurde als
+    Vorschlag erkannt, aber im selben Voll-Sync-Durchlauf gleich wieder mit dem alten
+    DB-Stand ueberschrieben - der Vorschlag wurde beim naechsten Abgleich gegenstandslos
+    und automatisch zurueckgezogen, ohne dass je jemand darueber entschieden hatte.
+    Ein Kontakt mit offenem kontakte_app-Aenderungsvorschlag darf beim Voll-Sync
+    deshalb nicht gepusht werden (siehe queries.kontakte_ids_mit_offenen_aenderungen)."""
+    k1 = queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster"})
+    k2 = queries.create_kontakt(tmp_db, {"vorname": "Bob", "nachname": "Beispiel"})
+    queries.create_vorschlag(
+        tmp_db, {"typ": "aenderung", "unterschiede": []}, kontakt_id=k2,
+        quelle="kontakte_app", message_id=f"kontakte-app-aenderung:{k2}:abc123",
+    )
+
+    gesendet = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        gesendet.append((request.method, request.url.path))
+        if request.method == "PROPFIND":
+            return httpx.Response(207, text="<multistatus></multistatus>")
+        return httpx.Response(201)
+
+    monkeypatch.setattr(radicale, "_client", lambda: httpx.Client(
+        transport=httpx.MockTransport(handler), base_url="https://test/a/"
+    ))
+
+    ergebnis = radicale.sync_alle(tmp_db)
+
+    assert ergebnis["kontakte"] == 1
+    assert ergebnis["uebersprungen"] == 1
+    assert ("PUT", f"/a/kontakt-{k1}.vcf") in gesendet
+    assert ("PUT", f"/a/kontakt-{k2}.vcf") not in gesendet
+
+
 def test_sync_alle_entfernt_bereits_gepushten_z_ordner(tmp_db, monkeypatch):
     """Ein Z-Ordner, der vor Einfuehrung der Z-Ordner-Regel schon als Apple-Gruppe
     gepusht wurde, wird beim naechsten Voll-Sync als verwaist erkannt und entfernt -

@@ -3,9 +3,9 @@
 Vollständiger Durchlauf von der Installation bis zum Export. Gedacht zum Abhaken:
 jeder Punkt ist eine Handlung mit einer klaren Erwartung.
 
-**Stand:** Abschnitt C ist durch (bis auf C11, C14, C17), von D fehlen noch
-D5–D9 und D11, in B neu B11. Offene Befunde siehe unten. Nächster Schritt:
-**1.24.0 installieren**.
+**Stand:** Abschnitt C ist durch (bis auf C11, C14, C17, neu C18), von D fehlen noch
+D5–D9 und D11, in B neu B11, F5–F7 offen. Offene Befunde siehe unten. Nächster Schritt:
+**1.26.0 installieren**.
 
 | Zeichen | Bedeutung |
 |---|---|
@@ -80,6 +80,7 @@ kommt zuerst als **Vorschlag**.
 | C15 | ✅ | Bestehenden Kontakt in Kontakte.app in einen Ordner ziehen, **einige Minuten warten**, dann im Browser einen anderen in denselben Ordner | Beide Zuordnungen bleiben | gleichzeitig gewinnt weiterhin der Browser — bekannte Grenze, siehe Befund „Zeitfenster“ |
 | C16 | ✅ | Vorschlag übernehmen, den Rubrica als **möglichen Duplikat** markiert | Drei Wege: **Zusammenführen**, **Als neuen Kontakt**, **Bestehenden ansehen** | |
 | C17 | ⬜ | Einen Duplikat-Vorschlag **Zusammenführen**, bei dem der bestehende Kontakt einen Namen hat | Der Name des bestehenden Kontakts bleibt; nur Nummern, Adressen und Mails kommen dazu | neu ab 1.19.0 — genau hier gingen Kontakte verloren |
+| C18 | ⬜ | In Kontakte.app eine Adresse/Nummer ändern, **bevor** der Vorschlag bestätigt ist **Einstellungen → Jetzt alles neu synchronisieren** klicken | Der Vorschlag bleibt mit dem geänderten Wert stehen — wird **nicht** stillschweigend mit dem alten Stand überschrieben | neu ab 1.26.0 — siehe Offene Befunde |
 
 ---
 
@@ -163,6 +164,15 @@ Ursache gefunden und in 1.19.0 behoben: beim Zusammenführen gewann der Name aus
 Vorschlag und überschrieb den bestehenden Kontakt. Was bereits verloren ging, findet
 `scripts/fehlende_kontakte.py` — Vergleich der alten vCard-Exporte gegen die
 Datenbank, fehlende Kontakte werden als einzelne Karten herausgeschrieben.
+
+**Voll-Sync überschrieb offene Änderungen (ausserhalb des Testablaufs).** Eine in
+Kontakte.app korrigierte Adresse stand hinterher wieder auf dem alten Wert, ohne dass
+jemand bewusst abgelehnt hatte. Ursache gefunden und in 1.26.0 behoben: **Jetzt alles
+neu synchronisieren** erkannte die Änderung zwar als Vorschlag, pushte im selben
+Durchlauf aber trotzdem jeden Kontakt unbedingt aus der Datenbank zurück — die
+Korrektur wurde augenblicklich wieder überschrieben, der jetzt gegenstandslose
+Vorschlag beim nächsten Abgleich automatisch als „abgelehnt“ zurückgezogen. Betroffene
+Fälle im produktiven Bestand mit `scripts/pruefe_verworfene_aenderungen.py` geprüft.
 
 **Zeitfenster bei Ordner-Zuordnungen (C15).** Verschiebt jemand in Kontakte.app einen
 Kontakt in einen Ordner und ändert kurz darauf jemand im Browser denselben Ordner,

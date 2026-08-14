@@ -310,6 +310,9 @@ def einstellungen_radicale_sync():
     else:
         text = (f"{ergebnis['kontakte']} Kontakte und {ergebnis['ordner']} Ordner synchronisiert, "
                 f"{ergebnis['entfernt']} verwaiste Einträge entfernt.")
+        if ergebnis.get("uebersprungen"):
+            text += (f" {ergebnis['uebersprungen']} Kontakte übersprungen (unbestätigte Änderung aus "
+                      f"Kontakte.app wartet auf der Vorschläge-Seite auf Entscheidung).")
         if ergebnis["fehler"]:
             text += f" {len(ergebnis['fehler'])} Fehler (z. B. {ergebnis['fehler'][0]})."
     return RedirectResponse(url=f"/einstellungen?sync={quote(text)}", status_code=303)

@@ -534,6 +534,22 @@ def offene_aenderungs_vorschlaege(conn: sqlite3.Connection, kontakt_id: int) -> 
     return [dict(r) for r in rows]
 
 
+def kontakte_ids_mit_offenen_aenderungen(conn: sqlite3.Connection) -> set:
+    """Alle Kontakt-IDs mit einem offenen Aenderungsvorschlag aus Kontakte.app.
+
+    Grundlage fuer sync_alle (siehe sync/radicale.py): ein Voll-Sync darf einen
+    solchen Kontakt nicht aus der Datenbank zurueckpushen, solange die dort
+    erkannte, noch unbestaetigte Aenderung offen ist - sonst wird sie im selben
+    Durchlauf wieder mit dem alten Stand ueberschrieben, bevor im Buero jemand
+    ueber den Vorschlag entscheiden konnte (Nutzer-Meldung: Adresse eines
+    Kontakts "ist jetzt wieder alt")."""
+    rows = conn.execute(
+        "SELECT DISTINCT kontakt_id FROM vorschlaege WHERE status = 'offen' "
+        "AND message_id LIKE 'kontakte-app-aenderung:%'"
+    ).fetchall()
+    return {r["kontakt_id"] for r in rows}
+
+
 def setze_gepushte_vcard(conn: sqlite3.Connection, kontakt_id: int, vcard: str) -> None:
     """Haelt die zuletzt erfolgreich gepushte vCard fest - Referenzpunkt fuer die
     Erkennung von Feldaenderungen aus Kontakte.app (siehe
