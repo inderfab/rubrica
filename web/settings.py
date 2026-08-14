@@ -342,3 +342,57 @@ async def einstellungen_alle_kontakte_loeschen(request: Request):
     if ergebnis["aktiv"]:
         text += f" {ergebnis['entfernt']} verwaiste Einträge in Radicale entfernt."
     return RedirectResponse(url=f"/einstellungen?reset={quote(text)}", status_code=303)
+
+
+@router.get("/einstellungen/aufraeumen")
+def aufraeumen_uebersicht(request: Request, meldung: str = ""):
+    """Findet, was nach Importen und Zusammenfuehrungen doppelt im Bestand steht.
+
+    Anlass (Nutzer-Meldung nach dem Wiederherstellen verlorener Kontakte): "irgendwie
+    muss ich all die kontakte die nun falsch sind wieder korrigieren". Von Hand ist
+    das bei 1500 Kontakten aussichtslos - hier stehen die Verdachtsfaelle
+    beieinander."""
+    conn = get_connection()
+    try:
+        doppelte = queries.doppelte_kontakte(conn)
+        angaben = queries.mehrfach_verwendete_angaben(conn)
+    finally:
+        conn.close()
+    return templates.TemplateResponse("aufraeumen.html", {
+        "request": request, "doppelte": doppelte, "meldung": meldung,
+        "mails": [a for a in angaben if a["feld"] == "E-Mail"],
+        "telefone": [a for a in angaben if a["feld"] == "Telefon"],
+    })
+
+
+@router.post("/einstellungen/aufraeumen/kontakt-loeschen")
+async def aufraeumen_kontakt_loeschen(request: Request):
+    form = await request.form()
+    kontakt_id = int(form.get("kontakt_id"))
+    conn = get_connection()
+    try:
+        betroffene_ordner = {o["id"] for o in (queries.get_kontakt(conn, kontakt_id) or {}).get("projekte", [])}
+        queries.delete_kontakt(conn, kontakt_id)
+        radicale.delete_kontakt(kontakt_id)
+        for oid in betroffene_ordner:
+            radicale.push_projekt(conn, oid)
+    finally:
+        conn.close()
+    return RedirectResponse(url="/einstellungen/aufraeumen?meldung=Kontakt+geloescht",
+                            status_code=303)
+
+
+@router.post("/einstellungen/aufraeumen/angabe-loeschen")
+async def aufraeumen_angabe_loeschen(request: Request):
+    """Entfernt eine einzelne Nummer oder Adresse von EINEM Kontakt - der Eintrag
+    beim anderen bleibt stehen."""
+    form = await request.form()
+    conn = get_connection()
+    try:
+        kontakt_id = queries.loesche_angabe(conn, form.get("feld", ""), int(form.get("eintrag_id")))
+        if kontakt_id:
+            radicale.push_kontakt(conn, kontakt_id)
+    finally:
+        conn.close()
+    return RedirectResponse(url="/einstellungen/aufraeumen?meldung=Angabe+entfernt",
+                            status_code=303)

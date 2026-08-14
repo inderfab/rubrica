@@ -350,3 +350,40 @@ def test_einstellungen_speichern_laesst_export_werte_unberuehrt(tmp_db, monkeypa
 
     assert settings.get("export.firmenname") == "Muster AG"
     assert settings.get("export.privates_telefon_zeigen") is True
+
+
+def test_aufraeumen_zeigt_namensdubletten_und_gemeinsame_angaben(tmp_db):
+    """Nutzer-Meldung nach dem Wiederherstellen verlorener Kontakte: "irgendwie muss
+    ich all die kontakte die nun falsch sind wieder korrigieren". Bei 1500 Kontakten
+    ist das von Hand aussichtslos - die Verdachtsfälle müssen beieinanderstehen."""
+    from db import queries
+    a = queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster", "firma": "Muster AG",
+                                        "emails": [{"typ": "Direkt", "email": "gemeinsam@beispiel.ch"}]})
+    queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster", "firma": ""})
+    queries.create_kontakt(tmp_db, {"vorname": "Bruno", "nachname": "Beispiel",
+                                    "emails": [{"typ": "Direkt", "email": "GEMEINSAM@beispiel.ch"}]})
+
+    r = TestClient(app).get("/einstellungen/aufraeumen")
+    assert r.status_code == 200
+    assert "Gleicher Name mehrfach (1)" in r.text
+    assert "E-Mail-Adresse bei mehreren Kontakten (1)" in r.text
+    assert f"/kontakte/{a}/bearbeiten" in r.text
+
+
+def test_aufraeumen_entfernt_eine_angabe_nur_bei_einem_kontakt(tmp_db, monkeypatch):
+    from db import queries
+    from sync import radicale
+    monkeypatch.setattr(radicale, "_client", lambda: None)
+    a = queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster",
+                                        "emails": [{"typ": "Direkt", "email": "gemeinsam@beispiel.ch"}]})
+    b = queries.create_kontakt(tmp_db, {"vorname": "Bruno", "nachname": "Beispiel",
+                                        "emails": [{"typ": "Direkt", "email": "gemeinsam@beispiel.ch"}]})
+    eintrag_id = queries.get_kontakt(tmp_db, b)["emails"][0]["id"]
+
+    r = TestClient(app).post("/einstellungen/aufraeumen/angabe-loeschen",
+                             data={"feld": "E-Mail", "eintrag_id": str(eintrag_id)},
+                             follow_redirects=False)
+
+    assert r.status_code == 303
+    assert queries.get_kontakt(tmp_db, b)["emails"] == []
+    assert len(queries.get_kontakt(tmp_db, a)["emails"]) == 1, "der andere Eintrag muss bleiben"

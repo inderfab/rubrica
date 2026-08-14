@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}Bestand aufräumen – Rubrica{% endblock %}
+{% block content %}
+<h1>Bestand aufräumen</h1>
+
+{% if meldung %}
+<p style="color:#1a7f37; padding:0.5rem 0">{{ meldung }}</p>
+{% endif %}
+
+<div class="formular-schmal">
+<p class="empty">
+    Verdachtsfälle aus Importen und Zusammenführungen. Nichts davon wird automatisch bereinigt —
+    ob zwei Einträge dieselbe Person sind oder zwei Menschen sich eine Nummer teilen, kann nur
+    jemand entscheiden, der die Leute kennt.
+</p>
+
+<details class="einstell-block" open>
+    <summary>Gleicher Name mehrfach ({{ doppelte|length }})</summary>
+    {% if doppelte %}
+    <p class="empty" style="padding:0 0 0.5rem">
+        Entsteht vor allem, wenn derselbe Bestand zweimal importiert wurde. Den vollständigeren
+        Eintrag behalten, den anderen löschen — fehlt beim behaltenen etwas, vorher dort ergänzen.
+    </p>
+    {% for gruppe in doppelte %}
+    <fieldset>
+        <legend>{{ gruppe[0].vorname }} {{ gruppe[0].nachname }}{% if not gruppe[0].vorname and not gruppe[0].nachname %}{{ gruppe[0].firma }}{% endif %}</legend>
+        <table>
+            <thead><tr><th>Firma</th><th>Telefon</th><th>E-Mail</th><th>Ordner</th><th></th></tr></thead>
+            <tbody>
+                {% for k in gruppe %}
+                <tr>
+                    <td><a href="/kontakte/{{ k.id }}/bearbeiten">{{ k.firma or "–" }}</a></td>
+                    <td>{% for t in k.telefonnummern %}{{ t.nummer }}<br>{% endfor %}</td>
+                    <td>{% for e in k.emails %}{{ e.email }}<br>{% endfor %}</td>
+                    <td>{{ k.projekte|length }}</td>
+                    <td class="actions">
+                        <form method="post" action="/einstellungen/aufraeumen/kontakt-loeschen"
+                              onsubmit="return confirm('Diesen Eintrag unwiderruflich löschen?')">
+                            <input type="hidden" name="kontakt_id" value="{{ k.id }}">
+                            <button type="submit" class="danger">Löschen</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </fieldset>
+    {% endfor %}
+    {% else %}
+    <p class="empty">Keine Namensdubletten gefunden.</p>
+    {% endif %}
+</details>
+
+{% macro angaben_block(titel, eintraege, hinweis, offen) %}
+<details class="einstell-block"{% if offen %} open{% endif %}>
+    <summary>{{ titel }} ({{ eintraege|length }})</summary>
+    <p class="empty" style="padding:0 0 0.5rem">{{ hinweis }}</p>
+    {% if eintraege %}
+    <table>
+        <thead><tr><th>Wert</th><th>Steht bei</th><th></th></tr></thead>
+        <tbody>
+            {% for a in eintraege %}
+            {% for e in a.eintraege %}
+            <tr>
+                <td>{% if loop.first %}{{ a.wert }}{% endif %}</td>
+                <td><a href="/kontakte/{{ e.kontakt_id }}/bearbeiten">{{ e.vorname }} {{ e.nachname }}</a>
+                    {% if e.firma %}<span style="color:var(--text-hell)">— {{ e.firma }}</span>{% endif %}</td>
+                <td class="actions">
+                    <form method="post" action="/einstellungen/aufraeumen/angabe-loeschen">
+                        <input type="hidden" name="feld" value="{{ a.feld }}">
+                        <input type="hidden" name="eintrag_id" value="{{ e.id }}">
+                        <button type="submit" class="secondary">Hier entfernen</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+</details>
+{% endmacro %}
+
+{{ angaben_block("E-Mail-Adresse bei mehreren Kontakten", mails,
+   "Eine persönliche Adresse gehört praktisch nie zwei Menschen — hier steckt oft eine falsche
+    Zusammenführung. Ein gemeinsames Postfach (info@…, ein Ehepaar) ist dagegen in Ordnung.",
+   true) }}
+
+{{ angaben_block("Telefonnummer bei mehreren Kontakten", telefone,
+   "Meist harmlos: eine Firmenzentrale steht zu Recht bei allen Mitarbeitenden. Nur durchsehen, wenn
+    eine Nummer bei Leuten steht, die nichts miteinander zu tun haben.",
+   false) }}
+
+<p><a href="/einstellungen">← Zurück zu den Einstellungen</a></p>
+</div>
+{% endblock %}

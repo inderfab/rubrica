@@ -5,7 +5,7 @@ jeder Punkt ist eine Handlung mit einer klaren Erwartung.
 
 **Stand:** Abschnitt C ist durch (bis auf C11, C14, C17), von D fehlen noch
 D5–D9 und D11, in B neu B11. Offene Befunde siehe unten. Nächster Schritt:
-**1.20.0 installieren**.
+**1.24.0 installieren**.
 
 | Zeichen | Bedeutung |
 |---|---|
@@ -122,6 +122,9 @@ kommt zuerst als **Vorschlag**.
 | F2 | ⬜ | Dieselbe Datei nochmals importieren | Keine Dubletten — Treffer werden erkannt |
 | F3 | ⬜ | Import mit unvollständigen Kontakten | Läuft durch (beim Import gelten die Pflichtfelder bewusst nicht) |
 | F4 | ⬜ | Danach in der Kontaktliste auf **Unvollständige Kontakte** filtern | Genau diese Datensätze erscheinen |
+| F5 | ⬜ | Import abschliessen | Ergebnisseite nennt **wie viele neu** und **wie viele zusammengeführt** wurden, beide Listen namentlich |
+| F6 | ⬜ | Import mit **Immer als neue Kontakte anlegen** wiederholen | Nichts wird zusammengeführt, jede Karte wird ein eigener Kontakt |
+| F7 | ⬜ | Einstellungen → **Bestand aufräumen** öffnen | Zeigt Namensdubletten und mehrfach verwendete Angaben; „Löschen" bzw. „Hier entfernen" wirkt nur auf den gewählten Eintrag |
 
 ---
 

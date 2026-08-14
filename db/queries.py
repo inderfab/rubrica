@@ -797,3 +797,62 @@ def loese_duplikat_verknuepfung(conn: sqlite3.Connection, vorschlag_id: int) -> 
     web/vorschlaege.py: vorschlag_uebernehmen_als_neu)."""
     with conn:
         conn.execute("UPDATE vorschlaege SET kontakt_id = NULL WHERE id = ?", (vorschlag_id,))
+
+
+def _namensschluessel(vorname: str, nachname: str, firma: str) -> str:
+    name = _vergleichsform(f"{vorname} {nachname}")
+    return name or f"firma:{_vergleichsform(firma)}"
+
+
+def doppelte_kontakte(conn: sqlite3.Connection) -> list:
+    """Kontakte, die denselben Namen tragen - Grundlage fuer die Aufraeumseite.
+
+    Entsteht vor allem nach einem Wiederholungs-Import: wer denselben Bestand
+    zweimal einliest, einmal mit und einmal ohne Zusammenfuehren, hat einen Teil
+    danach doppelt (Nutzer-Meldung nach dem Wiederherstellen verlorener Kontakte)."""
+    gruppen: dict = {}
+    for row in conn.execute("SELECT * FROM kontakte ORDER BY id"):
+        gruppen.setdefault(_namensschluessel(row["vorname"], row["nachname"], row["firma"]), []).append(
+            _kontakt_row_to_dict(conn, row))
+    return [eintraege for eintraege in gruppen.values() if len(eintraege) > 1]
+
+
+def mehrfach_verwendete_angaben(conn: sqlite3.Connection) -> list:
+    """Telefonnummern und E-Mail-Adressen, die an mehr als einem Kontakt haengen.
+
+    Manche davon sind echt (eine Firmenzentrale, ein gemeinsames Postfach eines
+    Ehepaars), andere stammen aus einer falschen Zusammenfuehrung. Die Entscheidung
+    kann nur der Mensch treffen - die Seite zeigt sie nebeneinander, damit sie
+    ueberhaupt auffallen."""
+    treffer: dict = {}
+    for tabelle, spalte, feld, normalisieren in (
+        ("telefonnummern", "nummer", "Telefon", _nur_ziffern),
+        ("emails", "email", "E-Mail", _vergleichsform),
+    ):
+        for row in conn.execute(
+            f"SELECT x.id, x.{spalte} AS wert, k.id AS kontakt_id, k.vorname, k.nachname, k.firma "
+            f"FROM {tabelle} x JOIN kontakte k ON k.id = x.kontakt_id"
+        ):
+            schluessel = (feld, normalisieren(row["wert"]))
+            if not schluessel[1]:
+                continue
+            treffer.setdefault(schluessel, []).append(dict(row))
+    return [
+        {"feld": feld, "wert": eintraege[0]["wert"], "eintraege": eintraege}
+        for (feld, _), eintraege in sorted(treffer.items())
+        if len({e["kontakt_id"] for e in eintraege}) > 1
+    ]
+
+
+def loesche_angabe(conn: sqlite3.Connection, feld: str, eintrag_id: int) -> "int | None":
+    """Entfernt eine einzelne Telefonnummer oder E-Mail-Adresse von einem Kontakt -
+    fuer die Aufraeumseite. Gibt die betroffene kontakt_id zurueck (fuer den Push)."""
+    tabelle = {"Telefon": "telefonnummern", "E-Mail": "emails"}.get(feld)
+    if not tabelle:
+        return None
+    row = conn.execute(f"SELECT kontakt_id FROM {tabelle} WHERE id = ?", (eintrag_id,)).fetchone()
+    if row is None:
+        return None
+    with conn:
+        conn.execute(f"DELETE FROM {tabelle} WHERE id = ?", (eintrag_id,))
+    return row["kontakt_id"]
