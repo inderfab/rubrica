@@ -224,7 +224,7 @@ async def vorschlag_zusammenfuehren_speichern(request: Request, vorschlag_id: in
                 "fehlende_felder": fehlende_felder or {"vorname": True},
             })
         kontakt_id = vorschlag["kontakt_id"]
-        queries.update_kontakt(conn, kontakt_id, daten)
+        queries.update_kontakt(conn, kontakt_id, daten, quelle="zusammenfuehrung")
         queries.set_kontakt_projekte(conn, kontakt_id, list(ordner_ids))
         queries.set_vorschlag_status(conn, vorschlag_id, "bestaetigt")
         radicale.push_kontakt_mit_ordnern(conn, kontakt_id)

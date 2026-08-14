@@ -3,9 +3,9 @@
 Vollständiger Durchlauf von der Installation bis zum Export. Gedacht zum Abhaken:
 jeder Punkt ist eine Handlung mit einer klaren Erwartung.
 
-**Stand:** Abschnitt C ist durch (bis auf C11, C14, C17, neu C18), von D fehlen noch
-D5–D9 und D11, in B neu B11, F5–F7 offen. Offene Befunde siehe unten. Nächster Schritt:
-**1.26.0 installieren**.
+**Stand:** Abschnitt C ist durch (bis auf C11, C14, C17, C18), von D fehlen noch
+D5–D9 und D11, in B neu B11–B13, F5–F7 offen. Offene Befunde siehe unten. Nächster Schritt:
+**1.27.0 installieren**.
 
 | Zeichen | Bedeutung |
 |---|---|
@@ -53,6 +53,8 @@ synchronisieren** urteilen.
 | B9 | ✅ | Mehrere Kontakte auswählen → Sammelbearbeiten | Änderung greift bei allen ausgewählten |
 | B10 | ✅ | Kontakt per Drag & Drop auf einen Ordner ziehen | Zuordnung wird übernommen |
 | B11 | ⬜ | Kontakt anlegen, der **nur eine Firma** ist (Namensfelder leer) | Lässt sich speichern; als Bezeichnung genügt Name **oder** Firma | neu ab 1.20.0 |
+| B12 | ⬜ | Bei einem Kontakt die Adresse ändern und speichern, dann **Verlauf** öffnen | Neuer Eintrag mit Zeitpunkt, Quelle „Bearbeitet im Browser“, altem und neuem Wert | neu ab 1.27.0 |
+| B13 | ⬜ | Bei diesem Verlaufseintrag **Rückgängig** klicken | Vorschau zeigt den alten Wert orange markiert; erst „Speichern“ setzt ihn zurück, „Abbrechen“ ändert nichts | neu ab 1.27.0 |
 
 ---
 
@@ -210,7 +212,6 @@ Keine Fehler, sondern Verbesserungen — noch nicht umgesetzt:
 - **Kontakt aus einem Ordner entfernen** geht im Browser nur über Bearbeiten und das
   Häkchen in der Ordnerliste. In Kontakte.app fragt das Löschen „aus Ordner entfernen
   oder löschen?“ mit zwei Knöpfen — dasselbe wäre in der Kontaktliste gewünscht.
-- **Adresse mit Kategorie-Auswahl** (Arbeit / Privat / Baustelle) statt fest „Arbeit“.
 
 ---
 

@@ -688,7 +688,7 @@ def bestaetige_aenderungs_vorschlag(conn, vorschlag: dict) -> int:
 
     daten = dict(bestehend)
     daten.update(vorschlag["rohdaten"].get("geaenderte_felder", {}))
-    queries.update_kontakt(conn, kontakt_id, daten)
+    queries.update_kontakt(conn, kontakt_id, daten, quelle="kontakte_app")
     return kontakt_id
 
 

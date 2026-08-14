@@ -141,6 +141,36 @@ _MIGRATIONS: list[tuple[str, str]] = [
             WHERE status = 'offen' AND message_id LIKE 'kontakte-app-ordner-loeschung:%';
         """,
     ),
+    (
+        "2026-08-14_kontakt_verlauf",
+        """
+        -- Verlauf/Historie fuer Kontaktaenderungen (Nutzer-Anlass: eine in
+        -- Kontakte.app korrigierte Adresse stand nach einem Voll-Sync wieder auf dem
+        -- alten Wert, ohne nachvollziehbare Spur - siehe queries.protokolliere_aenderung).
+        -- Ein Ereignis buendelt alle Feldaenderungen EINES Speicherns (Bearbeiten-Formular,
+        -- Kontakte.app-Aenderung bestaetigt, Zusammenfuehren, Wiederherstellen).
+        CREATE TABLE IF NOT EXISTS kontakt_verlauf_ereignisse (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            kontakt_id INTEGER NOT NULL REFERENCES kontakte(id) ON DELETE CASCADE,
+            quelle     TEXT    NOT NULL DEFAULT 'bearbeitung',
+            created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS kontakt_verlauf (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            ereignis_id INTEGER NOT NULL REFERENCES kontakt_verlauf_ereignisse(id) ON DELETE CASCADE,
+            feld        TEXT    NOT NULL,
+            alt_wert    TEXT,
+            neu_wert    TEXT,
+            alt_lesbar  TEXT    NOT NULL DEFAULT '',
+            neu_lesbar  TEXT    NOT NULL DEFAULT ''
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_kontakt_verlauf_ereignis ON kontakt_verlauf(ereignis_id);
+        CREATE INDEX IF NOT EXISTS idx_kontakt_verlauf_ereignisse_kontakt
+            ON kontakt_verlauf_ereignisse(kontakt_id, created_at DESC);
+        """,
+    ),
 ]
 
 

@@ -1,0 +1,11 @@
+{# Zeigt das Ergebnis eines Wiederherstellens, bevor es geschieht - dasselbe
+   gruen/orange-Vorschau-Prinzip wie beim Zusammenfuehren (siehe
+   web/vorschlaege.py::vorschlag_zusammenfuehren_flyover). #}
+<h2 style="margin-top:0">Änderung rückgängig machen</h2>
+<p class="zusammenfuehrung-hinweis">
+    So sähe der Kontakt danach aus.
+    <span class="wert-bestehend-punkt"></span> bleibt wie jetzt,
+    <span class="wert-neu-punkt"></span> wird auf den alten Stand zurückgesetzt.
+    Erst mit „Speichern“ wird es übernommen.
+</p>
+{% include "_kontakt_bearbeiten_form.html" %}

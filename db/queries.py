@@ -143,7 +143,160 @@ def create_kontakt(conn: sqlite3.Connection, daten: dict) -> int:
     return kontakt_id
 
 
-def update_kontakt(conn: sqlite3.Connection, kontakt_id: int, daten: dict) -> None:
+# Verlauf/Historie fuer Kontaktaenderungen (Nutzer-Anlass: eine in Kontakte.app
+# korrigierte Adresse stand nach einem Voll-Sync-Lauf wieder auf dem alten Wert,
+# ohne dass sich das irgendwo nachvollziehen liess). VERLAUF_SKALARFELDER bewusst
+# eine eigene Liste statt kontakte_app_intake._VERGLEICHSFELDER wiederzuverwenden:
+# die dortige Liste laesst "kategorie" (= Funktion, eines der meistgenutzten Felder)
+# aus, weil eine vCard dafuer keine verlaessliche Entsprechung liefert - fuer den
+# Verlauf soll gerade dieses Feld nicht fehlen.
+VERLAUF_SKALARFELDER = ("vorname", "nachname", "firma", "kategorie", "rolle", "notizen")
+VERLAUF_LISTENFELDER = ("telefonnummern", "emails", "adressen", "urls")
+VERLAUF_FELD_BESCHRIFTUNG = {
+    "vorname": "Vorname", "nachname": "Nachname", "firma": "Firma", "kategorie": "Funktion",
+    "rolle": "Rolle", "notizen": "Notizen", "telefonnummern": "Telefon", "emails": "E-Mail",
+    "adressen": "Adresse", "urls": "Web",
+}
+VERLAUF_QUELLE_BESCHRIFTUNG = {
+    "bearbeitung": "Bearbeitet im Browser",
+    "kontakte_app": "Übernommen aus Kontakte.app",
+    "zusammenfuehrung": "Zusammengeführt",
+    "wiederherstellung": "Wiederhergestellt",
+}
+VERLAUF_VERGLEICH_SCHLUESSEL = {
+    "telefonnummern": lambda e: _nur_ziffern(e.get("nummer", "")),
+    "emails": lambda e: _vergleichsform(e.get("email", "")),
+    "adressen": lambda e: tuple(_vergleichsform(e.get(f, "")) for f in ("strasse", "plz", "ort")),
+    "urls": lambda e: _vergleichsform(e.get("url", "")).rstrip("/"),
+}
+
+
+def _verlauf_lesbar(feld: str, wert) -> str:
+    """Formatiert einen Feldwert fuer die Anzeige im Verlauf - bei Listenfeldern
+    inklusive Kategorie, sonst zeigten zwei Zeilen "Musterstrasse 1" links wie
+    rechts denselben Text, obwohl sich nur die Kategorie geaendert hat."""
+    if isinstance(wert, list):
+        teile = []
+        for eintrag in wert:
+            if not isinstance(eintrag, dict):
+                continue
+            if "nummer" in eintrag:
+                text = eintrag.get("nummer", "")
+            elif "email" in eintrag:
+                text = eintrag.get("email", "")
+            elif "url" in eintrag:
+                text = eintrag.get("url", "")
+            else:
+                text = " ".join(str(eintrag.get(f, "")) for f in ("strasse", "plz", "ort", "land")).strip()
+            typ = (eintrag.get("typ") or "").strip()
+            if typ and text:
+                teile.append(f"{typ}: {text}")
+            elif text:
+                teile.append(text)
+        return ", ".join(teile)
+    return str(wert or "")
+
+
+def _verlauf_unterschiede(vorher: dict, nachher: dict) -> dict:
+    """Vergleicht zwei Kontakt-Dicts (siehe get_kontakt) und liefert nur die
+    abweichenden Felder als {feld: (alter_wert, neuer_wert)}."""
+    unterschiede = {}
+    for feld in VERLAUF_SKALARFELDER:
+        alt = vorher.get(feld) or ""
+        neu = nachher.get(feld) or ""
+        if _vergleichsform(alt) == _vergleichsform(neu):
+            continue
+        unterschiede[feld] = (alt, neu)
+    for feld in VERLAUF_LISTENFELDER:
+        alt = vorher.get(feld) or []
+        neu = nachher.get(feld) or []
+        schluessel = VERLAUF_VERGLEICH_SCHLUESSEL[feld]
+        if sorted(schluessel(e) for e in alt) == sorted(schluessel(e) for e in neu):
+            continue
+        unterschiede[feld] = (alt, neu)
+    return unterschiede
+
+
+def protokolliere_aenderung(conn: sqlite3.Connection, kontakt_id: int, vorher: dict, nachher: dict,
+                            quelle: str) -> None:
+    """Haelt jede tatsaechliche Feldaenderung eines Speicherns fest (siehe
+    update_kontakt) - Grundlage fuer die Verlaufsanzeige und das Wiederherstellen
+    eines frueheren Stands. Ohne Unterschied wird kein Ereignis angelegt, ein
+    Speichern ohne Aenderung erzeugt also keinen Verlaufseintrag."""
+    unterschiede = _verlauf_unterschiede(vorher, nachher)
+    if not unterschiede:
+        return
+    cur = conn.execute(
+        "INSERT INTO kontakt_verlauf_ereignisse (kontakt_id, quelle) VALUES (?, ?)",
+        (kontakt_id, quelle),
+    )
+    ereignis_id = cur.lastrowid
+    for feld, (alt, neu) in unterschiede.items():
+        conn.execute(
+            """INSERT INTO kontakt_verlauf (ereignis_id, feld, alt_wert, neu_wert, alt_lesbar, neu_lesbar)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (
+                ereignis_id, feld, json.dumps(alt, ensure_ascii=False), json.dumps(neu, ensure_ascii=False),
+                _verlauf_lesbar(feld, alt), _verlauf_lesbar(feld, neu),
+            ),
+        )
+
+
+def kontakt_verlauf(conn: sqlite3.Connection, kontakt_id: int, limit: int = 50) -> list:
+    """Verlauf eines Kontakts, neuestes Ereignis zuerst - fuer die Anzeige (nur
+    lesbarer Text, siehe verlauf_ereignis fuer die strukturierten Werte)."""
+    ereignisse = conn.execute(
+        "SELECT * FROM kontakt_verlauf_ereignisse WHERE kontakt_id = ? "
+        "ORDER BY created_at DESC, id DESC LIMIT ?",
+        (kontakt_id, limit),
+    ).fetchall()
+    ergebnis = []
+    for e in ereignisse:
+        felder = conn.execute(
+            "SELECT feld, alt_lesbar, neu_lesbar FROM kontakt_verlauf WHERE ereignis_id = ? ORDER BY id",
+            (e["id"],),
+        ).fetchall()
+        ergebnis.append({
+            "id": e["id"], "created_at": e["created_at"], "quelle": e["quelle"],
+            "quelle_lesbar": VERLAUF_QUELLE_BESCHRIFTUNG.get(e["quelle"], e["quelle"]),
+            "felder": [
+                {"feld": f["feld"], "feld_lesbar": VERLAUF_FELD_BESCHRIFTUNG.get(f["feld"], f["feld"]),
+                 "alt": f["alt_lesbar"], "neu": f["neu_lesbar"]}
+                for f in felder
+            ],
+        })
+    return ergebnis
+
+
+def verlauf_ereignis(conn: sqlite3.Connection, ereignis_id: int) -> "dict | None":
+    """Ein einzelnes Verlauf-Ereignis mit den STRUKTURIERTEN Werten (nicht nur dem
+    lesbaren Text) - Grundlage fuers Wiederherstellen, das die alten Werte
+    tatsaechlich zurueckschreiben muss."""
+    e = conn.execute("SELECT * FROM kontakt_verlauf_ereignisse WHERE id = ?", (ereignis_id,)).fetchone()
+    if e is None:
+        return None
+    felder = conn.execute(
+        "SELECT feld, alt_wert, neu_wert FROM kontakt_verlauf WHERE ereignis_id = ? ORDER BY id",
+        (ereignis_id,),
+    ).fetchall()
+    return {
+        "id": e["id"], "kontakt_id": e["kontakt_id"], "created_at": e["created_at"], "quelle": e["quelle"],
+        "felder": [
+            {
+                "feld": f["feld"],
+                "alt_wert": json.loads(f["alt_wert"]) if f["alt_wert"] is not None else None,
+                "neu_wert": json.loads(f["neu_wert"]) if f["neu_wert"] is not None else None,
+            }
+            for f in felder
+        ],
+    }
+
+
+def update_kontakt(conn: sqlite3.Connection, kontakt_id: int, daten: dict, quelle: str = "bearbeitung") -> None:
+    """`quelle` beschriftet den Verlauf-Eintrag (siehe protokolliere_aenderung) -
+    Standard "bearbeitung" fuer den direkten Bearbeiten-Weg, abweichend gesetzt von
+    Aufrufern, die ueber einen Vorschlag oder eine Wiederherstellung hierherkommen."""
+    vorher = get_kontakt(conn, kontakt_id)
     with conn:
         conn.execute(
             """UPDATE kontakte SET vorname = ?, nachname = ?, firma = ?, rolle = ?,
@@ -158,6 +311,8 @@ def update_kontakt(conn: sqlite3.Connection, kontakt_id: int, daten: dict) -> No
         _replace_emails(conn, kontakt_id, daten.get("emails", []))
         _replace_adressen(conn, kontakt_id, daten.get("adressen", []))
         _replace_urls(conn, kontakt_id, daten.get("urls", []))
+        if vorher is not None:
+            protokolliere_aenderung(conn, kontakt_id, vorher, daten, quelle)
 
 
 _ERLAUBTE_MEHRFACHFELDER = {"vorname", "nachname", "firma", "rolle", "kategorie", "notizen"}

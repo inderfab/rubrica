@@ -46,12 +46,13 @@
         </div>
         <div class="field">
             <label>Rolle</label>
-            <input type="text" name="rolle" value="{{ kontakt.rolle if kontakt else '' }}">
+            <input type="text" name="rolle" value="{{ kontakt.rolle if kontakt else '' }}"
+                   class="{{ markierung("rolle") }}">
         </div>
         <div class="field">
             <label>Funktion</label>
             <div class="combobox" data-optionen='{{ funktionen|tojson }}'>
-                <input type="text" class="combobox-input {{ 'feld-fehler' if fehlende_felder.kategorie }}" name="kategorie" autocomplete="off"
+                <input type="text" class="combobox-input {{ 'feld-fehler' if fehlende_felder.kategorie }}{{ markierung("kategorie") }}" name="kategorie" autocomplete="off"
                        value="{{ kontakt.kategorie if kontakt else '' }}" placeholder="z. B. Bauingenieur/in (Statik)"
                        oninput="rubricaComboboxInput(event)" onfocus="rubricaComboboxInput(event)"
                        onblur="rubricaComboboxBlur(event)">
@@ -131,7 +132,7 @@
 
     <fieldset>
         <legend>Notizen</legend>
-        <textarea name="notizen" rows="2" style="width: 100%;">{{ kontakt.notizen if kontakt else '' }}</textarea>
+        <textarea name="notizen" rows="2" style="width: 100%;" class="{{ markierung("notizen") }}">{{ kontakt.notizen if kontakt else '' }}</textarea>
     </fieldset>
 
     <fieldset class="{{ 'feld-fehler' if fehlende_felder.ordner }}">

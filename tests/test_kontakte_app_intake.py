@@ -505,6 +505,30 @@ def test_uebernehmen_behaelt_die_funktion(tmp_db, monkeypatch):
     assert kontakt["vorname"] == "Anna"
 
 
+def test_uebernehmen_protokolliert_die_aenderung_im_verlauf(tmp_db, monkeypatch):
+    """v1.26.0: das Gegenstueck zum sync_alle-Fix - was tatsaechlich uebernommen
+    wird, muss sich hinterher im Verlauf des Kontakts nachvollziehen lassen,
+    mit "kontakte_app" als Quelle (nicht "bearbeitung", das waere irrefuehrend)."""
+    kontakt_id = _kontakt_mit_push(tmp_db, monkeypatch)
+    gepusht = queries.hole_gepushte_vcard(tmp_db, kontakt_id)
+    geaendert = gepusht.replace("+41 44 111 11 11", "+41 44 222 22 22")
+
+    def handler(request):
+        if request.method == "GET":
+            return httpx.Response(200, text=geaendert)
+        return httpx.Response(201)
+
+    _mock_client(monkeypatch, handler)
+    kontakte_app_intake.pruefe_kontakt_aenderungen(tmp_db)
+    v = queries.list_vorschlaege(tmp_db, quelle="kontakte_app")[0]
+    kontakte_app_intake.bestaetige_aenderungs_vorschlag(tmp_db, v)
+
+    verlauf = queries.kontakt_verlauf(tmp_db, kontakt_id)
+    assert len(verlauf) == 1
+    assert verlauf[0]["quelle"] == "kontakte_app"
+    assert verlauf[0]["felder"][0]["feld"] == "telefonnummern"
+
+
 def test_unveraenderte_vcard_erzeugt_keinen_vorschlag(tmp_db, monkeypatch):
     kontakt_id = _kontakt_mit_push(tmp_db, monkeypatch)
     gepusht = queries.hole_gepushte_vcard(tmp_db, kontakt_id)

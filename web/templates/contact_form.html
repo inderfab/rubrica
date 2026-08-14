@@ -2,7 +2,55 @@
 {% block title %}Kontakt bearbeiten – Rubrica{% endblock %}
 {% block content %}
 <h1>Kontakt bearbeiten</h1>
+{% if fehler %}
+<p style="color:#b3261e; padding:0.5rem 0">{{ fehler }}</p>
+{% endif %}
 <div class="formular-schmal">
 {% include "_kontakt_bearbeiten_form.html" %}
+
+{% if verlauf %}
+<details class="einstell-block">
+    <summary>Verlauf ({{ verlauf|length }})</summary>
+    <table>
+        <thead><tr><th>Zeitpunkt</th><th>Quelle</th><th>Änderung</th><th></th></tr></thead>
+        <tbody>
+            {% for e in verlauf %}
+            <tr>
+                <td style="white-space:nowrap">{{ e.created_at[:16].replace('T', ' ') }}</td>
+                <td>{{ e.quelle_lesbar }}</td>
+                <td>
+                    {% for f in e.felder %}
+                    <div><strong>{{ f.feld_lesbar }}:</strong> {{ f.alt or "(leer)" }} → {{ f.neu or "(leer)" }}</div>
+                    {% endfor %}
+                </td>
+                <td class="actions">
+                    <button type="button" class="secondary"
+                            hx-get="/kontakte/{{ kontakt.id }}/verlauf/{{ e.id }}/wiederherstellen-flyover"
+                            hx-target="#verlauf-modal-inhalt" hx-swap="innerHTML"
+                            onclick="rubricaVerlaufModalOeffnen()">
+                        Rückgängig
+                    </button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</details>
+{% endif %}
 </div>
+
+<div id="verlauf-modal-overlay" class="modal-overlay" onclick="if (event.target === this) rubricaVerlaufModalSchliessen()">
+    <div class="modal-panel formular-schmal">
+        <div id="verlauf-modal-inhalt"></div>
+    </div>
+</div>
+
+<script>
+function rubricaVerlaufModalOeffnen() {
+    document.getElementById('verlauf-modal-overlay').classList.add('sichtbar');
+}
+function rubricaVerlaufModalSchliessen() {
+    document.getElementById('verlauf-modal-overlay').classList.remove('sichtbar');
+}
+</script>
 {% endblock %}

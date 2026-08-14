@@ -522,3 +522,81 @@ def test_ganz_ohne_name_und_firma_bleibt_abgelehnt(tmp_db):
 
     assert r.status_code == 200  # Formular mit roten Feldern statt Weiterleitung
     assert queries.list_kontakte(tmp_db) == []
+
+
+def _vollstaendiger_kontakt(tmp_db, projekt_id, strasse="Alte Gasse 3", ort="Winterthur"):
+    kid = queries.create_kontakt(tmp_db, {
+        "vorname": "Anna", "nachname": "Muster", "kategorie": "Geologe",
+        "telefonnummern": [{"typ": "Direkt", "nummer": "+41 79 111 22 33"}],
+        "emails": [{"typ": "Direkt", "email": "anna@beispiel.ch"}],
+        "adressen": [{"typ": "Privat", "strasse": strasse, "plz": "8400", "ort": ort,
+                      "region": "", "land": "Schweiz"}],
+    })
+    queries.set_kontakt_projekte(tmp_db, kid, [projekt_id])
+    return kid
+
+
+def test_verlauf_erscheint_auf_der_bearbeiten_seite(tmp_db):
+    projekt_id = queries.get_or_create_projekt(tmp_db, "Testordner")
+    kid = _vollstaendiger_kontakt(tmp_db, projekt_id)
+    kontakt = queries.get_kontakt(tmp_db, kid)
+    neu = dict(kontakt)
+    neu["adressen"] = [{**kontakt["adressen"][0], "strasse": "Neue Gasse 8", "ort": "Hagenbuch"}]
+    queries.update_kontakt(tmp_db, kid, neu, quelle="kontakte_app")
+
+    r = TestClient(app).get(f"/kontakte/{kid}/bearbeiten")
+    assert r.status_code == 200
+    assert "Verlauf" in r.text
+    assert "Übernommen aus Kontakte.app" in r.text
+    assert "Alte Gasse 3" in r.text and "Neue Gasse 8" in r.text
+
+
+def test_wiederherstellen_flyover_zeigt_alten_wert_orange_markiert(tmp_db):
+    projekt_id = queries.get_or_create_projekt(tmp_db, "Testordner")
+    kid = _vollstaendiger_kontakt(tmp_db, projekt_id)
+    kontakt = queries.get_kontakt(tmp_db, kid)
+    neu = dict(kontakt)
+    neu["adressen"] = [{**kontakt["adressen"][0], "strasse": "Neue Gasse 8", "ort": "Hagenbuch"}]
+    queries.update_kontakt(tmp_db, kid, neu, quelle="kontakte_app")
+
+    ereignis_id = queries.kontakt_verlauf(tmp_db, kid)[0]["id"]
+    r = TestClient(app).get(f"/kontakte/{kid}/verlauf/{ereignis_id}/wiederherstellen-flyover")
+    assert r.status_code == 200
+    assert "Alte Gasse 3" in r.text  # der wiederherzustellende Wert steht im Formular
+    # Praezise auf die Adresszeile pruefen, nicht nur auf "wert-neu" irgendwo im HTML -
+    # der Banner-Text ("wert-neu-punkt") enthaelt "wert-neu" sonst schon als Teilstring.
+    assert 'tel-row wert-neu">' in r.text
+
+
+def test_wiederherstellen_unbekanntes_ereignis_ist_404(tmp_db):
+    projekt_id = queries.get_or_create_projekt(tmp_db, "Testordner")
+    kid = _vollstaendiger_kontakt(tmp_db, projekt_id)
+    r = TestClient(app).get(f"/kontakte/{kid}/verlauf/9999/wiederherstellen-flyover")
+    assert r.status_code == 404
+
+
+def test_wiederherstellen_speichern_setzt_alten_stand_und_protokolliert_sich_selbst(tmp_db):
+    projekt_id = queries.get_or_create_projekt(tmp_db, "Testordner")
+    kid = _vollstaendiger_kontakt(tmp_db, projekt_id)
+    kontakt = queries.get_kontakt(tmp_db, kid)
+    neu = dict(kontakt)
+    neu["adressen"] = [{**kontakt["adressen"][0], "strasse": "Neue Gasse 8", "ort": "Hagenbuch"}]
+    queries.update_kontakt(tmp_db, kid, neu, quelle="kontakte_app")
+
+    ereignis_id = queries.kontakt_verlauf(tmp_db, kid)[0]["id"]
+    r = TestClient(app).post(f"/kontakte/{kid}/verlauf/{ereignis_id}/wiederherstellen", data={
+        "vorname": "Anna", "nachname": "Muster", "kategorie": "Geologe",
+        "telefon_typ": "Direkt", "telefon_nummer": "+41 79 111 22 33",
+        "email_typ": "Direkt", "email_adresse": "anna@beispiel.ch",
+        "adresse_typ": "Privat", "adresse_strasse": "Alte Gasse 3", "adresse_plz": "8400",
+        "adresse_ort": "Winterthur", "adresse_region": "", "adresse_land": "Schweiz",
+        "ordner_ids": str(projekt_id),
+    }, follow_redirects=False)
+    assert r.status_code == 303
+
+    aktuell = queries.get_kontakt(tmp_db, kid)
+    assert aktuell["adressen"][0]["strasse"] == "Alte Gasse 3"
+
+    verlauf = queries.kontakt_verlauf(tmp_db, kid)
+    assert len(verlauf) == 2
+    assert verlauf[0]["quelle"] == "wiederherstellung"  # neuestes zuerst

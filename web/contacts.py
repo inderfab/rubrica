@@ -1,4 +1,5 @@
 from typing import List, Optional
+from urllib.parse import quote
 
 from fastapi import APIRouter, Form, Query, Request, Response
 from fastapi.responses import RedirectResponse
@@ -355,7 +356,7 @@ def _liste_url(zurueck_ordner_id: str) -> str:
 
 
 @router.get("/kontakte/{kontakt_id}/bearbeiten")
-def kontakt_bearbeiten_form(request: Request, kontakt_id: int, ordner_id: str = ""):
+def kontakt_bearbeiten_form(request: Request, kontakt_id: int, ordner_id: str = "", fehler: str = ""):
     conn = get_connection()
     try:
         kontakt = queries.get_kontakt(conn, kontakt_id)
@@ -364,12 +365,13 @@ def kontakt_bearbeiten_form(request: Request, kontakt_id: int, ordner_id: str = 
         telefon_typen = _telefon_typ_optionen(conn)
         email_typen = _email_typ_optionen(conn)
         adresse_typen = _adresse_typ_optionen(conn)
+        verlauf = queries.kontakt_verlauf(conn, kontakt_id)
     finally:
         conn.close()
     return templates.TemplateResponse("contact_form.html", {
         "request": request, "kontakt": kontakt, "ordner": ordner, "funktionen": funktionen,
         "telefon_typen": telefon_typen, "email_typen": email_typen,
-        "adresse_typen": adresse_typen,
+        "adresse_typen": adresse_typen, "verlauf": verlauf, "fehler": fehler,
         "action": f"/kontakte/{kontakt_id}/bearbeiten", "modal": False,
         "zurueck_ordner_id": ordner_id,
     })
@@ -427,6 +429,88 @@ async def kontakt_bearbeiten_speichern(request: Request, kontakt_id: int):
     finally:
         conn.close()
     return RedirectResponse(url=_liste_url(zurueck_ordner_id), status_code=303)
+
+
+# Die Markierung im gemeinsamen Formular (_kontakt_bearbeiten_form.html) erwartet
+# bei Listenfeldern die KURZEN Namen ("telefon" statt "telefonnummern") - dieselbe
+# Abkuerzung wie in web/vorschlaege.py::_LISTENFELDER, damit beide Vorschauen (
+# Zusammenfuehren und Wiederherstellen) dieselbe Markierung ansprechen.
+_VERLAUF_MARKIERUNGS_NAME = {
+    "telefonnummern": "telefon", "emails": "email", "adressen": "adresse", "urls": "url",
+}
+
+
+def _wiederherstellen_vorschau(kontakt: dict, ereignis: dict) -> tuple:
+    """Baut das Ergebnis eines Wiederherstellens (Verlauf-Ereignis auf den
+    aktuellen Kontakt angewendet) und dazu, Feld fuer Feld, die Markierung fuer
+    dieselbe gruen/orange-Vorschau wie beim Zusammenfuehren: "bestehend" fuer
+    alles, was bereits so dasteht, "neu" fuer alles, was sich durchs
+    Wiederherstellen aendern wuerde."""
+    ergebnis = dict(kontakt)
+    status: dict = {}
+    for f in ereignis["felder"]:
+        feld = f["feld"]
+        alt = f["alt_wert"]
+        if feld in queries.VERLAUF_LISTENFELDER:
+            schluessel = queries.VERLAUF_VERGLEICH_SCHLUESSEL[feld]
+            aktuelle_schluessel = {schluessel(e) for e in (kontakt.get(feld) or [])}
+            neue_liste = alt or []
+            ergebnis[feld] = neue_liste
+            status[_VERLAUF_MARKIERUNGS_NAME[feld]] = [
+                "bestehend" if schluessel(e) in aktuelle_schluessel else "neu" for e in neue_liste
+            ]
+        else:
+            ergebnis[feld] = alt or ""
+            unveraendert = queries._vergleichsform(alt or "") == queries._vergleichsform(kontakt.get(feld) or "")
+            status[feld] = "bestehend" if unveraendert else "neu"
+    return ergebnis, status
+
+
+@router.get("/kontakte/{kontakt_id}/verlauf/{ereignis_id}/wiederherstellen-flyover")
+def kontakt_verlauf_wiederherstellen_flyover(request: Request, kontakt_id: int, ereignis_id: int):
+    """Zeigt das ERGEBNIS des Wiederherstellens, bevor es geschieht - dasselbe
+    Prinzip wie bei der Zusammenfuehrung: erst sehen, was sich aendert, dann
+    entscheiden (siehe web/vorschlaege.py::vorschlag_zusammenfuehren_flyover)."""
+    conn = get_connection()
+    try:
+        ereignis = queries.verlauf_ereignis(conn, ereignis_id)
+        kontakt = queries.get_kontakt(conn, kontakt_id)
+        if ereignis is None or kontakt is None or ereignis["kontakt_id"] != kontakt_id:
+            return Response(status_code=404)
+        ergebnis, status = _wiederherstellen_vorschau(kontakt, ereignis)
+        return templates.TemplateResponse("kontakt_wiederherstellen_modal.html", {
+            "request": request, "kontakt": ergebnis, "ordner": queries.list_projekte(conn),
+            "funktionen": _funktion_optionen(conn),
+            "telefon_typen": _telefon_typ_optionen(conn),
+            "email_typen": _email_typ_optionen(conn),
+            "adresse_typen": _adresse_typ_optionen(conn),
+            "action": f"/kontakte/{kontakt_id}/verlauf/{ereignis_id}/wiederherstellen",
+            "modal": True, "zurueck_ordner_id": "", "feld_status": status,
+        })
+    finally:
+        conn.close()
+
+
+@router.post("/kontakte/{kontakt_id}/verlauf/{ereignis_id}/wiederherstellen")
+async def kontakt_verlauf_wiederherstellen_speichern(request: Request, kontakt_id: int, ereignis_id: int):
+    form = await request.form()
+    daten = _parse_kontakt_form(form)
+    ordner_ids = [int(o) for o in form.getlist("ordner_ids")]
+    conn = get_connection()
+    try:
+        fehlende_felder = _validiere_pflichtfelder(daten, ordner_ids)
+        if fehlende_felder:
+            return RedirectResponse(
+                url=f"/kontakte/{kontakt_id}/bearbeiten?fehler="
+                    f"{quote('Wiederherstellen abgebrochen: Pflichtfelder waeren danach leer. Bitte von Hand nachtragen.')}",
+                status_code=303,
+            )
+        queries.update_kontakt(conn, kontakt_id, daten, quelle="wiederherstellung")
+        queries.set_kontakt_projekte(conn, kontakt_id, ordner_ids)
+        radicale.push_kontakt_mit_ordnern(conn, kontakt_id)
+    finally:
+        conn.close()
+    return RedirectResponse(url=f"/kontakte/{kontakt_id}/bearbeiten", status_code=303)
 
 
 @router.post("/kontakte/{kontakt_id}/loeschen")
