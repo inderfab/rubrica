@@ -337,7 +337,8 @@ def _finde_match_fuer_import(conn: sqlite3.Connection, kontakt: dict) -> int | N
     return None
 
 
-def importiere(conn: sqlite3.Connection, inhalt: str, gruppen_als_ordner: bool = True) -> list[int]:
+def importiere(conn: sqlite3.Connection, inhalt: str, gruppen_als_ordner: bool = True,
+                nie_zusammenfuehren: bool = False) -> list[int]:
     """Parst eine .vcf-Datei und legt jeden Kontakt direkt an bzw. mergt ihn in einen
     erkannten bestehenden Kontakt (keine Review-Queue mehr, siehe docs/konzept.md
     Eintrag 2026-07-14: Korrekturen erfolgen danach direkt am Kontakt). Der Vorschlag
@@ -350,7 +351,7 @@ def importiere(conn: sqlite3.Connection, inhalt: str, gruppen_als_ordner: bool =
     for kontakt in kontakte:
         gruppen = kontakt.pop("gruppen", [])
         gruppen_uids = kontakt.pop("gruppen_uids", {})
-        kontakt_id = _finde_match_fuer_import(conn, kontakt)
+        kontakt_id = None if nie_zusammenfuehren else _finde_match_fuer_import(conn, kontakt)
         if gruppen_als_ordner and gruppen:
             kontakt["gruppen_als_ordner"] = gruppen
             kontakt["gruppen_apple_uids"] = gruppen_uids

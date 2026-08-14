@@ -75,3 +75,48 @@ def test_zusammengefuehrte_duplikate_seite_ohne_ergebnisse(tmp_db):
     r = TestClient(app).get("/import/zusammengefuehrte-duplikate")
     assert r.status_code == 200
     assert "Keine Zusammenführungen gefunden" in r.text
+
+
+def _vcf(vorname, nachname, email, uid="X-1"):
+    return (f"BEGIN:VCARD\r\nVERSION:3.0\r\nUID:{uid}\r\n"
+            f"N:{nachname};{vorname};;;\r\nFN:{vorname} {nachname}\r\n"
+            f"EMAIL;TYPE=INTERNET:{email}\r\nEND:VCARD\r\n")
+
+
+def test_import_meldet_was_neu_ist_und_was_zusammengefuehrt_wurde(tmp_db):
+    """Nutzer-Meldung: "es lädt und springt dann zu den kontakten. die kontakte sind
+    aber dort nicht ersichtlich". Der Import leitete stumm weiter — wer nicht sieht,
+    dass eine Karte in einen bestehenden Kontakt gewandert ist, sucht sie
+    vergeblich in der Liste."""
+    from db import queries
+    queries.create_kontakt(tmp_db, {
+        "vorname": "Anna", "nachname": "Muster",
+        "emails": [{"typ": "Direkt", "email": "gemeinsam@beispiel.ch"}]})
+
+    r = TestClient(app).post("/import", files=[
+        ("dateien", ("a.vcf", _vcf("Bruno", "Beispiel", "gemeinsam@beispiel.ch", "U1"), "text/vcard")),
+        ("dateien", ("b.vcf", _vcf("Carla", "Neu", "carla@beispiel.ch", "U2"), "text/vcard")),
+    ])
+
+    assert r.status_code == 200
+    assert "1 neu angelegt" in r.text.replace("</strong>", "").replace("<strong style=\"color:#1a7f37\">", "")
+    assert "Zusammengeführt" in r.text
+    assert "Anna Muster" in r.text  # dorthin ist Bruno gewandert
+    assert "Carla Neu" in r.text
+
+
+def test_import_kann_das_zusammenfuehren_abschalten(tmp_db):
+    """Fuer das Wiederherstellen verlorener Kontakte: deren E-Mail steht nach einer
+    Fehlzuordnung beim falschen Menschen, und genau darüber würde der Import sie
+    sofort wieder dorthin schieben."""
+    from db import queries
+    queries.create_kontakt(tmp_db, {
+        "vorname": "Anna", "nachname": "Muster",
+        "emails": [{"typ": "Direkt", "email": "gemeinsam@beispiel.ch"}]})
+
+    TestClient(app).post("/import", data={"nie_zusammenfuehren": "on"}, files=[
+        ("dateien", ("a.vcf", _vcf("Bruno", "Beispiel", "gemeinsam@beispiel.ch", "U1"), "text/vcard")),
+    ])
+
+    namen = {f"{k['vorname']} {k['nachname']}" for k in queries.list_kontakte(tmp_db)}
+    assert namen == {"Anna Muster", "Bruno Beispiel"}

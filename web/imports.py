@@ -59,19 +59,23 @@ def import_zusammengefuehrte_duplikate(request: Request):
 
 
 @router.post("/import")
-async def import_hochladen(dateien: list[UploadFile]):
+async def import_hochladen(request: Request, dateien: list[UploadFile]):
     """Apple-Gruppen werden immer versucht zu uebernehmen (frueher eine
     Checkbox, die praktisch wirkungslos war - Gruppenzugehoerigkeit steht nur
     in vCards drin, wenn eine ganze Gruppe statt einzelner Kontakte exportiert
     wurde; ohne solche Daten passiert einfach nichts). Kontakte werden direkt
     angelegt bzw. gemergt (keine Review-Queue mehr) - Korrekturen erfolgen
     danach direkt am Kontakt."""
+    form = await request.form()
+    nie_zusammenfuehren = form.get("nie_zusammenfuehren") is not None
+
     conn = get_connection()
     try:
+        vorher = {r["id"] for r in conn.execute("SELECT id FROM kontakte")}
         kontakt_ids = []
         for datei in dateien:
             inhalt = (await datei.read()).decode("utf-8", errors="replace")
-            kontakt_ids.extend(importiere(conn, inhalt))
+            kontakt_ids.extend(importiere(conn, inhalt, nie_zusammenfuehren=nie_zusammenfuehren))
         # Eine Verbindung fuer den ganzen Batch wiederverwenden statt pro Kontakt
         # eine eigene TLS-Verbindung aufzubauen (siehe sync.radicale.sync_alle).
         client = radicale._client()
@@ -81,7 +85,18 @@ async def import_hochladen(dateien: list[UploadFile]):
         finally:
             if client is not None:
                 client.close()
+        # Rueckmeldung statt stiller Weiterleitung (Nutzer-Meldung: "es laedt und
+        # springt dann zu den kontakten. die kontakte sind aber dort nicht
+        # ersichtlich"). Wer nicht sieht, wie viele Karten in einen bestehenden
+        # Kontakt gewandert sind, sucht sie vergeblich in der Liste.
+        neue = [k for k in dict.fromkeys(kontakt_ids) if k not in vorher]
+        zusammengefuehrt = [k for k in dict.fromkeys(kontakt_ids) if k in vorher]
+        ergebnis = {
+            "neu": [queries.get_kontakt(conn, k) for k in neue],
+            "zusammengefuehrt": [queries.get_kontakt(conn, k) for k in zusammengefuehrt],
+            "nie_zusammenfuehren": nie_zusammenfuehren,
+        }
+        return templates.TemplateResponse("import_ergebnis.html",
+                                           {"request": request, **ergebnis})
     finally:
         conn.close()
-
-    return RedirectResponse(url="/kontakte", status_code=303)

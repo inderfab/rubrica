@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Import abgeschlossen – Rubrica{% endblock %}
+{% block content %}
+<h1>Import abgeschlossen</h1>
+
+<div class="formular-schmal">
+    <p class="empty">
+        <strong style="color:#1a7f37">{{ neu|length }}</strong> neu angelegt,
+        <strong style="color:{{ '#a15c00' if zusammengefuehrt else 'inherit' }}">{{ zusammengefuehrt|length }}</strong>
+        mit einem bestehenden Kontakt zusammengeführt.
+    </p>
+
+    {% if zusammengefuehrt %}
+    {# Der Punkt, an dem der Import bisher schwieg: wer nicht sieht, dass eine Karte
+       in einen bestehenden Kontakt gewandert ist, sucht sie vergeblich in der Liste
+       (Nutzer-Meldung). Die Zusammenführung geschieht über eine übereinstimmende
+       E-Mail-Adresse - steht die nach einer früheren Fehlzuordnung beim falschen
+       Menschen, landet die Karte genau dort wieder. #}
+    <fieldset>
+        <legend>Zusammengeführt</legend>
+        <p class="empty" style="padding:0 0 0.5rem">
+            Diese Karten hatten eine E-Mail-Adresse, die es in Rubrica schon gibt, und wurden deshalb dem
+            jeweiligen Kontakt hinzugefügt statt neu angelegt. Sie erscheinen <strong>nicht</strong> als
+            eigener Eintrag in der Liste. Steht die Adresse beim falschen Kontakt, den Import mit
+            <strong>Immer als neue Kontakte anlegen</strong> wiederholen.
+        </p>
+        <table>
+            <thead><tr><th>Hinzugefügt zu</th><th>Firma</th></tr></thead>
+            <tbody>
+                {% for k in zusammengefuehrt %}
+                <tr>
+                    <td><a href="/kontakte/{{ k.id }}/bearbeiten">{{ k.vorname }} {{ k.nachname }}</a></td>
+                    <td>{{ k.firma }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </fieldset>
+    {% endif %}
+
+    {% if neu %}
+    <fieldset>
+        <legend>Neu angelegt</legend>
+        <p class="empty" style="padding:0 0 0.5rem">
+            Beim Import gelten die Pflichtfelder bewusst nicht — sonst liesse sich ein gewachsenes
+            Adressbuch gar nicht übernehmen. Unvollständige Einträge lassen sich über den Filter
+            <a href="/kontakte?unvollstaendig=1">Unvollständige Kontakte</a> gezielt nacharbeiten.
+        </p>
+        <table>
+            <thead><tr><th>Name</th><th>Firma</th></tr></thead>
+            <tbody>
+                {% for k in neu %}
+                <tr>
+                    <td><a href="/kontakte/{{ k.id }}/bearbeiten">{{ k.vorname }} {{ k.nachname }}</a></td>
+                    <td>{{ k.firma }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </fieldset>
+    {% endif %}
+
+    <div class="actions">
+        <a href="/kontakte" class="btn">Zu den Kontakten</a>
+        <a href="/import" class="btn secondary">Weiteren Import</a>
+    </div>
+</div>
+{% endblock %}

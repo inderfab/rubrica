@@ -46,6 +46,19 @@
         Enthält die vCard-Datei Apple-Gruppen (z. B. beim Export einer ganzen Gruppe statt einzelner
         Kontakte), werden diese automatisch als Ordner übernommen.
     </p>
+    {# Normalerweise richtig: eine bereits bekannte E-Mail-Adresse bedeutet, dass es
+       den Kontakt schon gibt. Beim Wiederherstellen verlorener Kontakte ist es
+       genau falsch - deren Adresse steht ja nach einer Fehlzuordnung beim falschen
+       Menschen, und der Import schoebe sie sofort wieder dorthin (Nutzer-Meldung). #}
+    <label class="ankreuz" style="margin-bottom:0.8rem">
+        <input type="checkbox" name="nie_zusammenfuehren">
+        Immer als neue Kontakte anlegen, auch wenn die E-Mail-Adresse schon vorkommt
+    </label>
+    <p class="empty" style="font-size:0.85rem; padding-top:0">
+        Ohne dieses Häkchen wird eine Karte, deren E-Mail-Adresse Rubrica schon kennt, dem bestehenden
+        Kontakt hinzugefügt statt neu angelegt — sie erscheint dann nicht als eigener Eintrag. Für das
+        Wiederherstellen verlorener Kontakte das Häkchen setzen.
+    </p>
     <button type="submit">Importieren</button>
 </form>
 
