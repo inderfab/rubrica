@@ -10,9 +10,15 @@ from web.main import app
 
 
 def _kontakt(**overrides) -> dict:
+    # "kategorie"/"rolle" bleiben als bequeme Kurzform fuer EIN Funktion/Rolle-Paar
+    # nutzbar (seit kontakt_funktionen die eigentliche Quelle, siehe generator.
+    # _fuer_export_expandieren) - fuer mehrere Paare "funktionen" direkt uebergeben.
+    kategorie = overrides.pop("kategorie", "Fachplaner")
+    rolle = overrides.pop("rolle", "Bauleiterin")
     basis = {
         "id": 1, "vorname": "Anna", "nachname": "Muster", "firma": "Muster AG",
-        "rolle": "Bauleiterin", "kategorie": "Fachplaner", "notizen": "Testnotiz",
+        "funktionen": [{"funktion": kategorie, "rolle": rolle}] if (kategorie or rolle) else [],
+        "notizen": "Testnotiz",
         "telefonnummern": [{"typ": "mobil", "nummer": "079 123 45 67"}],
         "emails": [{"typ": "arbeit", "email": "anna@example.com"}],
         "adressen": [{"typ": "arbeit", "strasse": "Teststrasse 1", "plz": "8000",
@@ -252,6 +258,31 @@ def test_gruppiert_sortiert_funktionsgruppen_nach_bkp_nummer():
     gruppen = generator._gruppiere_fuer_export(kontakte)
     funktionen = [g["funktion"] for g in gruppen]
     assert funktionen == ["104 Baugespann", "297.0 Geometer", "299 Visualisierung"]
+
+
+def test_kontakt_mit_zwei_funktionen_erscheint_in_beiden_gruppen():
+    """Nutzer-Entscheid: hat jemand in einem Projekt zwei Funktionen (z.B. Architekt
+    UND Bauleitung), erscheint er im Export unter BEIDEN - eine Adressliste wird
+    ueber die Funktion durchsucht, nicht ueber den Namen."""
+    kontakte = [_kontakt(id=1, vorname="Anna", nachname="Muster", firma="Muster AG", funktionen=[
+        {"funktion": "291 Architekt/in", "rolle": "Projektleiterin"},
+        {"funktion": "291 Bauleitung", "rolle": "Gestalterische Bauleitung"},
+    ])]
+    gruppen = generator._gruppiere_fuer_export(kontakte)
+    funktionen = [g["funktion"] for g in gruppen]
+    assert funktionen == ["291 Architekt/in", "291 Bauleitung"]
+    # In jeder Gruppe steht die zu DIESER Funktion passende Rolle, nicht irgendeine.
+    rolle_architekt = gruppen[0]["firmen"][0]["kontakte"][0]["rolle"]
+    rolle_bauleitung = gruppen[1]["firmen"][0]["kontakte"][0]["rolle"]
+    assert rolle_architekt == "Projektleiterin"
+    assert rolle_bauleitung == "Gestalterische Bauleitung"
+
+    # Auch in der CSV zweimal, mit je eigener Funktion/Rolle-Spalte.
+    csv_text = generator.kontakte_csv(kontakte).decode("utf-8-sig")
+    zeilen = [z for z in csv_text.strip().splitlines()[1:]]
+    assert len(zeilen) == 2
+    assert any("291 Architekt/in;Projektleiterin" in z for z in zeilen)
+    assert any("291 Bauleitung;Gestalterische Bauleitung" in z for z in zeilen)
 
 
 def test_export_route_nutzt_konfigurierten_firmennamen(tmp_db, monkeypatch):

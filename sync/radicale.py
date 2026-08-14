@@ -143,10 +143,20 @@ def kontakt_zu_vcard(kontakt: dict) -> str:
     ]
     if kontakt.get("firma"):
         zeilen.append(f"ORG:{_escape(kontakt['firma'])}")
-    if kontakt.get("rolle"):
-        zeilen.append(f"TITLE:{_escape(kontakt['rolle'])}")
-    if kontakt.get("kategorie"):
-        zeilen.append(f"CATEGORIES:{_escape(kontakt['kategorie'])}")
+    # Funktion/Rolle sind seit kontakt_funktionen ein Paar, das mehrfach vorkommen
+    # kann - eine vCard hat aber nur EIN TITLE-Feld. TITLE bekommt deshalb alle
+    # Paare als lesbaren Text ("Funktion (Rolle)", mehrere durch "; " getrennt),
+    # damit nichts beim Export nach Kontakte.app stillschweigend verschwindet.
+    # CATEGORIES bleibt zusaetzlich Apples eigenes Mehrfachfeld (kommagetrennt) -
+    # nur die Funktionen, ohne die Rollen, fuer Apples eigene Gruppierung/Suche.
+    funktionen = kontakt.get("funktionen", [])
+    if funktionen:
+        titel = "; ".join(
+            f"{f['funktion']} ({f['rolle']})" if f.get("rolle") else f["funktion"]
+            for f in funktionen
+        )
+        zeilen.append(f"TITLE:{_escape(titel)}")
+        zeilen.append(f"CATEGORIES:{_escape(','.join(f['funktion'] for f in funktionen))}")
     gruppe = _Gruppenzaehler()
     for tel in kontakt.get("telefonnummern", []):
         zeilen += _beschriftete_zeilen(gruppe, "TEL", tel["typ"], tel["nummer"], _STANDARD_TEL_TYPEN)

@@ -211,7 +211,7 @@ def test_uebernehmen_bearbeitet_verwendet_korrigierte_werte(tmp_db, archivio_db,
             "vorname": "Hanna",  # vom Nutzer korrigiert (statt "Anna")
             "nachname": "Beispiel",
             "firma": "Beispiel AG",
-            "rolle": "", "kategorie": "Geologe", "notizen": "",
+            "funktion": "Geologe", "funktion_rolle": "", "notizen": "",
             "telefon_typ": "Direkt", "telefon_nummer": "044 123 45 67",
             "email_typ": "Direkt", "email_adresse": "anna@beispiel.ch",
             "adresse_typ": "arbeit", "adresse_strasse": "Musterstrasse 1", "adresse_plz": "8000", "adresse_ort": "Zürich",
@@ -312,8 +312,11 @@ def test_bulk_bearbeiten_speichert_gemeinsamen_wert_und_uebernimmt_beide(tmp_db,
         "vorname": "", "vorname__gemischt": "1",
         "nachname": "", "nachname__gemischt": "0",
         "firma": "", "firma__gemischt": "1",
+        # Rolle allein (ohne Funktion) ist seit kontakt_funktionen ein Paar ohne
+        # Bedeutung und wird nicht uebernommen (siehe queries._replace_funktionen) -
+        # deshalb hier zusaetzlich eine Funktion mitgeben.
+        "kategorie": "intern", "kategorie__gemischt": "0",
         "rolle": "Mitarbeiter", "rolle__gemischt": "0",
-        "kategorie": "", "kategorie__gemischt": "0",
         "notizen": "", "notizen__gemischt": "0",
     }, follow_redirects=False)
     assert r.status_code == 303
@@ -322,8 +325,9 @@ def test_bulk_bearbeiten_speichert_gemeinsamen_wert_und_uebernimmt_beide(tmp_db,
     assert len(kontakte) == 2
     vornamen = {k["vorname"] for k in kontakte}
     assert vornamen == {"Anna", "Peter"}
-    rollen = {k["rolle"] for k in kontakte}
-    assert rollen == {"Mitarbeiter"}
+    for k in kontakte:
+        funktionen = queries.get_kontakt(tmp_db, k["id"])["funktionen"]
+        assert funktionen == [{"id": funktionen[0]["id"], "funktion": "intern", "rolle": "Mitarbeiter"}]
 
     conn = sqlite3.connect(archivio_db)
     status = {r2[0] for r2 in conn.execute("SELECT status FROM signatur_quelle")}

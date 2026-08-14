@@ -52,13 +52,13 @@ erDiagram
     KONTAKTE ||--o{ VORSCHLAEGE : quelle
     KONTAKTE ||--o{ ADRESSEN : hat
     KONTAKTE ||--o{ URLS : hat
+    KONTAKTE ||--o{ KONTAKT_FUNKTIONEN : hat
+    PROJEKTE ||--o{ KONTAKT_FUNKTIONEN : "grenzt ein (optional)"
     KONTAKTE {
         uuid id PK
         string vorname
         string nachname
         string firma
-        string rolle
-        string kategorie
         string notizen
         string status
         datetime created_at
@@ -92,6 +92,13 @@ erDiagram
         string typ
         string url
     }
+    KONTAKT_FUNKTIONEN {
+        uuid id PK
+        uuid kontakt_id FK
+        uuid projekt_id FK "NULL = Voreinstellung"
+        string funktion
+        string rolle
+    }
     PROJEKTE {
         uuid id PK
         string name
@@ -123,9 +130,20 @@ Feldumfang bewusst an der tatsächlichen Nutzung im bestehenden Apple-Adressbuch
   die Felder vor (danach editierbar). Kontakte werden **direkt angelegt** (kein Freigabe-Gate — Reibung
   würde die Erfassung verhindern), nachträglich korrigierbar. Der bisherige Weg (Import aus Kontakte.app,
   5.6) bleibt zusätzlich bestehen.
-- **Feld „Funktion"** (Fachrichtung: Architekt, Bauingenieur, Geologe, div. Planer …) pro Kontakt, damit der
-  Chef nach Ansprechpartner-Rolle filtern/exportieren kann. Auswahlliste + Freitext (nicht erzwungen).
-  Technisch im bestehenden Feld `kategorie` gespeichert (nur UI-Label „Funktion"), keine DB-Migration.
+- **Felder „Funktion" und „Rolle"** (Fachrichtung: Architekt, Bauingenieur, Geologe, div. Planer … / Titel
+  innerhalb der Fachrichtung: Projektleiter, Bauleiter …) pro Kontakt, damit der Chef nach Ansprechpartner-
+  Rolle filtern/exportieren kann. Auswahlliste + Freitext (nicht erzwungen). Seit 2026-08-14 (Nutzer-Vorgabe)
+  in eigener Tabelle `kontakt_funktionen` statt als Scalar-Spalten auf `kontakte`: ein Kontakt kann mehrere
+  Funktion/Rolle-**Paare** gleichzeitig haben (z. B. „291 Architekt/in" mit Rolle „Projektleiter" UND
+  „291 Bauleitung" mit Rolle „Gestalterische Bauleitung"). `projekt_id` grenzt ein Paar optional auf ein
+  Projekt ein — `NULL` ist die Voreinstellung, die ausserhalb eines bestimmten Projekts gilt und auch die
+  einzige Ebene ist, die die aktuelle Version bereits vollständig bedient (die Web-UI zur
+  projektspezifischen Zuweisung selbst ist eine Folgeversion). Export (PDF/CSV) zeigt einen Kontakt mit
+  mehreren Funktionen unter jeder einzelnen — eine Adressliste wird über die Funktion durchsucht, nicht über
+  den Namen. Die alten Spalten `kontakte.kategorie`/`kontakte.rolle` bleiben in `schema.sql` bestehen (kein
+  `ALTER TABLE DROP COLUMN` auf produktivem Bestand), werden aber von der App nicht mehr gelesen oder
+  beschrieben — die Migration `2026-08-14_kontakt_funktionen_uebernehmen` übernimmt ihren Inhalt einmalig als
+  erste Voreinstellungs-Zeile.
 - **Push-Sync nach Radicale** (`sync/radicale.py`): bei jeder Kontakt-Änderung/-Löschung, Ordner-Zuordnung
   oder Vorschlag-Bestätigung schreibt die App die betroffene(n) vCard(s) per CardDAV `PUT` (Legt die
   Adressbuch-Collection bei Bedarf automatisch per `MKCOL` an). Deterministisches UID-Schema:
@@ -301,9 +319,12 @@ Feldumfang bewusst an der tatsächlichen Nutzung im bestehenden Apple-Adressbuch
   bestätigtem Push — dieselbe Konstruktion wie bei den Ordnern (5.9.1).
 - **Verglichen wird geparster Schnappschuss gegen geparsten Serverstand**, nicht gegen den Datenbankstand,
   und angewandt werden nur die abweichenden Felder. Grund ist eine konkrete Falle: Rubrica schreibt die
-  Funktion als `CATEGORIES` in die vCard, `importer/vcard.py::_parse_kontakt` liefert dafür aber immer `""`
-  zurück. Würde man die geparste vCard einfach anwenden, wäre die Funktion — ein Pflichtfeld — danach leer.
-  Durch den Diff ist der Wert auf beiden Seiten gleich und wird nie angefasst; ein Test sichert das ab.
+  Funktion(en) als `TITLE`/`CATEGORIES` in die vCard, `importer/vcard.py::_parse_kontakt` liefert dafür aber
+  nie verlässlich die ursprünglichen Funktion/Rolle-Paare zurück (mehrere Paare landen als ein
+  zusammengesetzter Text, siehe 4.). Würde man die geparste vCard einfach anwenden, wäre die Funktion — ein
+  Pflichtfeld — danach leer oder falsch zusammengesetzt. `funktionen` ist deshalb (wie zuvor `kategorie`)
+  bewusst kein Vergleichsfeld (`kontakte_app_intake._VERGLEICHSFELDER`) — der Wert wird nie angefasst; ein
+  Test sichert das ab.
 - **Verwerfen pusht Rubricas Stand zurück.** Ohne das bliebe die abgelehnte Änderung auf dem Server stehen
   und wäre weiterhin auf allen Geräten sichtbar — abgelehnt wäre sie dann nur in Rubricas Datenbank.
 - **Dublettenschutz über einen Inhalts-Hash** (`kontakte-app-aenderung:<id>:<hash>`): der Lauf alle fünf

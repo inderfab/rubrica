@@ -24,6 +24,7 @@ from web.contacts import (
     _email_typ_optionen,
     _funktion_optionen,
     _parse_kontakt_form,
+    _primaere_funktion_rolle,
     _telefon_typ_optionen,
     _validiere_pflichtfelder,
 )
@@ -201,6 +202,19 @@ def archivio_bulk_bearbeiten_flyover(
         else:
             felder[feld] = {"wert": "", "gemischt": True}
 
+    # Funktion/Rolle: Archivio-Kandidaten bringen praktisch nie eines von beiden mit
+    # (aus einer E-Mail-Signatur nicht zuverlaessig erkennbar) - trotzdem dieselbe
+    # gleich-oder-gemischt-Logik wie beim Sammel-Bearbeiten der Kontaktliste, falls
+    # doch einmal ein Kandidat schon eine Funktion traegt.
+    primaere = [_primaere_funktion_rolle(k) for k in kandidaten]
+    mehrfach = any(len(k.get("funktionen") or []) > 1 for k in kandidaten)
+    for feld, index in (("kategorie", 0), ("rolle", 1)):
+        werte = {p[index] for p in primaere}
+        if not mehrfach and len(werte) == 1:
+            felder[feld] = {"wert": werte.pop(), "gemischt": False}
+        else:
+            felder[feld] = {"wert": "", "gemischt": True}
+
     return templates.TemplateResponse("archivio_bulk_bearbeiten_modal.html", {
         "request": request, "kandidaten": kandidaten, "emails": emails, "postfaecher": postfaecher,
         "felder": felder, "funktionen": funktionen,
@@ -224,6 +238,12 @@ async def archivio_bulk_bearbeiten_speichern(request: Request):
         if war_gemischt and not wert:
             continue
         updates[feld] = wert
+
+    funktion_gemischt = form.get("kategorie__gemischt", "") == "1"
+    funktion_wert = form.get("kategorie", "").strip()
+    rolle_wert = form.get("rolle", "").strip()
+    if funktion_wert or not funktion_gemischt:
+        updates["funktionen"] = [{"funktion": funktion_wert, "rolle": rolle_wert}] if funktion_wert else []
 
     conn = get_connection()
     try:

@@ -192,12 +192,32 @@ def _bkp_sortier_schluessel(kategorie: str) -> tuple:
     return (1, int(treffer.group(1)), int(treffer.group(2) or 0), kategorie)
 
 
+def _fuer_export_expandieren(kontakte: list[dict]) -> list[dict]:
+    """Baut aus jedem Kontakt eine Kopie je Funktion/Rolle-Paar (siehe
+    kontakt_funktionen) - hat jemand in einem Projekt mehrere Funktionen (z.B.
+    "291 Architekt/in" UND "291 Bauleitung"), erscheint er im Export unter BEIDEN
+    (Nutzer-Entscheid: eine Adressliste wird ueber die Funktion durchsucht, nicht
+    ueber den Namen). Ein Kontakt ganz ohne Funktion erscheint einmal, mit leerer
+    Funktion/Rolle - unveraendertes Verhalten. "kategorie"/"rolle" bleiben als
+    Scalar-Schluessel bestehen, damit der uebrige Sortier-/Gruppier-/PDF-Code
+    unveraendert bleibt - er kennt nur diese beiden Kontakt-Kopien, nie die
+    urspruengliche Paar-Liste."""
+    ergebnis = []
+    for k in kontakte:
+        for f in (k.get("funktionen") or [{}]):
+            kopie = dict(k)
+            kopie["kategorie"] = f.get("funktion", "")
+            kopie["rolle"] = f.get("rolle", "")
+            ergebnis.append(kopie)
+    return ergebnis
+
+
 def _sortiere_fuer_export(kontakte: list[dict]) -> list[dict]:
     """Sortiert Kontakte fuer den Export nach Funktion (BKP-Nummer aufsteigend),
     innerhalb derselben Funktion nach Firma - Personen derselben Firma landen
     dadurch direkt nebeneinander."""
     return sorted(
-        kontakte,
+        _fuer_export_expandieren(kontakte),
         key=lambda k: (_bkp_sortier_schluessel(k.get("kategorie", "")), k.get("firma", ""), k.get("nachname", "")),
     )
 

@@ -8,7 +8,7 @@ from sync import radicale
 def _kontakt(**overrides) -> dict:
     basis = {
         "id": 1, "vorname": "Anna", "nachname": "Muster", "firma": "Muster AG",
-        "rolle": "Bauleiterin", "kategorie": "Fachplaner", "notizen": "Testnotiz",
+        "funktionen": [{"funktion": "Fachplaner", "rolle": "Bauleiterin"}], "notizen": "Testnotiz",
         "telefonnummern": [{"typ": "mobil", "nummer": "079 123 45 67"}],
         "emails": [{"typ": "arbeit", "email": "anna@example.com"}],
         "adressen": [{"typ": "arbeit", "strasse": "Teststrasse 1", "plz": "8000",
@@ -24,7 +24,7 @@ def test_kontakt_zu_vcard_enthaelt_alle_felder():
     assert "UID:kontakt-1" in vcard
     assert "FN:Anna Muster" in vcard
     assert "ORG:Muster AG" in vcard
-    assert "TITLE:Bauleiterin" in vcard
+    assert "TITLE:Fachplaner (Bauleiterin)" in vcard
     assert "CATEGORIES:Fachplaner" in vcard
     # Telefon und E-Mail tragen die Kategorie als X-ABLabel, nicht als TYPE: unsere
     # Kategorien sind keine vCard-Typen, und "Privat Handy" waere als Parameterwert
@@ -41,7 +41,7 @@ def test_kontakt_zu_vcard_enthaelt_alle_felder():
 
 def test_kontakt_zu_vcard_escaped_sonderzeichen():
     vcard = radicale.kontakt_zu_vcard(_kontakt(
-        vorname="A;B", nachname="C,D", firma="", rolle="", kategorie="",
+        vorname="A;B", nachname="C,D", firma="", funktionen=[],
         notizen="Zeile1\nZeile2", telefonnummern=[], emails=[], adressen=[], urls=[],
     ))
     assert "A\\;B" in vcard

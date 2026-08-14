@@ -227,9 +227,15 @@ def parse_signatur(text: str) -> dict:
             vorname, nachname = _name_aus_worten(worte)
             break
 
+    # Erkannt wird nur die Rolle/Titel-Zeile ("Geschäftsführer"), nie eine
+    # Funktion (BKP-Klassierung) - eine Signatur liefert dafuer keine
+    # verlaessliche Grundlage. Ohne Funktion waere das Paar bedeutungslos
+    # (siehe queries._replace_funktionen), deshalb nur bei erkannter Rolle
+    # ueberhaupt ein Paar - mit leerer Funktion, die im Formular nachgetragen wird.
     return {
         "vorname": vorname, "nachname": nachname, "firma": firma,
-        "rolle": rolle, "kategorie": "", "notizen": "",
+        "notizen": "",
+        "funktionen": [{"funktion": "", "rolle": rolle}] if rolle else [],
         "telefonnummern": telefonnummern, "emails": emails,
         "adressen": adressen, "urls": urls,
     }

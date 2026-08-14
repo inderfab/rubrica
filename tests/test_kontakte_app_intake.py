@@ -447,7 +447,8 @@ def test_hintergrund_takt_ist_getrennt():
 
 def _kontakt_mit_push(tmp_db, monkeypatch, **felder):
     """Legt einen Kontakt an und pusht ihn, damit ein Vergleichsstand existiert."""
-    daten = {"vorname": "Anna", "nachname": "Muster", "kategorie": "Architektin",
+    daten = {"vorname": "Anna", "nachname": "Muster",
+             "funktionen": [{"funktion": "Architektin", "rolle": ""}],
              "telefonnummern": [{"typ": "Direkt", "nummer": "044 111 11 11"}],
              "emails": [{"typ": "Direkt", "email": "anna@beispiel.ch"}]}
     daten.update(felder)
@@ -500,7 +501,7 @@ def test_uebernehmen_behaelt_die_funktion(tmp_db, monkeypatch):
     kontakte_app_intake.bestaetige_aenderungs_vorschlag(tmp_db, v)
 
     kontakt = queries.get_kontakt(tmp_db, kontakt_id)
-    assert kontakt["kategorie"] == "Architektin"     # NICHT geleert
+    assert kontakt["funktionen"][0]["funktion"] == "Architektin"     # NICHT geleert
     assert "222 22 22" in kontakt["telefonnummern"][0]["nummer"]
     assert kontakt["vorname"] == "Anna"
 
@@ -722,10 +723,14 @@ def test_neuer_ordner_mit_bestehendem_kontakt_behaelt_zuordnung(tmp_db, monkeypa
 def test_alle_vcard_felder_werden_als_aenderung_erkannt(tmp_db, monkeypatch):
     """Nutzer-Vorgabe: in Kontakte.app soll sich JEDES Feld aendern lassen und jede
     Aenderung als Vorschlag ankommen. Deckt alle Feldarten ab, die eine vCard traegt,
-    inklusive einer reinen Umkategorisierung (Direkt -> Privat)."""
+    inklusive einer reinen Umkategorisierung (Direkt -> Privat). Rolle/Funktion NICHT
+    dabei (siehe kontakte_app_intake._VERGLEICHSFELDER) - TITLE traegt seit
+    kontakt_funktionen einen zusammengesetzten Text fuer beliebig viele Paare, der
+    beim Reimport nicht verlaesslich in einzelne Paare zerlegt werden kann."""
     kontakt_id = queries.create_kontakt(tmp_db, {
-        "vorname": "Anna", "nachname": "Muster", "firma": "Alt AG", "rolle": "Bauleiterin",
-        "kategorie": "Architektin", "notizen": "alte Notiz",
+        "vorname": "Anna", "nachname": "Muster", "firma": "Alt AG",
+        "funktionen": [{"funktion": "Architektin", "rolle": "Bauleiterin"}],
+        "notizen": "alte Notiz",
         "telefonnummern": [{"typ": "Direkt", "nummer": "044 111 11 11"}],
         "emails": [{"typ": "Direkt", "email": "alt@beispiel.ch"}],
         "adressen": [{"typ": "arbeit", "strasse": "Altweg 1", "plz": "8000", "ort": "Zürich",
@@ -737,7 +742,6 @@ def test_alle_vcard_felder_werden_als_aenderung_erkannt(tmp_db, monkeypatch):
 
     faelle = [
         ("Firma", "ORG:Alt AG", "ORG:Neu AG"),
-        ("Rolle", "TITLE:Bauleiterin", "TITLE:Projektleiterin"),
         ("Notizen", "NOTE:alte Notiz", "NOTE:neue Notiz"),
         ("E-Mail", "alt@beispiel.ch", "neu@beispiel.ch"),
         ("Adresse", "Altweg 1", "Neuweg 9"),

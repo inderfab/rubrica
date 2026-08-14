@@ -123,8 +123,14 @@ _LISTENFELDER = {
     "adressen": ("adresse", lambda e: tuple(
         queries._vergleichsform(e.get(f, "")) for f in ("strasse", "plz", "ort"))),
     "urls": ("url", lambda e: queries._vergleichsform(e.get("url", "")).rstrip("/")),
+    # "kategorie" als Markierungs-Name, nicht "funktionen" - dieselbe Abkuerzung
+    # wie im gemeinsamen Formular (_kontakt_bearbeiten_form.html, siehe
+    # web/contacts.py::_VERLAUF_MARKIERUNGS_NAME), damit die Funktion/Rolle-Zeilen
+    # dieselbe gruen/orange-Markierung ansprechen wie beim Bearbeiten/Wiederherstellen.
+    "funktionen": ("kategorie", lambda e: (
+        queries._vergleichsform(e.get("funktion", "")), queries._vergleichsform(e.get("rolle", "")))),
 }
-_SCALARFELDER = ("vorname", "nachname", "firma", "rolle", "kategorie", "notizen")
+_SCALARFELDER = ("vorname", "nachname", "firma", "notizen")
 
 
 def _zusammenfuehrung_vorschau(bestehend: dict, neu: dict) -> tuple:

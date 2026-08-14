@@ -101,7 +101,20 @@ FUNKTIONEN = [
 # Scalar-Felder, die per Mehrfachauswahl gemeinsam bearbeitet werden koennen -
 # Telefonnummern/E-Mails/Adressen/URLs/Ordner bleiben bewusst aussen vor (kein
 # klares "gleich oder verschieden"-Konzept bei unterschiedlicher Anzahl je Kontakt).
-FELDER_MEHRFACHBEARBEITUNG = ["vorname", "nachname", "firma", "rolle", "kategorie", "notizen"]
+# "rolle"/"kategorie" bewusst nicht mehr hier drin - seit kontakt_funktionen sind
+# Funktion und Rolle ein Paar, das mehrfach vorkommen kann (siehe unten,
+# _primaere_funktion_rolle/bulk_funktion_rolle_setzen).
+FELDER_MEHRFACHBEARBEITUNG = ["vorname", "nachname", "firma", "notizen"]
+
+
+def _primaere_funktion_rolle(kontakt: dict) -> tuple:
+    """Erstes Funktion/Rolle-Paar eines Kontakts, oder ("", "") ohne Paar - fuer
+    das Sammel-Bearbeiten, das (anders als das einzelne Bearbeiten) nur EIN
+    Eingabefeldpaar fuer beliebig viele ausgewaehlte Kontakte anbietet."""
+    funktionen = kontakt.get("funktionen") or []
+    if not funktionen:
+        return "", ""
+    return funktionen[0].get("funktion", ""), funktionen[0].get("rolle", "")
 
 # Kategorien fuer Telefon/E-Mail: reine Auswahl, kein Freitext. Die Listen selbst
 # sind unter /einstellungen/kategorien konfigurierbar - hier stehen nur noch die
@@ -115,8 +128,8 @@ EMAIL_TYPEN = settings.EMAIL_TYPEN_STANDARD
 def _funktion_optionen(conn) -> list:
     """Vordefinierte Funktionen + bereits im Bestand vorkommende Zusatzwerte."""
     bestehende = {
-        r["kategorie"] for r in conn.execute(
-            "SELECT DISTINCT kategorie FROM kontakte WHERE kategorie != ''"
+        r["funktion"] for r in conn.execute(
+            "SELECT DISTINCT funktion FROM kontakt_funktionen WHERE funktion != ''"
         )
     }
     return FUNKTIONEN + sorted(bestehende - set(FUNKTIONEN))
@@ -139,6 +152,8 @@ def _adresse_typ_optionen(conn) -> list:
 
 
 def _parse_kontakt_form(form) -> dict:
+    funktion_werte = form.getlist("funktion")
+    funktion_rollen = form.getlist("funktion_rolle")
     telefon_typen = form.getlist("telefon_typ")
     telefon_nummern = form.getlist("telefon_nummer")
     email_typen = form.getlist("email_typ")
@@ -165,9 +180,11 @@ def _parse_kontakt_form(form) -> dict:
         "vorname": form.get("vorname", "").strip(),
         "nachname": form.get("nachname", "").strip(),
         "firma": form.get("firma", "").strip(),
-        "rolle": form.get("rolle", "").strip(),
-        "kategorie": form.get("kategorie", "").strip(),
         "notizen": form.get("notizen", "").strip(),
+        "funktionen": [
+            {"funktion": f.strip(), "rolle": r.strip()}
+            for f, r in zip(funktion_werte, funktion_rollen) if f.strip()
+        ],
         "telefonnummern": [
             {"typ": t.strip() or "Direkt", "nummer": n.strip()}
             for t, n in zip(telefon_typen, telefon_nummern) if n.strip()
@@ -208,7 +225,7 @@ def _validiere_pflichtfelder(daten: dict, ordner_ids: list) -> dict:
         fehlend["vorname"] = True
         fehlend["nachname"] = True
         fehlend["firma"] = True
-    if not daten.get("kategorie", "").strip():
+    if not daten.get("funktionen", []):
         fehlend["kategorie"] = True
     if not any(t.get("nummer", "").strip() for t in daten.get("telefonnummern", [])):
         fehlend["telefon"] = True
@@ -243,7 +260,11 @@ def kontakte_liste(request: Request, suche: str = "", ordner_id: str = "", kateg
             o["anzahl_kontakte"] = conn.execute(
                 "SELECT COUNT(*) FROM kontakte_projekte WHERE projekt_id = ?", (o["id"],)
             ).fetchone()[0]
-        kategorien = sorted({k["kategorie"] for k in conn.execute("SELECT DISTINCT kategorie FROM kontakte WHERE kategorie != ''")})
+        kategorien = sorted({
+            r["funktion"] for r in conn.execute(
+                "SELECT DISTINCT funktion FROM kontakt_funktionen WHERE projekt_id IS NULL AND funktion != ''"
+            )
+        })
     finally:
         conn.close()
     return templates.TemplateResponse("contacts_list.html", {
@@ -553,6 +574,19 @@ def kontakte_bulk_bearbeiten_flyover(request: Request, ids: List[int] = Query(..
         else:
             felder[feld] = {"wert": "", "gemischt": True}
 
+    # Funktion/Rolle: nur das jeweils ERSTE Paar je Kontakt fliesst in den
+    # gleich-oder-gemischt-Vergleich ein - hat ein Kontakt bereits mehrere Paare,
+    # gilt er hier als "gemischt" (die Rueckfrage "welches der mehreren Paare
+    # meinst du" liesse sich in einem einzigen Textfeld nicht sinnvoll beantworten).
+    primaere = [_primaere_funktion_rolle(k) for k in kontakte]
+    mehrfach = any(len(k.get("funktionen") or []) > 1 for k in kontakte)
+    for feld, index in (("kategorie", 0), ("rolle", 1)):
+        werte = {p[index] for p in primaere}
+        if not mehrfach and len(werte) == 1:
+            felder[feld] = {"wert": werte.pop(), "gemischt": False}
+        else:
+            felder[feld] = {"wert": "", "gemischt": True}
+
     return templates.TemplateResponse("kontakt_bulk_bearbeiten_modal.html", {
         "request": request, "kontakte": kontakte, "ids": ids, "felder": felder,
         "ordner": ordner, "funktionen": funktionen, "zurueck_ordner_id": ordner_id,
@@ -575,12 +609,22 @@ async def kontakte_bulk_bearbeiten_speichern(request: Request):
             continue  # unangetastetes "Unterschiedliche Werte"-Feld: nichts aendern
         felder[feld] = wert
 
+    # Funktion/Rolle bewusst getrennt behandelt: ein ausgefuelltes Feld ERSETZT bei
+    # jedem ausgewaehlten Kontakt saemtliche Funktion/Rolle-Paare durch dieses eine -
+    # anders als bei den uebrigen Feldern gibt es hier keine additive Option.
+    funktion_gemischt = form.get("kategorie__gemischt", "") == "1"
+    funktion_wert = form.get("kategorie", "").strip()
+    rolle_wert = form.get("rolle", "").strip()
+    funktion_setzen = not (funktion_gemischt and not funktion_wert)
+
     conn = get_connection()
     try:
         betroffene_ordner_ids = set()
         for kontakt_id in ids:
             if felder:
                 queries.update_kontakt_felder(conn, kontakt_id, felder)
+            if funktion_setzen:
+                queries.bulk_funktion_rolle_setzen(conn, kontakt_id, funktion_wert, rolle_wert)
             betroffene_ordner_ids |= {o["id"] for o in queries.get_kontakt(conn, kontakt_id)["projekte"]}
             radicale.push_kontakt(conn, kontakt_id)
         for oid in betroffene_ordner_ids:

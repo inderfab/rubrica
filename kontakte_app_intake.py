@@ -421,17 +421,18 @@ def pruefe_ordner_mitgliedschaften(conn, client=None) -> dict:
 
 
 # Felder, die aus einer vCard verlaesslich zurueckgelesen werden koennen. Bewusst
-# NICHT enthalten: "kategorie" (die Funktion). Rubrica schreibt sie zwar als
-# CATEGORIES in die vCard, importer/vcard.py._parse_kontakt liefert dafuer aber
-# immer "" zurueck - wuerde man sie mitvergleichen, sae­he jede Aenderung so aus, als
-# haette jemand die Funktion geleert, und das Uebernehmen wuerde ein Pflichtfeld
-# loeschen. Da der Wert in Schnappschuss und Serverstand gleichermassen "" ist,
-# faellt er beim Diff ohnehin nie auf.
-_VERGLEICHSFELDER = ("vorname", "nachname", "firma", "rolle", "notizen",
+# NICHT enthalten: "funktionen" (Funktion/Rolle-Paare, TITLE/CATEGORIES in der
+# vCard, siehe kontakt_funktionen). Rubrica schreibt TITLE als zusammengesetzten
+# "Funktion (Rolle)"-Text fuer mehrere Paare (sync/radicale.py), importer/
+# vcard.py._parse_kontakt liest das aber nie in einzelne Paare zurueck (siehe dort) -
+# wuerde man trotzdem vergleichen, saehe der Import-Schnappschuss (immer ohne
+# Funktion) gegen den echten Serverstand wie eine staendige Aenderung aus, und das
+# Uebernehmen wuerde ein Pflichtfeld leeren.
+_VERGLEICHSFELDER = ("vorname", "nachname", "firma", "notizen",
                      "telefonnummern", "emails", "adressen", "urls")
 
 _FELD_BESCHRIFTUNG = {
-    "vorname": "Vorname", "nachname": "Nachname", "firma": "Firma", "rolle": "Rolle",
+    "vorname": "Vorname", "nachname": "Nachname", "firma": "Firma",
     "notizen": "Notizen", "telefonnummern": "Telefon", "emails": "E-Mail",
     "adressen": "Adresse", "urls": "Web",
 }

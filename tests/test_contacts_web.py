@@ -12,7 +12,8 @@ def _client(tmp_db):
 def test_unvollstaendige_kontakte_filter_zeigt_nur_kontakte_mit_fehlenden_pflichtfeldern(tmp_db):
     projekt_id = queries.get_or_create_projekt(tmp_db, "Testordner")
     queries.create_kontakt(tmp_db, {
-        "vorname": "Anna", "nachname": "Vollstaendig", "kategorie": "Geologe",
+        "vorname": "Anna", "nachname": "Vollstaendig",
+        "funktionen": [{"funktion": "Geologe", "rolle": ""}],
         "telefonnummern": [{"typ": "Direkt", "nummer": "079 111 22 33"}],
         "emails": [{"typ": "Direkt", "email": "anna@beispiel.ch"}],
         "adressen": [{"typ": "arbeit", "strasse": "Musterstrasse 1", "plz": "8000", "ort": "Zürich"}],
@@ -72,7 +73,7 @@ def test_kontakt_anlegen_speichert_und_leitet_um(tmp_db):
     client = _client(tmp_db)
     r = client.post("/kontakte/neu", data={
         "vorname": "Bob", "nachname": "Beispiel", "firma": "Beispiel GmbH",
-        "kategorie": "Geologe", "rolle": "",
+        "funktion": "Geologe", "funktion_rolle": "",
         "telefon_typ": "mobil", "telefon_nummer": "079 111 22 33",
         "email_typ": "arbeit", "email_adresse": "bob@beispiel.ch",
         "adresse_typ": "arbeit", "adresse_strasse": "Musterstrasse 1", "adresse_plz": "8000", "adresse_ort": "Zürich",
@@ -85,13 +86,13 @@ def test_kontakt_anlegen_speichert_und_leitet_um(tmp_db):
     assert len(kontakte) == 1
     k = kontakte[0]
     assert k["nachname"] == "Beispiel"
-    assert k["kategorie"] == "Geologe"
+    assert k["funktionen"][0]["funktion"] == "Geologe"
     assert k["telefonnummern"][0]["nummer"] == "+41 79 111 22 33"
     assert k["projekte"][0]["name"] == "Testprojekt"
 
 
 _PFLICHTFELDER_KOMPLETT = {
-    "kategorie": "Geologe",
+    "funktion": "Geologe", "funktion_rolle": "",
     "telefon_typ": "mobil", "telefon_nummer": "079 111 22 33",
     "email_typ": "arbeit", "email_adresse": "bruno@beispiel.ch",
     "adresse_typ": "arbeit", "adresse_strasse": "Musterstrasse 1", "adresse_plz": "8000", "adresse_ort": "Zürich",
@@ -313,10 +314,12 @@ def test_update_kontakt_felder_laesst_kontaktdaten_arrays_unangetastet(tmp_db):
         "vorname": "Anna", "nachname": "Muster",
         "telefonnummern": [{"typ": "mobil", "nummer": "079 000 00 00"}],
     })
-    queries.update_kontakt_felder(tmp_db, kontakt_id, {"firma": "Neue Firma", "rolle": "Chefin"})
+    # "rolle"/"kategorie" bewusst NICHT hier drin - seit kontakt_funktionen kein
+    # Scalar-Feld mehr, siehe queries.bulk_funktion_rolle_setzen.
+    queries.update_kontakt_felder(tmp_db, kontakt_id, {"firma": "Neue Firma", "notizen": "Notiz"})
     kontakt = queries.get_kontakt(tmp_db, kontakt_id)
     assert kontakt["firma"] == "Neue Firma"
-    assert kontakt["rolle"] == "Chefin"
+    assert kontakt["notizen"] == "Notiz"
     assert kontakt["telefonnummern"][0]["nummer"] == "+41 79 000 00 00"  # unveraendert
 
 
@@ -335,52 +338,69 @@ def test_kategorie_umstellen_nur_passende_eintraege(tmp_db):
 
 
 def test_feld_werte_uebersicht_zaehlt_kontakte_pro_wert(tmp_db):
-    queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "A", "kategorie": "Architekt/in"})
-    queries.create_kontakt(tmp_db, {"vorname": "Bea", "nachname": "B", "kategorie": "Architekt/in"})
-    queries.create_kontakt(tmp_db, {"vorname": "Chris", "nachname": "C", "kategorie": "Bauleiter/in"})
-    queries.create_kontakt(tmp_db, {"vorname": "Dora", "nachname": "D", "kategorie": ""})
+    queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "A",
+                                     "funktionen": [{"funktion": "Architekt/in", "rolle": ""}]})
+    queries.create_kontakt(tmp_db, {"vorname": "Bea", "nachname": "B",
+                                     "funktionen": [{"funktion": "Architekt/in", "rolle": ""}]})
+    queries.create_kontakt(tmp_db, {"vorname": "Chris", "nachname": "C",
+                                     "funktionen": [{"funktion": "Bauleiter/in", "rolle": ""}]})
+    queries.create_kontakt(tmp_db, {"vorname": "Dora", "nachname": "D", "funktionen": []})
 
     werte = {w["wert"]: w["anzahl"] for w in queries.feld_werte_uebersicht(tmp_db, "kategorie")}
     assert werte == {"Architekt/in": 2, "Bauleiter/in": 1}
 
 
 def test_feld_wert_umbenennen_aendert_alle_betroffenen_kontakte(tmp_db):
-    k1 = queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "A", "kategorie": "Architeckt/in"})
-    k2 = queries.create_kontakt(tmp_db, {"vorname": "Bea", "nachname": "B", "kategorie": "Architeckt/in"})
-    k3 = queries.create_kontakt(tmp_db, {"vorname": "Chris", "nachname": "C", "kategorie": "Bauleiter/in"})
+    k1 = queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "A",
+                                          "funktionen": [{"funktion": "Architeckt/in", "rolle": ""}]})
+    k2 = queries.create_kontakt(tmp_db, {"vorname": "Bea", "nachname": "B",
+                                          "funktionen": [{"funktion": "Architeckt/in", "rolle": ""}]})
+    k3 = queries.create_kontakt(tmp_db, {"vorname": "Chris", "nachname": "C",
+                                          "funktionen": [{"funktion": "Bauleiter/in", "rolle": ""}]})
 
     betroffene = queries.feld_wert_umbenennen(tmp_db, "kategorie", "Architeckt/in", "Architekt/in")
 
     assert set(betroffene) == {k1, k2}
-    assert queries.get_kontakt(tmp_db, k1)["kategorie"] == "Architekt/in"
-    assert queries.get_kontakt(tmp_db, k2)["kategorie"] == "Architekt/in"
-    assert queries.get_kontakt(tmp_db, k3)["kategorie"] == "Bauleiter/in"  # unberuehrt
+    assert queries.get_kontakt(tmp_db, k1)["funktionen"][0]["funktion"] == "Architekt/in"
+    assert queries.get_kontakt(tmp_db, k2)["funktionen"][0]["funktion"] == "Architekt/in"
+    assert queries.get_kontakt(tmp_db, k3)["funktionen"][0]["funktion"] == "Bauleiter/in"  # unberuehrt
 
 
 def test_feld_wert_umbenennen_mit_leerem_neuen_wert_entfernt_zuweisung(tmp_db):
-    k1 = queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "A", "rolle": "Praktikant"})
+    """Bei "rolle" wird nur die Rolle geleert, die Funktion (Pflichtfeld) bleibt -
+    anders als bei "kategorie" (Funktion), wo ein leerer neuer Wert die ganze
+    Zeile entfernt (siehe queries.feld_wert_umbenennen)."""
+    k1 = queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "A",
+                                          "funktionen": [{"funktion": "Praktikum", "rolle": "Praktikant"}]})
     queries.feld_wert_umbenennen(tmp_db, "rolle", "Praktikant", "")
-    assert queries.get_kontakt(tmp_db, k1)["rolle"] == ""
+    funktionen = queries.get_kontakt(tmp_db, k1)["funktionen"]
+    assert funktionen[0]["funktion"] == "Praktikum"
+    assert funktionen[0]["rolle"] == ""
 
 
 def test_feld_wert_umbenennen_kann_zusammenfuehren(tmp_db):
-    k1 = queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "A", "rolle": "Chef"})
-    k2 = queries.create_kontakt(tmp_db, {"vorname": "Bea", "nachname": "B", "rolle": "Geschaeftsleitung"})
+    k1 = queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "A",
+                                          "funktionen": [{"funktion": "Geschaeftsleitung", "rolle": "Chef"}]})
+    k2 = queries.create_kontakt(tmp_db, {"vorname": "Bea", "nachname": "B",
+                                          "funktionen": [{"funktion": "Geschaeftsleitung", "rolle": "Geschaeftsleitung"}]})
     queries.feld_wert_umbenennen(tmp_db, "rolle", "Chef", "Geschaeftsleitung")
-    assert queries.get_kontakt(tmp_db, k1)["rolle"] == "Geschaeftsleitung"
-    assert queries.get_kontakt(tmp_db, k2)["rolle"] == "Geschaeftsleitung"
+    assert queries.get_kontakt(tmp_db, k1)["funktionen"][0]["rolle"] == "Geschaeftsleitung"
+    assert queries.get_kontakt(tmp_db, k2)["funktionen"][0]["rolle"] == "Geschaeftsleitung"
 
 
 def test_feld_wert_umbenennen_ignoriert_unbekanntes_feld(tmp_db):
-    k1 = queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "A", "rolle": "Chef"})
+    k1 = queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "A",
+                                          "funktionen": [{"funktion": "Geschaeftsleitung", "rolle": "Chef"}]})
     betroffene = queries.feld_wert_umbenennen(tmp_db, "firma", "Chef", "Andere")
     assert betroffene == []
-    assert queries.get_kontakt(tmp_db, k1)["rolle"] == "Chef"
+    assert queries.get_kontakt(tmp_db, k1)["funktionen"][0]["rolle"] == "Chef"
 
 
 def test_funktionen_rollen_uebersicht_seite_zeigt_werte_und_anzahl(tmp_db):
-    queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "A", "kategorie": "Architekt/in"})
-    queries.create_kontakt(tmp_db, {"vorname": "Bea", "nachname": "B", "rolle": "Chefin"})
+    queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "A",
+                                     "funktionen": [{"funktion": "Architekt/in", "rolle": ""}]})
+    queries.create_kontakt(tmp_db, {"vorname": "Bea", "nachname": "B",
+                                     "funktionen": [{"funktion": "Geschaeftsleitung", "rolle": "Chefin"}]})
 
     r = _client(tmp_db).get("/einstellungen/funktionen-rollen")
     assert r.status_code == 200
@@ -389,7 +409,8 @@ def test_funktionen_rollen_uebersicht_seite_zeigt_werte_und_anzahl(tmp_db):
 
 
 def test_funktionen_rollen_umbenennen_route_aendert_kontakte(tmp_db):
-    k1 = queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "A", "kategorie": "Architeckt/in"})
+    k1 = queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "A",
+                                          "funktionen": [{"funktion": "Architeckt/in", "rolle": ""}]})
     client = _client(tmp_db)
 
     r = client.post("/einstellungen/funktionen-rollen/umbenennen", data={
@@ -397,25 +418,51 @@ def test_funktionen_rollen_umbenennen_route_aendert_kontakte(tmp_db):
     }, follow_redirects=False)
 
     assert r.status_code == 303
-    assert queries.get_kontakt(tmp_db, k1)["kategorie"] == "Architekt/in"
+    assert queries.get_kontakt(tmp_db, k1)["funktionen"][0]["funktion"] == "Architekt/in"
 
 
 def test_bulk_bearbeiten_speichern_laesst_gleiche_felder_unveraendert_wenn_nicht_editiert(tmp_db):
-    k1 = queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster", "rolle": "Chefin"})
-    k2 = queries.create_kontakt(tmp_db, {"vorname": "Bob", "nachname": "Beispiel", "rolle": "Chefin"})
+    """firma bleibt unangetastet, weil als "gemischt" markiert und leer gelassen -
+    Funktion/Rolle sind bewusst NICHT dabei: die sind seit kontakt_funktionen ein
+    Ersetzen-Paar ohne "unangetastet lassen"-Option (siehe
+    queries.bulk_funktion_rolle_setzen), separat getestet."""
+    k1 = queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster", "firma": "Firma A"})
+    k2 = queries.create_kontakt(tmp_db, {"vorname": "Bob", "nachname": "Beispiel", "firma": "Firma A"})
     client = _client(tmp_db)
     client.post("/kontakte/bulk-bearbeiten", data={
         "ids": [str(k1), str(k2)],
         "vorname": "", "vorname__gemischt": "1",
         "nachname": "", "nachname__gemischt": "1",
-        "firma": "", "firma__gemischt": "0",
-        "rolle": "Chefin", "rolle__gemischt": "0",
-        "kategorie": "", "kategorie__gemischt": "0",
+        "firma": "", "firma__gemischt": "1",
+        "kategorie": "", "kategorie__gemischt": "1",
+        "rolle": "", "rolle__gemischt": "1",
         "notizen": "", "notizen__gemischt": "0",
         "zurueck_ordner_id": "",
     }, follow_redirects=False)
-    assert queries.get_kontakt(tmp_db, k1)["rolle"] == "Chefin"
-    assert queries.get_kontakt(tmp_db, k2)["rolle"] == "Chefin"
+    assert queries.get_kontakt(tmp_db, k1)["firma"] == "Firma A"
+    assert queries.get_kontakt(tmp_db, k2)["firma"] == "Firma A"
+
+
+def test_bulk_bearbeiten_speichern_ersetzt_funktion_rolle_bei_allen(tmp_db):
+    k1 = queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster",
+                                          "funktionen": [{"funktion": "Alt", "rolle": "Alt-Rolle"}]})
+    k2 = queries.create_kontakt(tmp_db, {"vorname": "Bob", "nachname": "Beispiel"})
+    client = _client(tmp_db)
+    client.post("/kontakte/bulk-bearbeiten", data={
+        "ids": [str(k1), str(k2)],
+        "vorname": "", "vorname__gemischt": "1",
+        "nachname": "", "nachname__gemischt": "1",
+        "firma": "", "firma__gemischt": "1",
+        "kategorie": "Architekt/in", "kategorie__gemischt": "1",
+        "rolle": "Projektleiter", "rolle__gemischt": "1",
+        "notizen": "", "notizen__gemischt": "0",
+        "zurueck_ordner_id": "",
+    }, follow_redirects=False)
+    for kid in (k1, k2):
+        funktionen = queries.get_kontakt(tmp_db, kid)["funktionen"]
+        assert len(funktionen) == 1
+        assert funktionen[0]["funktion"] == "Architekt/in"
+        assert funktionen[0]["rolle"] == "Projektleiter"
 
 
 def test_bulk_kategorie_umstellen_telefon_bei_allen_ausgewaehlten(tmp_db):
@@ -493,7 +540,8 @@ def test_reiner_firmeneintrag_laesst_sich_anlegen(tmp_db):
     projekt_id = queries.get_or_create_projekt(tmp_db, "Testprojekt")
 
     r = TestClient(app).post("/kontakte/neu", data={
-        "vorname": "", "nachname": "", "firma": "Muster Bauamt", "kategorie": "Behörde/Amt",
+        "vorname": "", "nachname": "", "firma": "Muster Bauamt",
+        "funktion": "Behörde/Amt", "funktion_rolle": "",
         "telefon_typ": "Direkt", "telefon_nummer": "+41 52 111 11 11",
         "email_typ": "Direkt", "email_adresse": "info@beispiel.ch",
         "adresse_typ": "arbeit", "adresse_strasse": "Musterstrasse 1",
@@ -526,7 +574,8 @@ def test_ganz_ohne_name_und_firma_bleibt_abgelehnt(tmp_db):
 
 def _vollstaendiger_kontakt(tmp_db, projekt_id, strasse="Alte Gasse 3", ort="Winterthur"):
     kid = queries.create_kontakt(tmp_db, {
-        "vorname": "Anna", "nachname": "Muster", "kategorie": "Geologe",
+        "vorname": "Anna", "nachname": "Muster",
+        "funktionen": [{"funktion": "Geologe", "rolle": ""}],
         "telefonnummern": [{"typ": "Direkt", "nummer": "+41 79 111 22 33"}],
         "emails": [{"typ": "Direkt", "email": "anna@beispiel.ch"}],
         "adressen": [{"typ": "Privat", "strasse": strasse, "plz": "8400", "ort": ort,
@@ -585,7 +634,7 @@ def test_wiederherstellen_speichern_setzt_alten_stand_und_protokolliert_sich_sel
 
     ereignis_id = queries.kontakt_verlauf(tmp_db, kid)[0]["id"]
     r = TestClient(app).post(f"/kontakte/{kid}/verlauf/{ereignis_id}/wiederherstellen", data={
-        "vorname": "Anna", "nachname": "Muster", "kategorie": "Geologe",
+        "vorname": "Anna", "nachname": "Muster", "funktion": "Geologe", "funktion_rolle": "",
         "telefon_typ": "Direkt", "telefon_nummer": "+41 79 111 22 33",
         "email_typ": "Direkt", "email_adresse": "anna@beispiel.ch",
         "adresse_typ": "Privat", "adresse_strasse": "Alte Gasse 3", "adresse_plz": "8400",

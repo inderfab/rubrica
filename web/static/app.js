@@ -79,7 +79,16 @@ const ROW_SPECS = {
         ['adresse_plz', 'PLZ', '4.5rem'], ['adresse_ort', 'Ort', null],
         ['adresse_region', 'Kanton', '5rem'], ['adresse_land', 'Land', '6rem'],
     ]},
+    // Funktion/Rolle-Paar (siehe db/migrations.py::kontakt_funktionen): "funktion"
+    // braucht wie "url_typ" die Freitext-Combobox statt eines festen Auswahlfelds
+    // (die vordefinierten BKP-Funktionen sind ein Vorschlag, kein Zwang, siehe
+    // web/contacts.py::FUNKTIONEN) - deshalb in COMBOBOX_TYP_INPUTS unten.
+    funktion: {cls: 'tel-row', typInput: 'funktion', fields: [['funktion_rolle', 'Rolle (optional)', null]]},
 };
+
+// typInputs, die als Freitext-Combobox statt als <select> gerendert werden -
+// siehe addRow() weiter unten.
+const COMBOBOX_TYP_INPUTS = ['url_typ', 'funktion'];
 
 function addRow(containerId, kind, button) {
     const container = document.getElementById(containerId);
@@ -92,7 +101,7 @@ function addRow(containerId, kind, button) {
         // jeder neuen Zeile ein beliebiger Wert entstehen koennen (Nutzer-Vorgabe,
         // siehe Migration 2026-08-06). Adresse/URL nutzen weiterhin Freitext.
         const optionen = JSON.parse((button && button.dataset.optionen) || '[]');
-        if (spec.typInput !== 'url_typ') {
+        if (!COMBOBOX_TYP_INPUTS.includes(spec.typInput)) {
             const auswahl = document.createElement('select');
             auswahl.name = spec.typInput;
             auswahl.className = 'typ-auswahl';
@@ -123,13 +132,17 @@ function addRow(containerId, kind, button) {
         }
         const wrapper = document.createElement('div');
         wrapper.className = 'combobox';
-        wrapper.style.width = '8rem';
+        // "url_typ" ist ein kurzes Wort (z.B. "homepage"), "funktion" dagegen lange
+        // BKP-Bezeichnungen ("291 Architekt/in") - eigene Breite je typInput statt
+        // einer fuer beide passenden.
+        wrapper.style.width = spec.typInput === 'url_typ' ? '8rem' : '100%';
         wrapper.dataset.optionen = (button && button.dataset.optionen) || '[]';
         const input = document.createElement('input');
         input.type = 'text';
         input.className = 'combobox-input';
         input.name = spec.typInput;
         input.autocomplete = 'off';
+        if (spec.typInput === 'funktion') input.placeholder = 'z. B. Bauingenieur/in (Statik)';
         input.addEventListener('input', rubricaComboboxInput);
         input.addEventListener('focus', rubricaComboboxInput);
         input.addEventListener('blur', rubricaComboboxBlur);

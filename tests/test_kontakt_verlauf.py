@@ -48,20 +48,23 @@ def test_geaenderte_adresse_erzeugt_verlauf_eintrag(tmp_db):
 
 def test_funktion_wird_im_verlauf_erfasst(tmp_db):
     """Regression: kontakte_app_intake._VERGLEICHSFELDER (fuer den Kontakte.app-
-    Abgleich gedacht) laesst "kategorie" (= Funktion) aus, weil eine vCard dafuer
-    keine verlaessliche Entsprechung liefert. Der Verlauf braucht eine EIGENE
-    Feldliste, sonst faellt ausgerechnet eines der meistgenutzten Felder heraus."""
-    kid = queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster", "kategorie": "Architekt/in"})
+    Abgleich gedacht) laesst "funktionen" (Funktion/Rolle-Paare) aus, weil eine
+    vCard dafuer keine verlaessliche Entsprechung liefert. Der Verlauf braucht eine
+    EIGENE Feldliste, sonst faellt ausgerechnet eines der meistgenutzten Felder heraus."""
+    kid = queries.create_kontakt(tmp_db, {
+        "vorname": "Anna", "nachname": "Muster",
+        "funktionen": [{"funktion": "Architekt/in", "rolle": ""}],
+    })
     kontakt = queries.get_kontakt(tmp_db, kid)
     neu = dict(kontakt)
-    neu["kategorie"] = "Bauingenieur/in (Statik)"
+    neu["funktionen"] = [{"funktion": "Bauingenieur/in (Statik)", "rolle": "Teilprojektleiter"}]
     queries.update_kontakt(tmp_db, kid, neu)
 
     verlauf = queries.kontakt_verlauf(tmp_db, kid)
     assert len(verlauf) == 1
-    assert verlauf[0]["felder"][0]["feld"] == "kategorie"
+    assert verlauf[0]["felder"][0]["feld"] == "funktionen"
     assert verlauf[0]["felder"][0]["alt"] == "Architekt/in"
-    assert verlauf[0]["felder"][0]["neu"] == "Bauingenieur/in (Statik)"
+    assert verlauf[0]["felder"][0]["neu"] == "Bauingenieur/in (Statik) (Teilprojektleiter)"
 
 
 def test_nur_schreibweise_unterschied_erzeugt_keinen_verlauf(tmp_db):

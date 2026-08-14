@@ -61,7 +61,7 @@ def test_adresse():
 
 def test_rolle():
     d = parse_signatur(SIG_TYPISCH)
-    assert "Projektleiterin" in d["rolle"]
+    assert "Projektleiterin" in d["funktionen"][0]["rolle"]
 
 
 def test_mobil_ohne_label_per_vorwahl():

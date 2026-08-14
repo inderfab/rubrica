@@ -371,6 +371,10 @@ input.gemischt::placeholder, textarea.gemischt::placeholder { color: var(--text-
 .formular-schmal .field input[type="tel"] { width: 100%; }
 .formular-schmal .tel-row input,
 .formular-schmal .mail-row input { flex: 1; min-width: 0; }
+/* Funktion-Zeile: die Funktion-Combobox (siehe Funktion/Rolle-Paare,
+   kontakt_funktionen) braucht denselben Platz wie ein normales input - ohne das
+   bleibt der Combobox-Wrapper als Flex-Kind auf seiner Inhaltsbreite stehen. */
+.formular-schmal .tel-row .combobox { flex: 1; min-width: 0; }
 .formular-schmal .tel-row, .formular-schmal .mail-row { margin-bottom: 0.35rem; }
 .formular-schmal .tel-row:last-child, .formular-schmal .mail-row:last-child { margin-bottom: 0; }
 /* Telefon und E-Mail nebeneinander: die Kategorie-Auswahl darf hier schmaler

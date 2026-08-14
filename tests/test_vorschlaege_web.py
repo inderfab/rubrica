@@ -15,7 +15,8 @@ def _vollstaendig(**felder) -> dict:
     Uebernehmen (web/vorschlaege.py) muessen Fixtures, die uebernommen werden sollen,
     vollstaendig sein."""
     daten = {
-        "vorname": "Anna", "nachname": "Muster", "kategorie": "Architektin",
+        "vorname": "Anna", "nachname": "Muster",
+        "funktionen": [{"funktion": "Architektin", "rolle": ""}],
         "telefonnummern": [{"typ": "Direkt", "nummer": "044 111 11 11"}],
         "emails": [{"typ": "Direkt", "email": "anna@beispiel.ch"}],
         "adressen": [{"typ": "arbeit", "strasse": "Musterstrasse 1", "plz": "8000",
@@ -89,7 +90,7 @@ def test_uebernehmen_bearbeitet_speichert_korrigierte_werte(tmp_db):
         tmp_db, {"vorname": "Anna", "nachname": "Muster", "telefonnummern": [], "emails": []}, quelle="mail",
     )
     r = _client().post(f"/vorschlaege/{vorschlag_id}/uebernehmen-bearbeitet", data={
-        "vorname": "Anna", "nachname": "Korrigiert", "firma": "", "kategorie": "Geologe", "rolle": "",
+        "vorname": "Anna", "nachname": "Korrigiert", "firma": "", "funktion": "Geologe", "funktion_rolle": "",
         "telefon_typ": "Direkt", "telefon_nummer": "079 111 22 33",
         "email_typ": "Direkt", "email_adresse": "anna@beispiel.ch",
         "adresse_typ": "arbeit", "adresse_strasse": "Musterstrasse 1", "adresse_plz": "8000", "adresse_ort": "Zürich",
@@ -370,7 +371,8 @@ def test_aenderung_bearbeiten_zeigt_neue_werte(tmp_db):
     """Vorher fuehrte "Kontakt ansehen" aus der Vorschlaege-Seite heraus und zeigte
     den ALTEN Stand. Das Flyover zeigt den Kontakt inklusive der neuen Werte."""
     kontakt_id = queries.create_kontakt(tmp_db, {
-        "vorname": "Anna", "nachname": "Muster", "kategorie": "Architektin",
+        "vorname": "Anna", "nachname": "Muster",
+        "funktionen": [{"funktion": "Architektin", "rolle": ""}],
         "telefonnummern": [{"typ": "Direkt", "nummer": "044 111 11 11"}]})
     vorschlag_id = queries.create_vorschlag(tmp_db, {
         "typ": "aenderung", "vorname": "Anna", "nachname": "Muster", "firma": "",
@@ -470,7 +472,8 @@ def test_zusammenfuehren_zeigt_erst_die_vorschau(tmp_db):
     dazu — so fallen Verdoppelungen auf, bevor sie entstehen."""
     projekt_id = queries.get_or_create_projekt(tmp_db, "Testprojekt")
     bestehender_id = queries.create_kontakt(tmp_db, {
-        "vorname": "Anna", "nachname": "Muster", "kategorie": "Architektin",
+        "vorname": "Anna", "nachname": "Muster",
+        "funktionen": [{"funktion": "Architektin", "rolle": ""}],
         "adressen": [{"typ": "Arbeit", "strasse": "Musterstrasse 1", "plz": "8000",
                       "ort": "Zürich", "region": "", "land": ""}],
         "telefonnummern": [{"typ": "Direkt", "nummer": "+41 52 111 11 11"}],
@@ -495,6 +498,29 @@ def test_zusammenfuehren_zeigt_erst_die_vorschau(tmp_db):
     assert "tel-row wert-neu" in r.text
     assert r.text.count('name="adresse_strasse"') == 1
     assert "musterstrasse 1" not in r.text
+    # Die bestehende Funktion bleibt gruen markiert, der Vorschlag hat keine
+    # eigene mitgebracht (Regression: _SCALARFELDER enthielt vorher "kategorie"
+    # als Scalar-Feld, das seit kontakt_funktionen gar nicht mehr existiert -
+    # die Funktion waere in der Vorschau unsichtbar geblieben).
+    assert "Architektin" in r.text
+    assert 'tel-row wert-bestehend">' in r.text
+
+
+def test_zusammenfuehren_vorschau_markiert_neue_funktion_orange(tmp_db):
+    """Regression: _SCALARFELDER (vorschlaege.py) enthielt "kategorie"/"rolle" als
+    Scalar-Felder, die seit kontakt_funktionen nicht mehr existieren - eine vom
+    Vorschlag mitgebrachte Funktion waere in der Zusammenfuehren-Vorschau spurlos
+    verschwunden, statt orange markiert zu erscheinen."""
+    bestehender_id = queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster"})
+    vorschlag_id = queries.create_vorschlag(tmp_db, {
+        "vorname": "Anna", "nachname": "Muster",
+        "funktionen": [{"funktion": "291 Architekt/in", "rolle": "Projektleiterin"}],
+    }, kontakt_id=bestehender_id, quelle="mail")
+
+    r = _client().get(f"/vorschlaege/{vorschlag_id}/zusammenfuehren-flyover")
+    assert r.status_code == 200
+    assert "291 Architekt/in" in r.text
+    assert 'tel-row wert-neu">' in r.text
 
 
 def test_zusammenfuehren_speichern_schreibt_auf_den_bestehenden_kontakt(tmp_db):
@@ -508,7 +534,8 @@ def test_zusammenfuehren_speichern_schreibt_auf_den_bestehenden_kontakt(tmp_db):
         kontakt_id=bestehender_id, quelle="mail")
 
     r = _client().post(f"/vorschlaege/{vorschlag_id}/zusammenfuehren-speichern", data={
-        "vorname": "Anna", "nachname": "Muster", "firma": "", "kategorie": "Architektin", "rolle": "",
+        "vorname": "Anna", "nachname": "Muster", "firma": "",
+        "funktion": "Architektin", "funktion_rolle": "",
         "telefon_typ": "Direkt", "telefon_nummer": "+41 52 111 11 11",
         "email_typ": "Direkt", "email_adresse": "anna@beispiel.ch",
         "adresse_typ": "Arbeit", "adresse_strasse": "Musterstrasse 1", "adresse_plz": "8000",
@@ -519,5 +546,5 @@ def test_zusammenfuehren_speichern_schreibt_auf_den_bestehenden_kontakt(tmp_db):
     assert r.status_code == 303
     assert len(queries.list_kontakte(tmp_db)) == 1, "es darf kein zweiter Kontakt entstehen"
     kontakt = queries.get_kontakt(tmp_db, bestehender_id)
-    assert kontakt["kategorie"] == "Architektin"
+    assert kontakt["funktionen"][0]["funktion"] == "Architektin"
     assert queries.get_vorschlag(tmp_db, vorschlag_id)["status"] == "bestaetigt"

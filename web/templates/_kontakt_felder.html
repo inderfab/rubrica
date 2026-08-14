@@ -31,11 +31,14 @@
         <input type="text" name="firma" value="{{ kontakt.firma if kontakt else '' }}"
                class="{{ 'feld-fehler' if fehlende_felder.firma }}">
     </div>
+    {# Nur EIN Funktion/Rolle-Paar hier (bewusst kompakt, siehe Kommentar oben) -
+       weitere Paare lassen sich danach im vollen Bearbeiten-Formular ergaenzen. #}
+    {% set erste_funktion = (kontakt.funktionen[0] if kontakt and kontakt.funktionen else {}) %}
     <div class="field">
         <label>Funktion</label>
         <div class="combobox" data-optionen='{{ funktionen|tojson }}'>
-            <input type="text" class="combobox-input {{ 'feld-fehler' if fehlende_felder.kategorie }}" name="kategorie" autocomplete="off"
-                   placeholder="z. B. Bauingenieur/in (Statik)" value="{{ kontakt.kategorie if kontakt else '' }}"
+            <input type="text" class="combobox-input {{ 'feld-fehler' if fehlende_felder.kategorie }}" name="funktion" autocomplete="off"
+                   placeholder="z. B. Bauingenieur/in (Statik)" value="{{ erste_funktion.funktion or '' }}"
                    oninput="rubricaComboboxInput(event)" onfocus="rubricaComboboxInput(event)"
                    onblur="rubricaComboboxBlur(event)">
             <ul class="combobox-liste"></ul>
@@ -43,7 +46,7 @@
     </div>
     <div class="field">
         <label>Rolle / Titel <span style="color:#86868b">(optional)</span></label>
-        <input type="text" name="rolle" value="{{ kontakt.rolle if kontakt else '' }}"
+        <input type="text" name="funktion_rolle" value="{{ erste_funktion.rolle or '' }}"
                placeholder="z. B. Geschäftsführer">
     </div>
 </div>

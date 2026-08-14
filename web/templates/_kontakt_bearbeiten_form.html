@@ -44,22 +44,32 @@
             <input type="text" name="firma" value="{{ kontakt.firma if kontakt else '' }}"
                class="{{ 'feld-fehler' if fehlende_felder.firma }}{{ markierung("firma") }}">
         </div>
-        <div class="field">
-            <label>Rolle</label>
-            <input type="text" name="rolle" value="{{ kontakt.rolle if kontakt else '' }}"
-                   class="{{ markierung("rolle") }}">
-        </div>
-        <div class="field">
-            <label>Funktion</label>
-            <div class="combobox" data-optionen='{{ funktionen|tojson }}'>
-                <input type="text" class="combobox-input {{ 'feld-fehler' if fehlende_felder.kategorie }}{{ markierung("kategorie") }}" name="kategorie" autocomplete="off"
-                       value="{{ kontakt.kategorie if kontakt else '' }}" placeholder="z. B. Bauingenieur/in (Statik)"
-                       oninput="rubricaComboboxInput(event)" onfocus="rubricaComboboxInput(event)"
-                       onblur="rubricaComboboxBlur(event)">
-                <ul class="combobox-liste"></ul>
-            </div>
-        </div>
     </div>
+
+    <fieldset class="{{ 'feld-fehler' if fehlende_felder.kategorie }}">
+        <legend>Funktion &amp; Rolle</legend>
+        <p class="empty" style="padding:0 0 0.4rem">
+            Mehrere Paare möglich, z. B. „291 Architekt/in“ mit Rolle „Projektleiter“ UND
+            „291 Bauleitung“ mit Rolle „Gestalterische Bauleitung“.
+        </p>
+        <div id="funktion-rows" data-optionen='{{ funktionen|tojson }}'>
+            {% for f in (kontakt.funktionen if kontakt else []) %}
+            <div class="tel-row{{ markierung("kategorie", loop.index0) }}">
+                <div class="combobox" data-optionen='{{ funktionen|tojson }}'>
+                    <input type="text" class="combobox-input" name="funktion" autocomplete="off"
+                           value="{{ f.funktion }}" placeholder="z. B. Bauingenieur/in (Statik)"
+                           oninput="rubricaComboboxInput(event)" onfocus="rubricaComboboxInput(event)"
+                           onblur="rubricaComboboxBlur(event)">
+                    <ul class="combobox-liste"></ul>
+                </div>
+                <input type="text" name="funktion_rolle" value="{{ f.rolle }}" placeholder="Rolle (optional)">
+                <button type="button" class="secondary" onclick="this.parentElement.remove()">Entfernen</button>
+            </div>
+            {% endfor %}
+        </div>
+        <button type="button" class="secondary" data-optionen='{{ funktionen|tojson }}'
+                onclick="addRow('funktion-rows', 'funktion', this)">+ Funktion</button>
+    </fieldset>
 
     <fieldset class="{{ 'feld-fehler' if fehlende_felder.telefon }}">
         <legend>Telefonnummern</legend>

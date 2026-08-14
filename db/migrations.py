@@ -171,6 +171,31 @@ _MIGRATIONS: list[tuple[str, str]] = [
             ON kontakt_verlauf_ereignisse(kontakt_id, created_at DESC);
         """,
     ),
+    (
+        "2026-08-14_kontakt_funktionen",
+        """
+        -- Loest die zwei Scalar-Spalten kontakte.kategorie ("Funktion", z.B. "291
+        -- Architekt/in") und kontakte.rolle ("Rolle", z.B. "Projektleiter") ab
+        -- (Nutzer-Vorgabe): eine Person kann mehrere Funktion/Rolle-PAARE gleichzeitig
+        -- haben ("291 Architekt/Projektleiter" UND "291 Bauleitung/Gestalterische
+        -- Bauleitung"), und diese Paare sollen sich spaeter je Projekt unterscheiden
+        -- lassen - projekt_id NULL ist die Voreinstellung, die ausserhalb eines
+        -- bestimmten Projekts gilt (in dieser Version noch der einzige Fall: die
+        -- projektspezifische Zuweisung selbst kommt erst in einer Folgeversion).
+        -- Die alten Spalten kontakte.kategorie/rolle bleiben unangetastet stehen
+        -- (kein ALTER TABLE DROP COLUMN auf produktivem Bestand) - sie werden von der
+        -- App nur nicht mehr gelesen oder beschrieben.
+        CREATE TABLE IF NOT EXISTS kontakt_funktionen (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            kontakt_id INTEGER NOT NULL REFERENCES kontakte(id) ON DELETE CASCADE,
+            projekt_id INTEGER REFERENCES projekte(id) ON DELETE CASCADE,
+            funktion   TEXT NOT NULL DEFAULT '',
+            rolle      TEXT NOT NULL DEFAULT ''
+        );
+        CREATE INDEX IF NOT EXISTS idx_kontakt_funktionen_kontakt
+            ON kontakt_funktionen(kontakt_id, projekt_id);
+        """,
+    ),
 ]
 
 
@@ -259,6 +284,30 @@ def _feste_adress_kategorien(conn: sqlite3.Connection) -> None:
                  "WHERE typ NOT IN ('Arbeit', 'Privat', 'Baustelle')")
 
 
+def _kontakt_funktionen_uebernehmen(conn: sqlite3.Connection) -> None:
+    """Uebertraegt die alten Scalar-Werte kontakte.kategorie/rolle in je eine
+    Voreinstellungs-Zeile (projekt_id NULL) der neuen Tabelle kontakt_funktionen -
+    niemand muss nach dem Update etwas nacherfassen. Kontakte ganz ohne Funktion
+    und ohne Rolle bekommen keine Zeile (entspricht "kein Eintrag", nicht einem
+    Eintrag mit zwei leeren Feldern). Nur einmalig noetig, also als Python-Funktion
+    statt SQL-String - eine reine INSERT...SELECT-Migration liesse sich zwar auch
+    in SQL schreiben, die WHERE-Bedingung "mindestens eines der beiden Felder nicht
+    leer" ist als Python-Code lesbarer nachvollziehbar."""
+    tabellen = {r["name"] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+    if "kontakt_funktionen" not in tabellen:
+        return
+    # Ganz alte Installationen (vor Einfuehrung von kategorie/rolle als Spalten)
+    # haben die Spalten gar nicht - dann gibt es auch nichts zu uebernehmen.
+    spalten = {r["name"] for r in conn.execute("PRAGMA table_info(kontakte)")}
+    if "kategorie" not in spalten or "rolle" not in spalten:
+        return
+    for row in conn.execute("SELECT id, kategorie, rolle FROM kontakte WHERE kategorie != '' OR rolle != ''"):
+        conn.execute(
+            "INSERT INTO kontakt_funktionen (kontakt_id, projekt_id, funktion, rolle) VALUES (?, NULL, ?, ?)",
+            (row["id"], row["kategorie"], row["rolle"]),
+        )
+
+
 _PYTHON_MIGRATIONEN: list[tuple[str, "callable"]] = [
     ("2026-07-30_kontakte_apple_uid", _kontakte_apple_uid),
     ("2026-07-30_projekte_apple_gruppe_uid", _projekte_apple_gruppe_uid),
@@ -266,6 +315,7 @@ _PYTHON_MIGRATIONEN: list[tuple[str, "callable"]] = [
     ("2026-08-05_kontakte_zuletzt_gepushte_vcard", _kontakte_zuletzt_gepushte_vcard),
     ("2026-08-13_feste_adress_kategorien", _feste_adress_kategorien),
     ("2026-08-13_aufraeum_erledigt", _aufraeum_erledigt_tabelle),
+    ("2026-08-14_kontakt_funktionen_uebernehmen", _kontakt_funktionen_uebernehmen),
 ]
 
 

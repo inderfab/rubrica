@@ -70,6 +70,18 @@ def _kontakt_row_to_dict(conn: sqlite3.Connection, row: sqlite3.Row) -> dict:
             (row["id"],),
         )
     ]
+    # Voreinstellung (projekt_id IS NULL) - die projektspezifische Zuweisung
+    # (projekt_id gesetzt) kommt erst in einer Folgeversion dazu, siehe
+    # db/migrations.py::2026-08-14_kontakt_funktionen. Loest kontakte.kategorie/
+    # rolle ab (Nutzer-Vorgabe: mehrere Funktion/Rolle-PAARE statt je einem
+    # einzelnen Wert) - die alten Spalten werden nicht mehr gelesen.
+    kontakt["funktionen"] = [
+        dict(r) for r in conn.execute(
+            "SELECT id, funktion, rolle FROM kontakt_funktionen "
+            "WHERE kontakt_id = ? AND projekt_id IS NULL ORDER BY id",
+            (row["id"],),
+        )
+    ]
     return kontakt
 
 
@@ -96,7 +108,10 @@ def list_kontakte(conn: sqlite3.Connection, suche: str = "", projekt_id: int | N
             params.extend([like, like, like])
 
     if kategorie:
-        where.append("k.kategorie = ?")
+        where.append(
+            "EXISTS (SELECT 1 FROM kontakt_funktionen kf "
+            "WHERE kf.kontakt_id = k.id AND kf.projekt_id IS NULL AND kf.funktion = ?)"
+        )
         params.append(kategorie)
 
     if joins:
@@ -125,13 +140,16 @@ def kontakt_id_von_apple_uid(conn: sqlite3.Connection, apple_uid: str) -> "int |
 
 
 def create_kontakt(conn: sqlite3.Connection, daten: dict) -> int:
+    # kontakte.rolle/kategorie bewusst NICHT mehr befuellt (bleiben auf ihrem
+    # Spalten-Default '') - Funktion/Rolle stehen als Paare in kontakt_funktionen,
+    # siehe _replace_funktionen.
     with conn:
         cur = conn.execute(
-            """INSERT INTO kontakte (vorname, nachname, firma, rolle, kategorie, notizen, apple_uid)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            """INSERT INTO kontakte (vorname, nachname, firma, notizen, apple_uid)
+               VALUES (?, ?, ?, ?, ?)""",
             (
                 daten.get("vorname", ""), daten.get("nachname", ""),
-                daten.get("firma", ""), daten.get("rolle", ""), daten.get("kategorie", ""),
+                daten.get("firma", ""),
                 daten.get("notizen", ""), daten.get("apple_uid") or None,
             ),
         )
@@ -140,22 +158,21 @@ def create_kontakt(conn: sqlite3.Connection, daten: dict) -> int:
         _replace_emails(conn, kontakt_id, daten.get("emails", []))
         _replace_adressen(conn, kontakt_id, daten.get("adressen", []))
         _replace_urls(conn, kontakt_id, daten.get("urls", []))
+        _replace_funktionen(conn, kontakt_id, daten.get("funktionen", []))
     return kontakt_id
 
 
 # Verlauf/Historie fuer Kontaktaenderungen (Nutzer-Anlass: eine in Kontakte.app
 # korrigierte Adresse stand nach einem Voll-Sync-Lauf wieder auf dem alten Wert,
-# ohne dass sich das irgendwo nachvollziehen liess). VERLAUF_SKALARFELDER bewusst
-# eine eigene Liste statt kontakte_app_intake._VERGLEICHSFELDER wiederzuverwenden:
-# die dortige Liste laesst "kategorie" (= Funktion, eines der meistgenutzten Felder)
-# aus, weil eine vCard dafuer keine verlaessliche Entsprechung liefert - fuer den
-# Verlauf soll gerade dieses Feld nicht fehlen.
-VERLAUF_SKALARFELDER = ("vorname", "nachname", "firma", "kategorie", "rolle", "notizen")
-VERLAUF_LISTENFELDER = ("telefonnummern", "emails", "adressen", "urls")
+# ohne dass sich das irgendwo nachvollziehen liess). "funktionen" (Funktion/Rolle-
+# Paare, siehe kontakt_funktionen) ist ein Listenfeld wie Telefon/E-Mail/Adresse/
+# URL, kein Scalar mehr - ein Kontakt kann mehrere Paare gleichzeitig haben.
+VERLAUF_SKALARFELDER = ("vorname", "nachname", "firma", "notizen")
+VERLAUF_LISTENFELDER = ("telefonnummern", "emails", "adressen", "urls", "funktionen")
 VERLAUF_FELD_BESCHRIFTUNG = {
-    "vorname": "Vorname", "nachname": "Nachname", "firma": "Firma", "kategorie": "Funktion",
-    "rolle": "Rolle", "notizen": "Notizen", "telefonnummern": "Telefon", "emails": "E-Mail",
-    "adressen": "Adresse", "urls": "Web",
+    "vorname": "Vorname", "nachname": "Nachname", "firma": "Firma", "notizen": "Notizen",
+    "telefonnummern": "Telefon", "emails": "E-Mail", "adressen": "Adresse", "urls": "Web",
+    "funktionen": "Funktion/Rolle",
 }
 VERLAUF_QUELLE_BESCHRIFTUNG = {
     "bearbeitung": "Bearbeitet im Browser",
@@ -168,6 +185,7 @@ VERLAUF_VERGLEICH_SCHLUESSEL = {
     "emails": lambda e: _vergleichsform(e.get("email", "")),
     "adressen": lambda e: tuple(_vergleichsform(e.get(f, "")) for f in ("strasse", "plz", "ort")),
     "urls": lambda e: _vergleichsform(e.get("url", "")).rstrip("/"),
+    "funktionen": lambda e: (_vergleichsform(e.get("funktion", "")), _vergleichsform(e.get("rolle", ""))),
 }
 
 
@@ -186,6 +204,11 @@ def _verlauf_lesbar(feld: str, wert) -> str:
                 text = eintrag.get("email", "")
             elif "url" in eintrag:
                 text = eintrag.get("url", "")
+            elif "funktion" in eintrag:
+                text = f"{eintrag.get('funktion', '')} ({eintrag['rolle']})" if eintrag.get("rolle") \
+                    else eintrag.get("funktion", "")
+                teile.append(text)
+                continue
             else:
                 text = " ".join(str(eintrag.get(f, "")) for f in ("strasse", "plz", "ort", "land")).strip()
             typ = (eintrag.get("typ") or "").strip()
@@ -299,11 +322,11 @@ def update_kontakt(conn: sqlite3.Connection, kontakt_id: int, daten: dict, quell
     vorher = get_kontakt(conn, kontakt_id)
     with conn:
         conn.execute(
-            """UPDATE kontakte SET vorname = ?, nachname = ?, firma = ?, rolle = ?,
-               kategorie = ?, notizen = ?, updated_at = ? WHERE id = ?""",
+            """UPDATE kontakte SET vorname = ?, nachname = ?, firma = ?,
+               notizen = ?, updated_at = ? WHERE id = ?""",
             (
                 daten.get("vorname", ""), daten.get("nachname", ""),
-                daten.get("firma", ""), daten.get("rolle", ""), daten.get("kategorie", ""),
+                daten.get("firma", ""),
                 daten.get("notizen", ""), _now(), kontakt_id,
             ),
         )
@@ -311,11 +334,15 @@ def update_kontakt(conn: sqlite3.Connection, kontakt_id: int, daten: dict, quell
         _replace_emails(conn, kontakt_id, daten.get("emails", []))
         _replace_adressen(conn, kontakt_id, daten.get("adressen", []))
         _replace_urls(conn, kontakt_id, daten.get("urls", []))
+        _replace_funktionen(conn, kontakt_id, daten.get("funktionen", []))
         if vorher is not None:
             protokolliere_aenderung(conn, kontakt_id, vorher, daten, quelle)
 
 
-_ERLAUBTE_MEHRFACHFELDER = {"vorname", "nachname", "firma", "rolle", "kategorie", "notizen"}
+# "rolle"/"kategorie" bewusst NICHT mehr hier drin - Funktion/Rolle sind seit
+# kontakt_funktionen ein Paar, kein einzelner Scalar-Wert mehr (siehe
+# bulk_funktion_rolle_setzen unten fuer den Sammel-Bearbeiten-Weg dafuer).
+_ERLAUBTE_MEHRFACHFELDER = {"vorname", "nachname", "firma", "notizen"}
 
 
 def update_kontakt_felder(conn: sqlite3.Connection, kontakt_id: int, felder: dict) -> None:
@@ -332,6 +359,22 @@ def update_kontakt_felder(conn: sqlite3.Connection, kontakt_id: int, felder: dic
             f"UPDATE kontakte SET {zuweisungen}, updated_at = ? WHERE id = ?",
             (*werte, _now(), kontakt_id),
         )
+
+
+def bulk_funktion_rolle_setzen(conn: sqlite3.Connection, kontakt_id: int, funktion: str, rolle: str) -> None:
+    """Sammel-Bearbeiten-Gegenstueck zu update_kontakt_felder fuer Funktion/Rolle:
+    ersetzt die Voreinstellung durch GENAU EIN Paar. Anders als beim einzelnen
+    Bearbeiten (dort volle Paar-Liste aus dem Formular) gibt es im Sammel-Dialog nur
+    ein Eingabefeldpaar fuer beliebig viele ausgewaehlte Kontakte - mehrere
+    bestehende Paare liessen sich dort ohnehin nicht sinnvoll einzeln benennen.
+    Eigenes with conn: noetig (anders als bei update_kontakt/create_kontakt, wo
+    _replace_funktionen im with-Block des Aufrufers laeuft) - ohne das blieb der
+    letzte Kontakt einer Sammel-Bearbeiten-Auswahl unbestaetigt und ging beim
+    Schliessen der Verbindung wieder verloren (nur zufaellig durch den naechsten
+    Kontakt in der Schleife "mitbestaetigt", der letzte Kontakt hat aber keinen
+    Nachfolger mehr)."""
+    with conn:
+        _replace_funktionen(conn, kontakt_id, [{"funktion": funktion, "rolle": rolle}] if funktion else [])
 
 
 _KATEGORIE_TABELLEN = {"telefon": "telefonnummern", "email": "emails", "adresse": "adressen"}
@@ -387,37 +430,52 @@ def kategorie_global_umbenennen(conn: sqlite3.Connection, feld: str, alter_wert:
     return betroffene
 
 
-_FELD_SPALTEN = {"kategorie": "kategorie", "rolle": "rolle"}
+# "kategorie" (= Funktion, UI-Label) zeigt weiterhin auf die Spalte "funktion" -
+# der Name der Tabellenspalte selbst heisst funktion, um sie von der Funktion/
+# Rolle-PAARUNG als Ganzes zu unterscheiden. Seit kontakt_funktionen (siehe
+# db/migrations.py) keine Spalte auf `kontakte` mehr, sondern auf der neuen
+# Paar-Tabelle - ein Kontakt kann jetzt mehrere Funktion/Rolle-Paare haben.
+_FELD_SPALTEN = {"kategorie": "funktion", "rolle": "rolle"}
 
 
 def feld_werte_uebersicht(conn: sqlite3.Connection, feld: str) -> list[dict]:
-    """Listet alle in `kontakte` verwendeten Werte eines Scalar-Felds (Funktion/Rolle)
-    mit Anzahl betroffener Kontakte - Grundlage fuer die Verwaltungsseite (Tippfehler
+    """Listet alle verwendeten Werte eines Funktion-/Rolle-Felds mit Anzahl
+    betroffener Kontakte - Grundlage fuer die Verwaltungsseite (Tippfehler
     korrigieren, global umbenennen, loeschen+neu zuweisen)."""
     spalte = _FELD_SPALTEN.get(feld)
     if not spalte:
         return []
     rows = conn.execute(
-        f"SELECT {spalte} AS wert, COUNT(*) AS anzahl FROM kontakte "
+        f"SELECT {spalte} AS wert, COUNT(DISTINCT kontakt_id) AS anzahl FROM kontakt_funktionen "
         f"WHERE {spalte} != '' GROUP BY {spalte} ORDER BY {spalte} COLLATE NOCASE"
     ).fetchall()
     return [dict(r) for r in rows]
 
 
 def feld_wert_umbenennen(conn: sqlite3.Connection, feld: str, alter_wert: str, neuer_wert: str) -> list[int]:
-    """Aendert einen Funktion-/Rolle-Wert bei ALLEN betroffenen Kontakten auf einmal.
-    Ein leerer `neuer_wert` entfernt die Zuweisung (Feld wird geleert). Ein bereits
-    bestehender `neuer_wert` fuehrt die Kontakte effektiv zusammen (z.B. beim Loeschen
-    eines doppelten/falsch geschriebenen Werts). Gibt die betroffenen kontakt_ids
-    zurueck, damit der Aufrufer sie erneut zu Radicale pushen kann."""
+    """Aendert einen Funktion-/Rolle-Wert bei ALLEN betroffenen Paaren auf einmal
+    (ueber alle Geltungsbereiche - Voreinstellung wie spaeter auch projektspezifisch).
+    Ein leerer `neuer_wert` entfernt bei "rolle" nur die Rolle (Funktion bleibt, Rolle
+    ist optional) - bei "kategorie" (Funktion) waere das Paar danach ohne Funktion
+    sinnlos, die Zeile faellt dann ganz weg (siehe _replace_funktionen). Ein bereits
+    bestehender `neuer_wert` fuehrt Paare effektiv zusammen (z.B. beim Loeschen eines
+    doppelten/falsch geschriebenen Werts). Gibt die betroffenen kontakt_ids zurueck,
+    damit der Aufrufer sie erneut zu Radicale pushen kann."""
     spalte = _FELD_SPALTEN.get(feld)
     if not spalte or not alter_wert or alter_wert == neuer_wert:
         return []
-    betroffene = [r["id"] for r in conn.execute(f"SELECT id FROM kontakte WHERE {spalte} = ?", (alter_wert,))]
+    betroffene = sorted({
+        r["kontakt_id"] for r in conn.execute(
+            f"SELECT DISTINCT kontakt_id FROM kontakt_funktionen WHERE {spalte} = ?", (alter_wert,)
+        )
+    })
     if not betroffene:
         return []
     with conn:
-        conn.execute(f"UPDATE kontakte SET {spalte} = ? WHERE {spalte} = ?", (neuer_wert, alter_wert))
+        if spalte == "funktion" and not neuer_wert:
+            conn.execute("DELETE FROM kontakt_funktionen WHERE funktion = ?", (alter_wert,))
+        else:
+            conn.execute(f"UPDATE kontakt_funktionen SET {spalte} = ? WHERE {spalte} = ?", (neuer_wert, alter_wert))
     return betroffene
 
 
@@ -437,8 +495,8 @@ def merge_kontakt(conn: sqlite3.Connection, kontakt_id: int, daten: dict) -> Non
 
     with conn:
         conn.execute(
-            """UPDATE kontakte SET vorname = ?, nachname = ?, firma = ?, rolle = ?,
-               kategorie = ?, notizen = ?, apple_uid = ?, updated_at = ? WHERE id = ?""",
+            """UPDATE kontakte SET vorname = ?, nachname = ?, firma = ?,
+               notizen = ?, apple_uid = ?, updated_at = ? WHERE id = ?""",
             (
                 # Der NAME des bestehenden Kontakts gewinnt - anders als bei den
                 # uebrigen Feldern. Ein Merge entsteht aus einem Duplikat-VERDACHT,
@@ -452,8 +510,6 @@ def merge_kontakt(conn: sqlite3.Connection, kontakt_id: int, daten: dict) -> Non
                 bestehend["vorname"] or daten.get("vorname") or "",
                 bestehend["nachname"] or daten.get("nachname") or "",
                 bestehend["firma"] or daten.get("firma") or "",
-                daten.get("rolle") or bestehend["rolle"],
-                daten.get("kategorie") or bestehend["kategorie"],
                 notizen,
                 # Einmal gesetzte apple_uid bleibt erhalten (verlaesslicher Wiedererkennungs-
                 # Anker) - wird nur befuellt, wenn der bestehende Kontakt noch keine hat.
@@ -461,6 +517,19 @@ def merge_kontakt(conn: sqlite3.Connection, kontakt_id: int, daten: dict) -> Non
                 _now(), kontakt_id,
             ),
         )
+        # Funktion/Rolle-Paare wie Telefon/E-Mail/Adresse/URL: ergaenzen statt
+        # ersetzen, ein bereits vorhandenes Paar (Funktion UND Rolle gleich) kommt
+        # nicht doppelt hinein.
+        bestehende_funktionen = {
+            (_vergleichsform(f["funktion"]), _vergleichsform(f["rolle"])) for f in bestehend["funktionen"]
+        }
+        for f in daten.get("funktionen", []):
+            schluessel = (_vergleichsform(f.get("funktion", "")), _vergleichsform(f.get("rolle", "")))
+            if f.get("funktion", "").strip() and schluessel not in bestehende_funktionen:
+                conn.execute(
+                    "INSERT INTO kontakt_funktionen (kontakt_id, projekt_id, funktion, rolle) VALUES (?, NULL, ?, ?)",
+                    (kontakt_id, f["funktion"].strip(), f.get("rolle", "").strip()),
+                )
         # Vergleich bewusst unempfindlich gegen Schreibweise: der Vorschlag kommt
         # aus einer anderen Quelle und schreibt dieselbe Angabe oft anders. Sonst
         # steht nach dem Zusammenfuehren dieselbe Adresse zweimal da, einmal gross
@@ -557,6 +626,24 @@ def _replace_urls(conn: sqlite3.Connection, kontakt_id: int, urls: list[dict]) -
             conn.execute(
                 "INSERT INTO urls (kontakt_id, typ, url) VALUES (?, ?, ?)",
                 (kontakt_id, u.get("typ", "homepage"), u["url"]),
+            )
+
+
+def _replace_funktionen(conn: sqlite3.Connection, kontakt_id: int, funktionen: list[dict],
+                         projekt_id: "int | None" = None) -> None:
+    """Ersetzt die Funktion/Rolle-Paare eines Kontakts fuer einen Geltungsbereich
+    (projekt_id NULL = Voreinstellung). Ein Paar ohne Funktion wird uebersprungen -
+    eine Rolle allein ("Projektleiter") ohne zugehoerige Funktion waere ohne
+    Aussagekraft; wer nur die Rolle kennt, traegt sie bei "Funktion" ein."""
+    conn.execute(
+        "DELETE FROM kontakt_funktionen WHERE kontakt_id = ? AND projekt_id IS ?",
+        (kontakt_id, projekt_id),
+    )
+    for f in funktionen:
+        if f.get("funktion", "").strip():
+            conn.execute(
+                "INSERT INTO kontakt_funktionen (kontakt_id, projekt_id, funktion, rolle) VALUES (?, ?, ?, ?)",
+                (kontakt_id, projekt_id, f["funktion"].strip(), f.get("rolle", "").strip()),
             )
 
 

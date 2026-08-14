@@ -169,6 +169,13 @@ def _email_typ_normalisieren(rohtyp: str, label: str = "") -> str:
 def _parse_kontakt(vcard) -> dict:
     vorname, nachname = _parse_name(vcard)
     firma = vcard.org.value[0] if hasattr(vcard, "org") and vcard.org.value else ""
+    # TITLE landet als Rolle eines Paars ohne Funktion - eine vCard liefert keine
+    # verlaessliche Entsprechung fuer die Funktion (BKP-Klassierung), die muss im
+    # Formular nachgetragen werden (war schon vor kontakt_funktionen so: kategorie
+    # blieb beim Import immer leer). Rubricas eigener Export schreibt TITLE als
+    # "Funktion (Rolle)"-Text fuer mehrere Paare (siehe sync/radicale.py) - das
+    # beim Reimport wieder in Paare zu zerlegen waere zu fehleranfaellig, deshalb
+    # bewusst als Ganzes uebernommen statt geparst.
     rolle = vcard.title.value if hasattr(vcard, "title") else ""
     apple_uid = vcard.uid.value if hasattr(vcard, "uid") else None
 
@@ -207,8 +214,7 @@ def _parse_kontakt(vcard) -> dict:
         "vorname": vorname,
         "nachname": nachname,
         "firma": firma,
-        "rolle": rolle,
-        "kategorie": "",
+        "funktionen": [{"funktion": "", "rolle": rolle}] if rolle else [],
         "notizen": notizen,
         "telefonnummern": telefonnummern,
         "emails": emails,
