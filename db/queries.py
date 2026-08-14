@@ -804,17 +804,38 @@ def _namensschluessel(vorname: str, nachname: str, firma: str) -> str:
     return name or f"firma:{_vergleichsform(firma)}"
 
 
+def aufraeum_erledigt(conn: sqlite3.Connection) -> set:
+    return {r["schluessel"] for r in conn.execute("SELECT schluessel FROM aufraeum_erledigt")}
+
+
+def setze_aufraeum_erledigt(conn: sqlite3.Connection, schluessel: str) -> None:
+    """Merkt sich, dass ein Verdachtsfall geprueft und in Ordnung ist.
+
+    Zwei Menschen koennen zufaellig gleich heissen, zwei Kollegen sich ein Postfach
+    teilen - solche Faelle sollen nach dem Nachsehen aus der Liste verschwinden und
+    nicht bei jedem Aufruf erneut Arbeit vortaeuschen (Nutzer-Meldung: "sind zwei
+    personen die zufaellig gleich heissen. ist aber korrekt")."""
+    with conn:
+        conn.execute("INSERT OR REPLACE INTO aufraeum_erledigt (schluessel, erledigt_am) VALUES (?, ?)",
+                     (schluessel, _now()))
+
+
 def doppelte_kontakte(conn: sqlite3.Connection) -> list:
     """Kontakte, die denselben Namen tragen - Grundlage fuer die Aufraeumseite.
 
     Entsteht vor allem nach einem Wiederholungs-Import: wer denselben Bestand
     zweimal einliest, einmal mit und einmal ohne Zusammenfuehren, hat einen Teil
     danach doppelt (Nutzer-Meldung nach dem Wiederherstellen verlorener Kontakte)."""
+    erledigt = aufraeum_erledigt(conn)
     gruppen: dict = {}
     for row in conn.execute("SELECT * FROM kontakte ORDER BY id"):
         gruppen.setdefault(_namensschluessel(row["vorname"], row["nachname"], row["firma"]), []).append(
             _kontakt_row_to_dict(conn, row))
-    return [eintraege for eintraege in gruppen.values() if len(eintraege) > 1]
+    return [
+        {"schluessel": f"name:{schluessel}", "kontakte": eintraege}
+        for schluessel, eintraege in sorted(gruppen.items())
+        if len(eintraege) > 1 and f"name:{schluessel}" not in erledigt
+    ]
 
 
 def mehrfach_verwendete_angaben(conn: sqlite3.Connection) -> list:
@@ -824,23 +845,29 @@ def mehrfach_verwendete_angaben(conn: sqlite3.Connection) -> list:
     Ehepaars), andere stammen aus einer falschen Zusammenfuehrung. Die Entscheidung
     kann nur der Mensch treffen - die Seite zeigt sie nebeneinander, damit sie
     ueberhaupt auffallen."""
+    erledigt = aufraeum_erledigt(conn)
     treffer: dict = {}
-    for tabelle, spalte, feld, normalisieren in (
-        ("telefonnummern", "nummer", "Telefon", _nur_ziffern),
-        ("emails", "email", "E-Mail", _vergleichsform),
+    for tabelle, spalte, feld, normalisieren, brauchbar in (
+        ("telefonnummern", "nummer", "Telefon", _nur_ziffern, lambda w: len(_nur_ziffern(w)) >= 5),
+        ("emails", "email", "E-Mail", _vergleichsform, lambda w: "@" in (w or "")),
     ):
         for row in conn.execute(
             f"SELECT x.id, x.{spalte} AS wert, k.id AS kontakt_id, k.vorname, k.nachname, k.firma "
             f"FROM {tabelle} x JOIN kontakte k ON k.id = x.kontakt_id"
         ):
-            schluessel = (feld, normalisieren(row["wert"]))
-            if not schluessel[1]:
+            # Platzhalter wie "-" oder "keine" stehen im Altbestand bei vielen
+            # Kontakten und wuerden die Liste mit Scheintreffern fluten
+            # (Nutzer-Meldung: ein Eintrag ohne erkennbaren Wert, vierfach gelistet).
+            if not brauchbar(row["wert"]):
                 continue
+            schluessel = (feld, normalisieren(row["wert"]))
             treffer.setdefault(schluessel, []).append(dict(row))
     return [
-        {"feld": feld, "wert": eintraege[0]["wert"], "eintraege": eintraege}
-        for (feld, _), eintraege in sorted(treffer.items())
+        {"feld": feld, "wert": eintraege[0]["wert"], "eintraege": eintraege,
+         "schluessel": f"{feld.lower()}:{normiert}"}
+        for (feld, normiert), eintraege in sorted(treffer.items())
         if len({e["kontakt_id"] for e in eintraege}) > 1
+        and f"{feld.lower()}:{normiert}" not in erledigt
     ]
 
 

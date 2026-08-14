@@ -199,6 +199,16 @@ def _kontakte_zuletzt_gepushte_vcard(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE kontakte ADD COLUMN zuletzt_gepushte_vcard TEXT")
 
 
+def _aufraeum_erledigt_tabelle(conn: sqlite3.Connection) -> None:
+    """Merkt, welche Verdachtsfaelle der Aufraeumseite als in Ordnung abgehakt sind."""
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS aufraeum_erledigt ("
+        "  schluessel  TEXT PRIMARY KEY,"
+        "  erledigt_am TEXT NOT NULL"
+        ")"
+    )
+
+
 def _feste_adress_kategorien(conn: sqlite3.Connection) -> None:
     """Adressen bekommen dieselbe feste Auswahl wie Telefon und E-Mail
     (Nutzer-Vorgabe): Arbeit / Privat / Baustelle statt kleingeschriebenem Freitext
@@ -225,6 +235,7 @@ _PYTHON_MIGRATIONEN: list[tuple[str, "callable"]] = [
     ("2026-08-04_projekte_zuletzt_gepushte_mitglieder", _projekte_zuletzt_gepushte_mitglieder),
     ("2026-08-05_kontakte_zuletzt_gepushte_vcard", _kontakte_zuletzt_gepushte_vcard),
     ("2026-08-13_feste_adress_kategorien", _feste_adress_kategorien),
+    ("2026-08-13_aufraeum_erledigt", _aufraeum_erledigt_tabelle),
 ]
 
 

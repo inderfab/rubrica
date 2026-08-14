@@ -387,3 +387,49 @@ def test_aufraeumen_entfernt_eine_angabe_nur_bei_einem_kontakt(tmp_db, monkeypat
     assert r.status_code == 303
     assert queries.get_kontakt(tmp_db, b)["emails"] == []
     assert len(queries.get_kontakt(tmp_db, a)["emails"]) == 1, "der andere Eintrag muss bleiben"
+
+
+def test_aufraeumen_haakt_geprueften_fall_ab(tmp_db):
+    """Nutzer-Meldung: „sind zwei personen die zufällig gleich heissen. ist aber
+    korrekt". Ohne die Möglichkeit, so einen Fall abzuhaken, täuscht die Liste bei
+    jedem Aufruf erneut Arbeit vor."""
+    from db import queries
+    queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster", "firma": "A AG"})
+    queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster", "firma": "B AG"})
+
+    schluessel = queries.doppelte_kontakte(tmp_db)[0]["schluessel"]
+    r = TestClient(app).post("/einstellungen/aufraeumen/erledigt",
+                             data={"schluessel": schluessel}, follow_redirects=False)
+
+    assert r.status_code == 303
+    assert queries.doppelte_kontakte(tmp_db) == []
+    # Abgehakt heisst geprüft, nicht geändert - beide Kontakte stehen weiterhin da.
+    assert len(queries.list_kontakte(tmp_db)) == 2
+
+
+def test_aufraeumen_ignoriert_platzhalter_statt_echter_adressen(tmp_db):
+    """Regression (Nutzer-Meldung: ein Eintrag ohne erkennbaren Wert, mehrfach
+    gelistet): im Altbestand steht bei vielen Kontakten „-" statt einer Adresse.
+    Als Dublette gemeldet flutet das die Liste mit Scheintreffern."""
+    from db import queries
+    for firma in ("A AG", "B AG", "C AG"):
+        queries.create_kontakt(tmp_db, {"vorname": "", "nachname": "", "firma": firma,
+                                        "emails": [{"typ": "Direkt", "email": "-"}],
+                                        "telefonnummern": [{"typ": "Direkt", "nummer": "-"}]})
+
+    assert queries.mehrfach_verwendete_angaben(tmp_db) == []
+
+
+def test_aufraeumen_zeigt_den_wert_bei_jeder_gruppe(tmp_db):
+    """Vorher stand der Wert nur in der ersten Zeile, die übrigen hingen ohne Bezug
+    darunter (Nutzer-Meldung: „man kann nur entfernen aber es fehlt der Kontext")."""
+    from db import queries
+    queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster",
+                                    "emails": [{"typ": "Direkt", "email": "geteilt@beispiel.ch"}]})
+    queries.create_kontakt(tmp_db, {"vorname": "Bruno", "nachname": "Beispiel",
+                                    "emails": [{"typ": "Direkt", "email": "geteilt@beispiel.ch"}]})
+
+    text = TestClient(app).get("/einstellungen/aufraeumen").text
+    assert "<legend>geteilt@beispiel.ch</legend>" in text
+    assert "Anna Muster" in text and "Bruno Beispiel" in text
+    assert text.count("bearbeiten-flyover") >= 2

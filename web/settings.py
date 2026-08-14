@@ -396,3 +396,16 @@ async def aufraeumen_angabe_loeschen(request: Request):
         conn.close()
     return RedirectResponse(url="/einstellungen/aufraeumen?meldung=Angabe+entfernt",
                             status_code=303)
+
+
+@router.post("/einstellungen/aufraeumen/erledigt")
+async def aufraeumen_erledigt(request: Request):
+    """Hakt einen geprueften Verdachtsfall ab, ohne etwas zu aendern."""
+    form = await request.form()
+    conn = get_connection()
+    try:
+        queries.setze_aufraeum_erledigt(conn, (form.get("schluessel") or "").strip())
+    finally:
+        conn.close()
+    return RedirectResponse(url="/einstellungen/aufraeumen?meldung=Als+in+Ordnung+abgehakt",
+                            status_code=303)

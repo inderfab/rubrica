@@ -9,39 +9,63 @@
 
 <div class="formular-schmal">
 <p class="empty">
-    Verdachtsfälle aus Importen und Zusammenführungen. Nichts davon wird automatisch bereinigt —
-    ob zwei Einträge dieselbe Person sind oder zwei Menschen sich eine Nummer teilen, kann nur
-    jemand entscheiden, der die Leute kennt.
+    Verdachtsfälle aus Importen und Zusammenführungen. Nichts wird automatisch bereinigt — ob zwei
+    Einträge dieselbe Person sind oder zwei Menschen zufällig gleich heissen, kann nur jemand
+    entscheiden, der die Leute kennt. Mit <strong>In Ordnung</strong> verschwindet ein geprüfter Fall
+    aus der Liste, ohne dass etwas geändert wird.
 </p>
+
+{# "In Ordnung" statt nur Loeschen (Nutzer-Meldung): die meisten Treffer sind
+   berechtigt, aber harmlos - zwei Personen gleichen Namens, ein geteiltes Postfach.
+   Ohne die Moeglichkeit, sie abzuhaken, taeuscht die Liste bei jedem Aufruf Arbeit vor. #}
+{% macro erledigt_knopf(schluessel, titel) %}
+<form method="post" action="/einstellungen/aufraeumen/erledigt">
+    <input type="hidden" name="schluessel" value="{{ schluessel }}">
+    <button type="submit" class="secondary" title="{{ titel }}">In Ordnung</button>
+</form>
+{% endmacro %}
 
 <details class="einstell-block" open>
     <summary>Gleicher Name mehrfach ({{ doppelte|length }})</summary>
     {% if doppelte %}
     <p class="empty" style="padding:0 0 0.5rem">
-        Entsteht vor allem, wenn derselbe Bestand zweimal importiert wurde. Den vollständigeren
-        Eintrag behalten, den anderen löschen — fehlt beim behaltenen etwas, vorher dort ergänzen.
+        Entsteht vor allem, wenn derselbe Bestand zweimal importiert wurde. Den vollständigeren Eintrag
+        behalten, den anderen löschen — oder den Fall abhaken, wenn es wirklich zwei Personen sind.
     </p>
     {% for gruppe in doppelte %}
+    {% set k0 = gruppe.kontakte[0] %}
     <fieldset>
-        <legend>{{ gruppe[0].vorname }} {{ gruppe[0].nachname }}{% if not gruppe[0].vorname and not gruppe[0].nachname %}{{ gruppe[0].firma }}{% endif %}</legend>
+        <legend>{{ (k0.vorname ~ " " ~ k0.nachname)|trim or k0.firma }}</legend>
         <table>
             <thead><tr><th>Firma</th><th>Telefon</th><th>E-Mail</th><th>Ordner</th><th></th></tr></thead>
             <tbody>
-                {% for k in gruppe %}
+                {% for k in gruppe.kontakte %}
                 <tr>
-                    <td><a href="/kontakte/{{ k.id }}/bearbeiten">{{ k.firma or "–" }}</a></td>
+                    <td>{{ k.firma or "–" }}</td>
                     <td>{% for t in k.telefonnummern %}{{ t.nummer }}<br>{% endfor %}</td>
                     <td>{% for e in k.emails %}{{ e.email }}<br>{% endfor %}</td>
                     <td>{{ k.projekte|length }}</td>
                     <td class="actions">
+                        <button type="button" class="secondary"
+                                hx-get="/kontakte/{{ k.id }}/bearbeiten-flyover"
+                                hx-target="#aufraeum-modal-inhalt" hx-swap="innerHTML"
+                                onclick="rubricaModalOeffnen()">
+                            Bearbeiten
+                        </button>
                         <form method="post" action="/einstellungen/aufraeumen/kontakt-loeschen"
-                              onsubmit="return confirm('Diesen Eintrag unwiderruflich löschen?')">
+                              onsubmit="return confirm('„{{ (k.vorname ~ ' ' ~ k.nachname)|trim or k.firma }}“ unwiderruflich löschen?')">
                             <input type="hidden" name="kontakt_id" value="{{ k.id }}">
                             <button type="submit" class="danger">Löschen</button>
                         </form>
                     </td>
                 </tr>
                 {% endfor %}
+                <tr>
+                    <td colspan="4" style="color:var(--text-hell); font-size:0.85rem">
+                        Zwei verschiedene Personen? Dann abhaken.
+                    </td>
+                    <td class="actions">{{ erledigt_knopf(gruppe.schluessel, "Diese Namensgleichheit ist in Ordnung") }}</td>
+                </tr>
             </tbody>
         </table>
     </fieldset>
@@ -51,46 +75,77 @@
     {% endif %}
 </details>
 
+{# Frueher eine einzige Tabelle, in der der Wert nur in der ersten Zeile stand und
+   die uebrigen Zeilen ohne Bezug dastanden (Nutzer-Meldung: "man kann nur entfernen
+   aber es fehlt der Kontext"). Jetzt je ein Block pro Wert, mit allen Beteiligten
+   und deren uebrigen Angaben. #}
 {% macro angaben_block(titel, eintraege, hinweis, offen) %}
 <details class="einstell-block"{% if offen %} open{% endif %}>
     <summary>{{ titel }} ({{ eintraege|length }})</summary>
     <p class="empty" style="padding:0 0 0.5rem">{{ hinweis }}</p>
-    {% if eintraege %}
-    <table>
-        <thead><tr><th>Wert</th><th>Steht bei</th><th></th></tr></thead>
-        <tbody>
-            {% for a in eintraege %}
-            {% for e in a.eintraege %}
-            <tr>
-                <td>{% if loop.first %}{{ a.wert }}{% endif %}</td>
-                <td><a href="/kontakte/{{ e.kontakt_id }}/bearbeiten">{{ e.vorname }} {{ e.nachname }}</a>
-                    {% if e.firma %}<span style="color:var(--text-hell)">— {{ e.firma }}</span>{% endif %}</td>
-                <td class="actions">
-                    <form method="post" action="/einstellungen/aufraeumen/angabe-loeschen">
-                        <input type="hidden" name="feld" value="{{ a.feld }}">
-                        <input type="hidden" name="eintrag_id" value="{{ e.id }}">
-                        <button type="submit" class="secondary">Hier entfernen</button>
-                    </form>
-                </td>
-            </tr>
-            {% endfor %}
-            {% endfor %}
-        </tbody>
-    </table>
-    {% endif %}
+    {% for a in eintraege %}
+    <fieldset>
+        <legend>{{ a.wert }}</legend>
+        <table>
+            <thead><tr><th>Steht bei</th><th>Firma</th><th></th></tr></thead>
+            <tbody>
+                {% for e in a.eintraege %}
+                <tr>
+                    <td>{{ (e.vorname ~ " " ~ e.nachname)|trim or "(ohne Namen)" }}</td>
+                    <td>{{ e.firma or "–" }}</td>
+                    <td class="actions">
+                        <button type="button" class="secondary"
+                                hx-get="/kontakte/{{ e.kontakt_id }}/bearbeiten-flyover"
+                                hx-target="#aufraeum-modal-inhalt" hx-swap="innerHTML"
+                                onclick="rubricaModalOeffnen()">
+                            Bearbeiten
+                        </button>
+                        <form method="post" action="/einstellungen/aufraeumen/angabe-loeschen"
+                              onsubmit="return confirm('„{{ a.wert }}“ bei diesem Kontakt entfernen?\n\nBeim anderen bleibt der Eintrag stehen.')">
+                            <input type="hidden" name="feld" value="{{ a.feld }}">
+                            <input type="hidden" name="eintrag_id" value="{{ e.id }}">
+                            <button type="submit" class="danger">Hier entfernen</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+                <tr>
+                    <td colspan="2" style="color:var(--text-hell); font-size:0.85rem">
+                        Gemeinsames Postfach oder Firmenzentrale? Dann abhaken.
+                    </td>
+                    <td class="actions">{{ erledigt_knopf(a.schluessel, "Diese gemeinsame Angabe ist in Ordnung") }}</td>
+                </tr>
+            </tbody>
+        </table>
+    </fieldset>
+    {% endfor %}
 </details>
 {% endmacro %}
 
 {{ angaben_block("E-Mail-Adresse bei mehreren Kontakten", mails,
    "Eine persönliche Adresse gehört praktisch nie zwei Menschen — hier steckt oft eine falsche
-    Zusammenführung. Ein gemeinsames Postfach (info@…, ein Ehepaar) ist dagegen in Ordnung.",
-   true) }}
+    Zusammenführung. Ein gemeinsames Postfach (info@…, zwei Kollegen derselben Firma) ist dagegen
+    in Ordnung und lässt sich abhaken.", true) }}
 
 {{ angaben_block("Telefonnummer bei mehreren Kontakten", telefone,
    "Meist harmlos: eine Firmenzentrale steht zu Recht bei allen Mitarbeitenden. Nur durchsehen, wenn
-    eine Nummer bei Leuten steht, die nichts miteinander zu tun haben.",
-   false) }}
+    eine Nummer bei Leuten steht, die nichts miteinander zu tun haben.", false) }}
 
 <p><a href="/einstellungen">← Zurück zu den Einstellungen</a></p>
 </div>
+
+<div id="aufraeum-modal-overlay" class="modal-overlay" onclick="if (event.target === this) rubricaModalSchliessen()">
+    <div class="modal-panel formular-schmal">
+        <div id="aufraeum-modal-inhalt"></div>
+    </div>
+</div>
+
+<script>
+function rubricaModalOeffnen() {
+    document.getElementById('aufraeum-modal-overlay').classList.add('sichtbar');
+}
+function rubricaModalSchliessen() {
+    document.getElementById('aufraeum-modal-overlay').classList.remove('sichtbar');
+}
+</script>
 {% endblock %}
