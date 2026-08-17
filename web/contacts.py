@@ -458,6 +458,7 @@ async def kontakt_bearbeiten_speichern(request: Request, kontakt_id: int):
 # Zusammenfuehren und Wiederherstellen) dieselbe Markierung ansprechen.
 _VERLAUF_MARKIERUNGS_NAME = {
     "telefonnummern": "telefon", "emails": "email", "adressen": "adresse", "urls": "url",
+    "funktionen": "kategorie",
 }
 
 

@@ -637,6 +637,27 @@ def test_wiederherstellen_flyover_zeigt_alten_wert_orange_markiert(tmp_db):
     assert 'tel-row wert-neu">' in r.text
 
 
+def test_wiederherstellen_flyover_bei_funktionsaenderung(tmp_db):
+    """Regression: _VERLAUF_MARKIERUNGS_NAME kannte "funktionen" nicht (nur beim
+    Hinzufuegen von telefonnummern/emails/adressen/urls gepflegt, nicht als
+    Funktion/Rolle in kontakt_funktionen dazukam) - jedes Rueckgaengig-Machen einer
+    Funktionsaenderung endete mit KeyError('funktionen') und einem 500er statt der
+    Vorschau (Nutzer-Meldung: "Rueckgaenging geht nicht. es kommt ein grauer
+    screen mit weissem Balken")."""
+    projekt_id = queries.get_or_create_projekt(tmp_db, "Testordner")
+    kid = _vollstaendiger_kontakt(tmp_db, projekt_id)
+    kontakt = queries.get_kontakt(tmp_db, kid)
+    neu = dict(kontakt)
+    neu["funktionen"] = [{"funktion": "Behörde/Amt", "rolle": "Leiter"}]
+    queries.update_kontakt(tmp_db, kid, neu, quelle="bearbeitung")
+
+    ereignis_id = queries.kontakt_verlauf(tmp_db, kid)[0]["id"]
+    r = TestClient(app).get(f"/kontakte/{kid}/verlauf/{ereignis_id}/wiederherstellen-flyover")
+    assert r.status_code == 200
+    assert "Geologe" in r.text  # der wiederherzustellende (alte) Funktionswert
+    assert 'tel-row wert-neu">' in r.text
+
+
 def test_wiederherstellen_unbekanntes_ereignis_ist_404(tmp_db):
     projekt_id = queries.get_or_create_projekt(tmp_db, "Testordner")
     kid = _vollstaendiger_kontakt(tmp_db, projekt_id)
