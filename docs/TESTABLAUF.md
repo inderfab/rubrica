@@ -4,8 +4,8 @@ Vollständiger Durchlauf von der Installation bis zum Export. Gedacht zum Abhake
 jeder Punkt ist eine Handlung mit einer klaren Erwartung.
 
 **Stand:** Abschnitt C ist durch (bis auf C11, C14, C17, C18), von D fehlen noch
-D5–D9 und D11, in B neu B11–B15, F5–F7 offen. Offene Befunde siehe unten. Nächster Schritt:
-**1.28.0 installieren**.
+D5–D9 und D11, in B neu B11–B16, F5–F7 offen. Offene Befunde siehe unten. Nächster Schritt:
+**1.29.0 installieren**.
 
 | Zeichen | Bedeutung |
 |---|---|
@@ -55,8 +55,9 @@ synchronisieren** urteilen.
 | B11 | ⬜ | Kontakt anlegen, der **nur eine Firma** ist (Namensfelder leer) | Lässt sich speichern; als Bezeichnung genügt Name **oder** Firma | neu ab 1.20.0 |
 | B12 | ⬜ | Bei einem Kontakt die Adresse ändern und speichern, dann **Verlauf** öffnen | Neuer Eintrag mit Zeitpunkt, Quelle „Bearbeitet im Browser“, altem und neuem Wert | neu ab 1.27.0 |
 | B13 | ⬜ | Bei diesem Verlaufseintrag **Rückgängig** klicken | Vorschau zeigt den alten Wert orange markiert; erst „Speichern“ setzt ihn zurück, „Abbrechen“ ändert nichts | neu ab 1.27.0 |
-| B14 | ⬜ | Bei einem Kontakt **+ Funktion** klicken, zweites Funktion/Rolle-Paar ausfüllen, speichern | Beide Paare bleiben erhalten, erscheinen beim erneuten Öffnen wieder | neu ab 1.27.0 |
-| B15 | ⬜ | Diesen Kontakt exportieren (PDF/CSV) | Erscheint unter **beiden** Funktionen, mit der jeweils passenden Rolle | neu ab 1.27.0 |
+| B14 | ⬜ | Bei einem Kontakt **+ Funktion** klicken, zweites Funktion/Rolle-Paar ausfüllen, speichern | Beide Paare bleiben erhalten, erscheinen beim erneuten Öffnen wieder | neu ab 1.28.0 |
+| B15 | ⬜ | Diesen Kontakt exportieren (PDF/CSV) | Erscheint unter **beiden** Funktionen, mit der jeweils passenden Rolle | neu ab 1.28.0 |
+| B16 | ⬜ | Einstellungen → **Verlauf aller Kontakte** öffnen | Zeigt Änderungen quer über alle Kontakte, neueste zuerst, mit Link zum Kontakt und „Rückgängig“ | neu ab 1.28.0 |
 
 ---
 

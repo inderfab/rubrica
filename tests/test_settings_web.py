@@ -352,6 +352,34 @@ def test_einstellungen_speichern_laesst_export_werte_unberuehrt(tmp_db, monkeypa
     assert settings.get("export.privates_telefon_zeigen") is True
 
 
+def test_verlauf_uebersicht_zeigt_aenderungen_quer_ueber_kontakte(tmp_db):
+    """Nutzer-Anlass: der Verlauf am einzelnen Kontakt verlangt, jeden Kontakt
+    einzeln zu oeffnen - "ich brauche nur eine globale liste ... nicht jeden
+    einzelnen kontakt anwaehlen und es pruefen das macht keinen sinn." """
+    from db import queries
+    a = queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster"})
+    b = queries.create_kontakt(tmp_db, {"vorname": "Bruno", "nachname": "Beispiel"})
+    queries.update_kontakt(tmp_db, a, {**queries.get_kontakt(tmp_db, a), "firma": "Neue Firma A"})
+    queries.update_kontakt(tmp_db, b, {**queries.get_kontakt(tmp_db, b), "firma": "Neue Firma B"})
+
+    r = TestClient(app).get("/einstellungen/verlauf")
+    assert r.status_code == 200
+    assert "Anna Muster" in r.text
+    assert "Bruno Beispiel" in r.text
+    assert "Neue Firma A" in r.text
+    assert "Neue Firma B" in r.text
+    assert f"/kontakte/{a}/bearbeiten" in r.text
+    assert f"/kontakte/{a}/verlauf/" in r.text and "wiederherstellen-flyover" in r.text
+
+
+def test_verlauf_uebersicht_ohne_aenderungen_ist_leer(tmp_db):
+    from db import queries
+    queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster"})
+    r = TestClient(app).get("/einstellungen/verlauf")
+    assert r.status_code == 200
+    assert "Noch keine Änderungen aufgezeichnet" in r.text
+
+
 def test_aufraeumen_zeigt_namensdubletten_und_gemeinsame_angaben(tmp_db):
     """Nutzer-Meldung nach dem Wiederherstellen verlorener Kontakte: "irgendwie muss
     ich all die kontakte die nun falsch sind wieder korrigieren". Bei 1500 Kontakten

@@ -347,6 +347,23 @@ async def einstellungen_alle_kontakte_loeschen(request: Request):
     return RedirectResponse(url=f"/einstellungen?reset={quote(text)}", status_code=303)
 
 
+@router.get("/einstellungen/verlauf")
+def verlauf_uebersicht(request: Request):
+    """Globale Aenderungshistorie ueber alle Kontakte - Nutzer-Anlass: der
+    Verlauf am einzelnen Kontakt (v1.27.0) verlangt, jeden Kontakt einzeln zu
+    oeffnen. "ich brauche nur eine globale liste. ich will ueber alles sehen was
+    geaendert wurde. nicht jeden einzelnen kontakt anwaehlen und es pruefen das
+    macht keinen sinn." Zeigt die letzten 200 Ereignisse quer durch den Bestand,
+    mit Link zum betroffenen Kontakt und Rueckgaengig-Knopf (identisch zum
+    Kontakt-eigenen Verlauf, siehe web/contacts.py)."""
+    conn = get_connection()
+    try:
+        verlauf = queries.globaler_verlauf(conn)
+    finally:
+        conn.close()
+    return templates.TemplateResponse("verlauf.html", {"request": request, "verlauf": verlauf})
+
+
 @router.get("/einstellungen/aufraeumen")
 def aufraeumen_uebersicht(request: Request, meldung: str = ""):
     """Findet, was nach Importen und Zusammenfuehrungen doppelt im Bestand steht.

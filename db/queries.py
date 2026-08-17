@@ -291,6 +291,41 @@ def kontakt_verlauf(conn: sqlite3.Connection, kontakt_id: int, limit: int = 50) 
     return ergebnis
 
 
+def globaler_verlauf(conn: sqlite3.Connection, limit: int = 200) -> list:
+    """Verlauf ueber ALLE Kontakte hinweg, neuestes Ereignis zuerst - Nutzer-Anlass:
+    "ich brauche nur eine globale liste. ich will ueber alles sehen was geaendert
+    wurde. nicht jeden einzelnen kontakt anwaehlen". Kein Datum-/Kontaktfilter in
+    dieser ersten Version - bei taeglicher Nutzung reichen die letzten `limit`
+    Ereignisse, um zu sehen, was sich kuerzlich getan hat. Kontakte, die
+    zwischenzeitlich geloescht wurden, fallen automatisch heraus (ON DELETE CASCADE
+    auf kontakt_verlauf_ereignisse.kontakt_id) - ihr Verlauf ergibt ohne den
+    Kontakt selbst ohnehin keinen Ansatzpunkt zum Nachschauen oder Wiederherstellen."""
+    ereignisse = conn.execute(
+        "SELECT e.*, k.vorname, k.nachname, k.firma FROM kontakt_verlauf_ereignisse e "
+        "JOIN kontakte k ON k.id = e.kontakt_id "
+        "ORDER BY e.created_at DESC, e.id DESC LIMIT ?",
+        (limit,),
+    ).fetchall()
+    ergebnis = []
+    for e in ereignisse:
+        felder = conn.execute(
+            "SELECT feld, alt_lesbar, neu_lesbar FROM kontakt_verlauf WHERE ereignis_id = ? ORDER BY id",
+            (e["id"],),
+        ).fetchall()
+        ergebnis.append({
+            "id": e["id"], "kontakt_id": e["kontakt_id"],
+            "kontakt_name": (f"{e['vorname']} {e['nachname']}".strip() or e["firma"] or "(ohne Namen)"),
+            "created_at": e["created_at"], "quelle": e["quelle"],
+            "quelle_lesbar": VERLAUF_QUELLE_BESCHRIFTUNG.get(e["quelle"], e["quelle"]),
+            "felder": [
+                {"feld": f["feld"], "feld_lesbar": VERLAUF_FELD_BESCHRIFTUNG.get(f["feld"], f["feld"]),
+                 "alt": f["alt_lesbar"], "neu": f["neu_lesbar"]}
+                for f in felder
+            ],
+        })
+    return ergebnis
+
+
 def verlauf_ereignis(conn: sqlite3.Connection, ereignis_id: int) -> "dict | None":
     """Ein einzelnes Verlauf-Ereignis mit den STRUKTURIERTEN Werten (nicht nur dem
     lesbaren Text) - Grundlage fuers Wiederherstellen, das die alten Werte
