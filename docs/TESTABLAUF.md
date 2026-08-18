@@ -3,9 +3,8 @@
 Vollständiger Durchlauf von der Installation bis zum Export. Gedacht zum Abhaken:
 jeder Punkt ist eine Handlung mit einer klaren Erwartung.
 
-**Stand:** Abschnitt C ist durch (bis auf C11, C14, C17, C18), von D fehlen noch
-D5–D9 und D11, in B neu B11–B16, F5–F7 offen. Offene Befunde siehe unten. Nächster Schritt:
-**1.29.0 installieren**.
+**Stand:** Abschnitt B und C sind durch bis auf C11 und C17, von D fehlen noch D7–D9 und D11, F5–F7 offen.
+Offene Befunde siehe unten. Nächster Schritt: **1.29.1 installieren**.
 
 | Zeichen | Bedeutung |
 |---|---|
@@ -52,12 +51,12 @@ synchronisieren** urteilen.
 | B8 | ✅ | Ordner umbenennen | Gruppe in Kontakte.app heisst neu, die Mitglieder bleiben |
 | B9 | ✅ | Mehrere Kontakte auswählen → Sammelbearbeiten | Änderung greift bei allen ausgewählten |
 | B10 | ✅ | Kontakt per Drag & Drop auf einen Ordner ziehen | Zuordnung wird übernommen |
-| B11 | ⬜ | Kontakt anlegen, der **nur eine Firma** ist (Namensfelder leer) | Lässt sich speichern; als Bezeichnung genügt Name **oder** Firma | neu ab 1.20.0 |
-| B12 | ⬜ | Bei einem Kontakt die Adresse ändern und speichern, dann **Verlauf** öffnen | Neuer Eintrag mit Zeitpunkt, Quelle „Bearbeitet im Browser“, altem und neuem Wert | neu ab 1.27.0 |
-| B13 | ⬜ | Bei diesem Verlaufseintrag **Rückgängig** klicken | Vorschau zeigt den alten Wert orange markiert; erst „Speichern“ setzt ihn zurück, „Abbrechen“ ändert nichts | neu ab 1.27.0 |
-| B14 | ⬜ | Bei einem Kontakt **+ Funktion** klicken, zweites Funktion/Rolle-Paar ausfüllen, speichern | Beide Paare bleiben erhalten, erscheinen beim erneuten Öffnen wieder | neu ab 1.28.0 |
-| B15 | ⬜ | Diesen Kontakt exportieren (PDF/CSV) | Erscheint unter **beiden** Funktionen, mit der jeweils passenden Rolle | neu ab 1.28.0 |
-| B16 | ⬜ | Einstellungen → **Verlauf aller Kontakte** öffnen | Zeigt Änderungen quer über alle Kontakte, neueste zuerst, mit Link zum Kontakt und „Rückgängig“ | neu ab 1.28.0 |
+| B11 | ✅ | Kontakt anlegen, der **nur eine Firma** ist (Namensfelder leer) | Lässt sich speichern; als Bezeichnung genügt Name **oder** Firma | neu ab 1.20.0 |
+| B12 | ✅ | Bei einem Kontakt die Adresse ändern und speichern, dann **Verlauf** öffnen | Neuer Eintrag mit Zeitpunkt, Quelle „Bearbeitet im Browser“, altem und neuem Wert | neu ab 1.27.0 |
+| B13 | ✅ | Bei diesem Verlaufseintrag **Rückgängig** klicken | Vorschau zeigt den alten Wert orange markiert; erst „Speichern“ setzt ihn zurück, „Abbrechen“ ändert nichts | neu ab 1.27.0 |
+| B14 | ✅ | Bei einem Kontakt **+ Funktion** klicken, zweites Funktion/Rolle-Paar ausfüllen, speichern | Beide Paare bleiben erhalten, erscheinen beim erneuten Öffnen wieder | neu ab 1.28.0 |
+| B15 | ✅ | Diesen Kontakt exportieren (PDF/CSV) | Erscheint unter **beiden** Funktionen, mit der jeweils passenden Rolle | neu ab 1.28.0 |
+| B16 | ✅ | Einstellungen → **Verlauf aller Kontakte** öffnen | Zeigt Änderungen quer über alle Kontakte, neueste zuerst, mit Link zum Kontakt und „Rückgängig“ | neu ab 1.28.0 |
 
 ---
 
@@ -81,11 +80,11 @@ kommt zuerst als **Vorschlag**.
 | C11 | 🔁 | Denselben Kontakt im Browser löschen | Verschwindet auf allen Geräten und bleibt weg | |
 | C12 | ✅ | Kontakt in Kontakte.app anlegen, aber **im privaten Account** (iCloud/„Auf meinem Mac“) | Kommt **nicht** in Rubrica an — Rubrica sieht nur seinen eigenen Account | |
 | C13 | ✅ | Nach der Installation einmal **Jetzt alles neu synchronisieren**, dann Vorschläge öffnen | Keine Änderungsvorschläge für Nummern, die niemand angefasst hat | Vorschlagsflut aus 1.14.0 ist weg |
-| C14 | 🔁 | Einen **Ordner** in Kontakte.app löschen (falls dort überhaupt möglich) | Der Ordner kommt von selbst zurück — auch Ordner löscht man nur im Browser | in Kontakte.app scheint es gar nicht zu gehen; Punkt bleibt für iPhone o. ä. |
+| C14 | ✅ | Einen **Ordner** in Kontakte.app löschen (falls dort überhaupt möglich) | Der Ordner kommt von selbst zurück — auch Ordner löscht man nur im Browser | in Kontakte.app nicht möglich (bestätigt) — Löschen bleibt ohnehin nur im Browser vorgesehen |
 | C15 | ✅ | Bestehenden Kontakt in Kontakte.app in einen Ordner ziehen, **einige Minuten warten**, dann im Browser einen anderen in denselben Ordner | Beide Zuordnungen bleiben | gleichzeitig gewinnt weiterhin der Browser — bekannte Grenze, siehe Befund „Zeitfenster“ |
 | C16 | ✅ | Vorschlag übernehmen, den Rubrica als **möglichen Duplikat** markiert | Drei Wege: **Zusammenführen**, **Als neuen Kontakt**, **Bestehenden ansehen** | |
 | C17 | ⬜ | Einen Duplikat-Vorschlag **Zusammenführen**, bei dem der bestehende Kontakt einen Namen hat | Der Name des bestehenden Kontakts bleibt; nur Nummern, Adressen und Mails kommen dazu | neu ab 1.19.0 — genau hier gingen Kontakte verloren |
-| C18 | ⬜ | In Kontakte.app eine Adresse/Nummer ändern, **bevor** der Vorschlag bestätigt ist **Einstellungen → Jetzt alles neu synchronisieren** klicken | Der Vorschlag bleibt mit dem geänderten Wert stehen — wird **nicht** stillschweigend mit dem alten Stand überschrieben | neu ab 1.26.0 — siehe Offene Befunde |
+| C18 | ✅ | In Kontakte.app eine Adresse/Nummer ändern, **bevor** der Vorschlag bestätigt ist **Einstellungen → Jetzt alles neu synchronisieren** klicken | Der Vorschlag bleibt mit dem geänderten Wert stehen — wird **nicht** stillschweigend mit dem alten Stand überschrieben | neu ab 1.26.0 — siehe Offene Befunde |
 
 ---
 
@@ -97,8 +96,8 @@ kommt zuerst als **Vorschlag**.
 | D2 | ✅ | Erste Telefonnummer ausfüllen | Darunter erscheint automatisch eine zweite Zeile mit der nächsten Kategorie |
 | D3 | ✅ | In Kontakte.app eine Nummer mit **eigener Bezeichnung** („Sekretariat“) anlegen | Bezeichnung bleibt erhalten und erscheint unter Einstellungen → Kategorien als Wert im Bestand |
 | D4 | ✅ | Diesen Wert dort einer bestehenden Kategorie zuordnen | Alle betroffenen Einträge wechseln die Kategorie |
-| D5 | ⬜ | In Kontakte.app eine als **privat** markierte E-Mail anlegen | Landet in Rubrica als „Privat“, nicht als „Direkt“ |
-| D6 | ⬜ | Einstellungen → Kategorien: neue Kategorie hinzufügen | Steht danach im Kontaktformular zur Auswahl |
+| D5 | ✅ | In Kontakte.app eine als **privat** markierte E-Mail anlegen | Landet in Rubrica als „Privat“, nicht als „Direkt“ |
+| D6 | ✅ | Einstellungen → Kategorien: neue Kategorie hinzufügen | Steht danach im Kontaktformular zur Auswahl |
 | D7 | ⬜ | Eine Kategorie umbenennen, die in Verwendung ist | Rückfrage mit Anzahl; danach tragen alle betroffenen Einträge den neuen Namen |
 | D8 | ⬜ | Eine Kategorie entfernen, die noch benutzt wird | Wird abgelehnt mit Hinweis auf die Anzahl der Einträge |
 | D9 | ⬜ | Eine Kategorie ohne Einträge entfernen | Verschwindet aus der Auswahl |
