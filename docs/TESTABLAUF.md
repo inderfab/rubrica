@@ -4,7 +4,7 @@ Vollständiger Durchlauf von der Installation bis zum Export. Gedacht zum Abhake
 jeder Punkt ist eine Handlung mit einer klaren Erwartung.
 
 **Stand:** Abschnitt B und C sind durch bis auf C11 und C17, von D fehlen noch D7–D9 und D11, F5–F7 offen.
-Offene Befunde siehe unten. Nächster Schritt: **1.29.1 installieren**.
+Offene Befunde siehe unten. Nächster Schritt: **1.29.2 installieren**.
 
 | Zeichen | Bedeutung |
 |---|---|
@@ -85,6 +85,7 @@ kommt zuerst als **Vorschlag**.
 | C16 | ✅ | Vorschlag übernehmen, den Rubrica als **möglichen Duplikat** markiert | Drei Wege: **Zusammenführen**, **Als neuen Kontakt**, **Bestehenden ansehen** | |
 | C17 | ⬜ | Einen Duplikat-Vorschlag **Zusammenführen**, bei dem der bestehende Kontakt einen Namen hat | Der Name des bestehenden Kontakts bleibt; nur Nummern, Adressen und Mails kommen dazu | neu ab 1.19.0 — genau hier gingen Kontakte verloren |
 | C18 | ✅ | In Kontakte.app eine Adresse/Nummer ändern, **bevor** der Vorschlag bestätigt ist **Einstellungen → Jetzt alles neu synchronisieren** klicken | Der Vorschlag bleibt mit dem geänderten Wert stehen — wird **nicht** stillschweigend mit dem alten Stand überschrieben | neu ab 1.26.0 — siehe Offene Befunde |
+| C19 | ⬜ | In Kontakte.app einen Kontakt anlegen, dessen Name **nicht** in Vor-/Nachname aufgeteilt ist (alles in ein Feld getippt) | Kommt trotzdem als Vorschlag an | neu ab 1.29.2 — kam vorher nie an |
 
 ---
 

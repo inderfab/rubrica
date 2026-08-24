@@ -17,9 +17,23 @@ def _values(vcard, name: str) -> list:
 
 
 def _parse_name(vcard) -> tuple[str, str]:
+    """Vor- und Nachname aus der vCard, mit FN als Rueckfall.
+
+    Der Rueckfall greift auch, wenn ein N-Feld zwar DA ist, Vor- und Nachname
+    darin aber leer sind. Anlass (Nutzer-Meldung: an mehreren Stationen in
+    Kontakte.app angelegte Kontakte kamen nie als Vorschlag an): Kontakte.app
+    schreibt einen Namen, der in kein Vor-/Nachname-Schema passt, komplett in das
+    VIERTE Feld von N: (Praefix, eigentlich fuer "Dr."/"Prof.") und laesst die
+    ersten beiden leer - "N:;;;test johanna;" bei "FN:test johanna". Frueher gewann
+    das vorhandene, aber leere N-Feld, der FN-Rueckfall darunter war unerreichbar,
+    und die Karte galt als inhaltsleer (kontakte_app_intake._ohne_inhalt) - also
+    als das noch ungefuellte Geruest, das Kontakte.app beim Klick auf "+" anlegt -
+    und wurde stillschweigend uebersprungen."""
     if hasattr(vcard, "n"):
         n = vcard.n.value
-        return (n.given or "").strip(), (n.family or "").strip()
+        vorname, nachname = (n.given or "").strip(), (n.family or "").strip()
+        if vorname or nachname:
+            return vorname, nachname
     if hasattr(vcard, "fn"):
         parts = vcard.fn.value.strip().split(" ", 1)
         if len(parts) == 2:

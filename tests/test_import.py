@@ -460,3 +460,45 @@ def test_merge_ergaenzt_eine_wirklich_andere_adresse(tmp_db):
     })
 
     assert len(queries.get_kontakt(tmp_db, kontakt_id)["adressen"]) == 2
+
+
+VCF_NAME_NUR_IM_PRAEFIX = textwrap.dedent("""\
+    BEGIN:VCARD
+    VERSION:3.0
+    PRODID:-//Apple Inc.//macOS 14.6//EN
+    UID:07652492-ac12-4e35-836a-1b6f52cfa857
+    N:;;;test johanna;
+    FN:test johanna
+    END:VCARD
+""")
+
+
+def test_name_nur_im_praefixfeld_wird_gelesen():
+    """Regression (Nutzer-Meldung: an mehreren Stationen in Kontakte.app angelegte
+    Testkontakte kamen NIE als Vorschlag an). Kontakte.app schreibt bei einem
+    Kontakt, dessen Name in kein Vor-/Nachname-Schema passt, den ganzen Namen in
+    das VIERTE Feld von N: (Praefix, eigentlich fuer "Dr."/"Prof.") und laesst
+    Vor- und Nachname leer - "N:;;;test johanna;". _parse_name gab bei
+    vorhandenem N: sofort das leere Paar zurueck, der FN-Rueckfall darunter war
+    unerreichbar. Die Karte galt damit als inhaltsleer (kontakte_app_intake.
+    _ohne_inhalt), wurde als noch ungefuelltes Kontakte.app-Geruest eingestuft
+    und stillschweigend uebersprungen - dauerhaft, auch bei "Jetzt pruefen"."""
+    kontakt = parse_vcf(VCF_NAME_NUR_IM_PRAEFIX)[0]
+    assert (kontakt["vorname"], kontakt["nachname"]) == ("test", "johanna")
+
+
+def test_leere_karte_bleibt_ohne_namen():
+    """Gegenprobe: die WIRKLICH leere Karte, die Kontakte.app beim Klick auf "+"
+    anlegt, darf weiterhin keinen Namen bekommen - sonst entsteht daraus ein
+    Vorschlag ohne ein einziges Feld (frueherer Nutzer-Befund: "sie erscheinen
+    aber sie sind leer")."""
+    leer = textwrap.dedent("""\
+        BEGIN:VCARD
+        VERSION:3.0
+        UID:21214592-30a0-4e2f-8764-100f3a6dd430
+        N:;;;;
+        FN:
+        END:VCARD
+    """)
+    kontakt = parse_vcf(leer)[0]
+    assert (kontakt["vorname"], kontakt["nachname"]) == ("", "")
