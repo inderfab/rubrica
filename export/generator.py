@@ -157,23 +157,29 @@ def _adresse_pdf(kontakt: dict, privatadresse_zeigen: bool) -> str:
     """Standardmaessig nur die geschaeftliche Adresse, ohne Typ-Praefix (kein
     "work"/"arbeit" im Ausdruck - der Nutzer wollte diesen Praefix nicht
     sehen). Die private Adresse erscheint nur, wenn in den Export-
-    Einstellungen aktiviert, dann mit "Privat:"-Praefix zur Unterscheidung."""
-    zeilen = []
+    Einstellungen aktiviert, dann mit "Privat:"-Praefix zur Unterscheidung.
+
+    Strasse und Ort/Land stehen auf FESTEN eigenen Zeilen (<br/> statt Komma-
+    Fliesstext) - dem reportlab-Zeilenumbruch ueberlassen, brach eine lange
+    Adresse mitten im Komma um (z.B. "Moosmattstr. 30, 8953 Dietikon," auf
+    einer Zeile, das einzelne Wort "Schweiz" verwaist auf der naechsten -
+    Nutzer-Befund anhand echter Adresslisten)."""
+    bloecke = []
     for a in kontakt.get("adressen", []):
         privat = _ist_privat_typ(a.get("typ", ""))
         if privat and not privatadresse_zeigen:
             continue
-        teile = [a.get("strasse", ""), f"{a.get('plz', '')} {a.get('ort', '')}".strip()]
-        teile = [t for t in teile if t]
+        ort_teile = [f"{a.get('plz', '')} {a.get('ort', '')}".strip()]
         if a.get("land"):
-            teile.append(a["land"])
-        if not teile:
+            ort_teile.append(a["land"])
+        zeilen = [t for t in (a.get("strasse", ""), ", ".join(t for t in ort_teile if t)) if t]
+        if not zeilen:
             continue
-        text = ", ".join(teile)
+        block = "<br/>".join(escape(z) for z in zeilen)
         if privat:
-            text = f"Privat: {text}"
-        zeilen.append(text)
-    return "<br/>".join(escape(z) for z in zeilen)
+            block = f"Privat:<br/>{block}"
+        bloecke.append(block)
+    return "<br/>".join(bloecke)
 
 
 def _url_text(kontakt: dict) -> str:
@@ -283,7 +289,7 @@ _STIL_KOPFZELLE = ParagraphStyle(
     "Kopfzelle", parent=_STIL_ZELLE, fontName="Helvetica-Bold", textColor=colors.white,
 )
 
-_TABELLEN_SPALTEN = ["BKP Nummer", "Unternehmen", "Sachbearbeitung", "Funktion", "Telefon", "E-Mail/Webseite"]
+_TABELLEN_SPALTEN = ["BKP Nummer", "Unternehmen", "Sachbearbeitung", "Rolle", "Telefon", "E-Mail/Webseite"]
 _SPALTEN_ANTEILE = [0.13, 0.20, 0.16, 0.16, 0.16, 0.19]
 _RAND = 15 * mm
 
@@ -328,13 +334,15 @@ def _kopf_zeichner(firmenname: str, logo_pfad: str):
     """Wird pro Seite als Canvas-Callback aufgerufen (nicht als Flowable), damit
     Firmenname/Logo/Datum auf JEDER Seite erscheinen, nicht nur auf der ersten -
     Platypus-Flowables wiederholen sich sonst nicht automatisch ueber Seiten
-    hinweg. Firmenname mittig oben, Logo rechts oben (Nutzer-Vorgabe; ersetzt
-    den fixen "mmt"-Platzhalter aus der Beispielvorlage), beides ueber die
-    Einstellungen konfigurierbar. "Seite X von Y" zeichnet _NumberedCanvas."""
+    hinweg. Logo rechts oben (Nutzer-Vorgabe; ersetzt den fixen "mmt"-
+    Platzhalter aus der Beispielvorlage), ueber die Einstellungen konfigurierbar.
+    Der Firmenname mittig oben erscheint nur, wenn KEIN Logo hinterlegt ist -
+    mit Logo waere er eine doppelte Nennung derselben Firma (Nutzer-Vorgabe:
+    "das Logo reicht"). "Seite X von Y" zeichnet _NumberedCanvas."""
     def zeichnen(canvas, doc):
         breite, hoehe = doc.pagesize
         canvas.saveState()
-        if firmenname:
+        if firmenname and not logo_pfad:
             canvas.setFont("Helvetica-Bold", 11)
             canvas.setFillColor(colors.black)
             canvas.drawCentredString(breite / 2, hoehe - 12 * mm, firmenname)
@@ -373,60 +381,101 @@ def _mitarbeiter_zeile(
     ]
 
 
+def _firmengruppen_zeilen(
+    firma: str, alle_kontakte: list[dict], privates_telefon_zeigen: bool,
+    private_email_zeigen: bool, privatadresse_zeigen: bool, bkp_zelle,
+) -> list[list]:
+    """Baut die Zeilen fuer EINE Firma (oder fuer BKP-lose Einzelkontakte ohne
+    Firma) - siehe _tabellenzeilen fuer das Gesamtbild. Pro Firma gibt es IMMER
+    eine eigene "Firmenzeile" (BKP-Nummer/Gewerk, Firmenname+Adresse, allgemeine
+    Nummer/Mail/Webseite falls vorhanden - Sachbearbeitung/Rolle bleiben dort
+    leer), gefolgt von je einer Zeile pro Mitarbeiter (Name/Rolle/Direktwahl) -
+    exakt das Muster aus der Nutzer-Vorlage. Die "allgemeine Nummer/Mail"
+    stammt von einem Kontakt ohne Namen in derselben Firma, falls vorhanden
+    (siehe _ist_firmenkontakt) - gibt es keinen, bleiben die Felder leer. Die
+    Webseite gilt firmenweit (siehe _firmen_webseiten_pdf) und erscheint
+    deshalb NUR auf der Firmenzeile, nie bei einzelnen Mitarbeitern. Kontakte
+    ohne Firma bekommen keine eigene Firmenzeile, die BKP-Nummer steht dann
+    direkt auf der ersten Personenzeile."""
+    zeilen = []
+    if firma:
+        firmenkontakt = next((k for k in alle_kontakte if _ist_firmenkontakt(k)), None)
+        mitarbeiter = [k for k in alle_kontakte if k is not firmenkontakt]
+
+        adresse = _firmen_adresse_pdf(alle_kontakte, privatadresse_zeigen)
+        unternehmen_teile = [f"<b>{escape(firma)}</b>"]
+        if adresse:
+            unternehmen_teile.append(adresse)
+        unternehmen_zelle = Paragraph("<br/>".join(unternehmen_teile), _STIL_ZELLE)
+
+        allg_telefon = _direktwahl_pdf(firmenkontakt, privates_telefon_zeigen) if firmenkontakt else ""
+        allg_email = _email_pdf(firmenkontakt, private_email_zeigen) if firmenkontakt else ""
+        allg_web = _firmen_webseiten_pdf(alle_kontakte)
+        allg_email_zelle = "<br/>".join(t for t in (allg_email, allg_web) if t)
+        zeilen.append([
+            bkp_zelle, unternehmen_zelle, "", "",
+            Paragraph(allg_telefon, _STIL_ZELLE) if allg_telefon else "",
+            Paragraph(allg_email_zelle, _STIL_ZELLE) if allg_email_zelle else "",
+        ])
+
+        for k in mitarbeiter:
+            zeilen.append(_mitarbeiter_zeile(k, privates_telefon_zeigen, private_email_zeigen))
+    else:
+        for i, k in enumerate(alle_kontakte):
+            zeilen.append(_mitarbeiter_zeile(
+                k, privates_telefon_zeigen, private_email_zeigen, bkp_zelle=bkp_zelle if i == 0 else "",
+            ))
+    return zeilen
+
+
+_INNERE_TABELLEN_STIL = TableStyle([
+    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+    ("LEFTPADDING", (0, 0), (-1, -1), 4),
+    ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+    ("TOPPADDING", (0, 0), (-1, -1), 3),
+    ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+])
+
+
 def _tabellenzeilen(
     kontakte: list[dict], privates_telefon_zeigen: bool, private_email_zeigen: bool, privatadresse_zeigen: bool,
-) -> tuple[list[list], list[int]]:
-    """Baut die Datenzeilen der Kontakttabelle. Pro Firma gibt es IMMER eine
-    eigene "Firmenzeile" (BKP-Nummer/Gewerk, Firmenname+Adresse, allgemeine
-    Nummer/Mail/Webseite falls vorhanden - Sachbearbeitung/Funktion bleiben
-    dort leer), gefolgt von je einer Zeile pro Mitarbeiter (Name/Funktion/
-    Direktwahl) - exakt das Muster aus der Nutzer-Vorlage. Die "allgemeine
-    Nummer/Mail" stammt von einem Kontakt ohne Namen in derselben Firma, falls
-    vorhanden (siehe _ist_firmenkontakt) - gibt es keinen, bleiben die Felder
-    leer. Die Webseite gilt firmenweit (siehe _firmen_webseiten_pdf) und
-    erscheint deshalb NUR auf der Firmenzeile, nie bei einzelnen Mitarbeitern.
-    Kontakte ohne Firma bekommen keine eigene Firmenzeile, die BKP-Nummer
-    steht dann direkt auf der ersten Personenzeile.
+    spaltenbreiten: list[float] | None = None,
+) -> tuple[list[list], list[int], list[int]]:
+    """Baut die Datenzeilen der Kontakttabelle (siehe _firmengruppen_zeilen fuer
+    eine einzelne Firma). Eine Firma MIT Mitarbeiterzeilen wird als EINE
+    verschachtelte, in sich unteilbare Tabelle eingefuegt (spaltenbreiten =
+    dieselben Spaltenbreiten wie die aeussere Tabelle) statt als lose Einzel-
+    zeilen - sonst reisst reportlab den Block an der Seitengrenze auseinander
+    (Firma bleibt auf Seite 1, die erste Sachbearbeitung faellt allein auf
+    Seite 2 - Nutzer-Befund anhand echter mehrseitiger Adresslisten). Ohne
+    spaltenbreiten (z.B. in bestehenden Tests) bleiben die Zeilen lose, wie vor
+    dieser Verschachtelung.
     Gibt zusaetzlich die Zeilenindizes zurueck, an denen eine neue Firma
-    beginnt (fuer die Trennlinie zwischen den Bloecken)."""
+    beginnt (fuer die Trennlinie zwischen den Bloecken), sowie die Indizes der
+    verschachtelten Zeilen (muessen ueber alle 6 Spalten verschmolzen werden,
+    da die Firma-Tabelle selbst schon alle 6 Spalten abbildet)."""
     zeilen = [[Paragraph(s, _STIL_KOPFZELLE) for s in _TABELLEN_SPALTEN]]
     gruppengrenzen = []
+    verschachtelte_zeilen = []
 
     for gruppe in _gruppiere_fuer_export(kontakte):
         for firmen_gruppe in gruppe["firmen"]:
             firma = firmen_gruppe["firma"]
             alle_kontakte = firmen_gruppe["kontakte"]
             bkp_zelle = Paragraph(_bkp_zellen_text(gruppe["funktion"]), _STIL_ZELLE) if gruppe["funktion"] else ""
+            block_zeilen = _firmengruppen_zeilen(
+                firma, alle_kontakte, privates_telefon_zeigen, private_email_zeigen, privatadresse_zeigen, bkp_zelle,
+            )
             gruppengrenzen.append(len(zeilen))
 
-            if firma:
-                firmenkontakt = next((k for k in alle_kontakte if _ist_firmenkontakt(k)), None)
-                mitarbeiter = [k for k in alle_kontakte if k is not firmenkontakt]
-
-                adresse = _firmen_adresse_pdf(alle_kontakte, privatadresse_zeigen)
-                unternehmen_teile = [f"<b>{escape(firma)}</b>"]
-                if adresse:
-                    unternehmen_teile.append(adresse)
-                unternehmen_zelle = Paragraph("<br/>".join(unternehmen_teile), _STIL_ZELLE)
-
-                allg_telefon = _direktwahl_pdf(firmenkontakt, privates_telefon_zeigen) if firmenkontakt else ""
-                allg_email = _email_pdf(firmenkontakt, private_email_zeigen) if firmenkontakt else ""
-                allg_web = _firmen_webseiten_pdf(alle_kontakte)
-                allg_email_zelle = "<br/>".join(t for t in (allg_email, allg_web) if t)
-                zeilen.append([
-                    bkp_zelle, unternehmen_zelle, "", "",
-                    Paragraph(allg_telefon, _STIL_ZELLE) if allg_telefon else "",
-                    Paragraph(allg_email_zelle, _STIL_ZELLE) if allg_email_zelle else "",
-                ])
-
-                for k in mitarbeiter:
-                    zeilen.append(_mitarbeiter_zeile(k, privates_telefon_zeigen, private_email_zeigen))
+            if firma and len(block_zeilen) > 1 and spaltenbreiten:
+                innere = Table(block_zeilen, colWidths=spaltenbreiten)
+                innere.setStyle(_INNERE_TABELLEN_STIL)
+                verschachtelte_zeilen.append(len(zeilen))
+                zeilen.append([innere, "", "", "", "", ""])
             else:
-                for i, k in enumerate(alle_kontakte):
-                    zeilen.append(_mitarbeiter_zeile(
-                        k, privates_telefon_zeigen, private_email_zeigen, bkp_zelle=bkp_zelle if i == 0 else "",
-                    ))
-    return zeilen, gruppengrenzen
+                zeilen.extend(block_zeilen)
+    return zeilen, gruppengrenzen, verschachtelte_zeilen
 
 
 def kontakte_pdf(
@@ -450,10 +499,11 @@ def kontakte_pdf(
     elemente = [Paragraph(escape(ordner_name), _STIL_TITEL)]
 
     if kontakte:
-        zeilen, gruppengrenzen = _tabellenzeilen(
-            kontakte, privates_telefon_zeigen, private_email_zeigen, privatadresse_zeigen,
+        spaltenbreiten = [doc.width * anteil for anteil in _SPALTEN_ANTEILE]
+        zeilen, gruppengrenzen, verschachtelte_zeilen = _tabellenzeilen(
+            kontakte, privates_telefon_zeigen, private_email_zeigen, privatadresse_zeigen, spaltenbreiten,
         )
-        tabelle = Table(zeilen, colWidths=[doc.width * anteil for anteil in _SPALTEN_ANTEILE], repeatRows=1)
+        tabelle = Table(zeilen, colWidths=spaltenbreiten, repeatRows=1)
         stil = [
             ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2f3437")),
             ("VALIGN", (0, 0), (-1, -1), "TOP"),
@@ -467,6 +517,15 @@ def kontakte_pdf(
         # keine Linien zwischen den Mitarbeiter-Zeilen derselben Firma.
         for zeilenindex in gruppengrenzen:
             stil.append(("LINEABOVE", (0, zeilenindex), (-1, zeilenindex), 0.5, colors.HexColor("#bbbbbb")))
+        # Verschachtelte Firma-Zeilen tragen die volle 6-Spalten-Tabelle bereits in
+        # der ersten Zelle - ueber alle Spalten verschmelzen und die Aussen-
+        # Polsterung fuer genau diese Zeile aufheben (die innere Tabelle bringt
+        # ihre eigene mit), sonst verschiebt sich die BKP-Spalte gegenueber den
+        # nicht-verschachtelten Zeilen um die doppelte Polsterung.
+        for zeilenindex in verschachtelte_zeilen:
+            stil.append(("SPAN", (0, zeilenindex), (-1, zeilenindex)))
+            for eigenschaft in ("LEFTPADDING", "RIGHTPADDING", "TOPPADDING", "BOTTOMPADDING"):
+                stil.append((eigenschaft, (0, zeilenindex), (-1, zeilenindex), 0))
         tabelle.setStyle(TableStyle(stil))
         elemente.append(tabelle)
     else:

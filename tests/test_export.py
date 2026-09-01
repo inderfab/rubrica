@@ -160,6 +160,56 @@ def test_email_pdf_private_nur_mit_flag_generische_typen_immer_sichtbar():
     assert "privat@example.com" in mit_privat
 
 
+def test_tabellenspalte_heisst_rolle_nicht_funktion():
+    """Die BKP-Nummer-Spalte zeigt bereits die Funktion (z.B. "292 Bauingenieur/
+    in") - eine weitere Spalte mit demselben Namen "Funktion" wirkte wie eine
+    Dopplung, obwohl darin die Rolle der Person steht (z.B. "Projektleitung").
+    Nutzer-Vorgabe: die Spalte muss "Rolle" heissen, nicht "Funktion"."""
+    assert "Rolle" in generator._TABELLEN_SPALTEN
+    assert "Funktion" not in generator._TABELLEN_SPALTEN
+
+
+def test_adresse_pdf_bricht_strasse_und_ort_auf_eigene_zeilen():
+    """Nutzer-Vorgabe: Strasse und "PLZ Ort, Land" auf FESTEN eigenen Zeilen,
+    nicht als Komma-Fliesstext, der reportlab ueberlaesst, wo er umbricht (frueher
+    brach z.B. "Moosmattstr. 30, 8953 Dietikon," ab und "Schweiz" landete allein
+    auf der naechsten Zeile)."""
+    kontakt = _kontakt(adressen=[{"typ": "work", "strasse": "Moosmattstr. 30", "plz": "8953",
+                                   "ort": "Dietikon", "region": "", "land": "Schweiz"}])
+    text = generator._adresse_pdf(kontakt, privatadresse_zeigen=False)
+    assert text == "Moosmattstr. 30<br/>8953 Dietikon, Schweiz"
+
+
+def test_kopf_zeichner_zeigt_firmenname_nur_ohne_logo():
+    """Nutzer-Vorgabe: mit Logo ist der zusaetzliche Firmenname-Schriftzug
+    ueberfluessig ("das Logo reicht") - ohne Logo bleibt er der einzige Hinweis
+    auf die Firma und muss weiterhin erscheinen."""
+    class _FakeCanvas:
+        def __init__(self):
+            self.texte = []
+
+        def saveState(self): pass
+        def restoreState(self): pass
+        def setFont(self, *a): pass
+        def setFillColor(self, *a): pass
+        def drawCentredString(self, x, y, text): self.texte.append(text)
+        def drawString(self, x, y, text): self.texte.append(text)
+        def drawImage(self, *a, **k): pass
+
+    class _FakeDoc:
+        pagesize = (100, 100)
+        leftMargin = 0
+        rightMargin = 0
+
+    ohne_logo = _FakeCanvas()
+    generator._kopf_zeichner("Muster AG", "")(ohne_logo, _FakeDoc())
+    assert "Muster AG" in ohne_logo.texte
+
+    mit_logo = _FakeCanvas()
+    generator._kopf_zeichner("Muster AG", "/pfad/zu/logo.png")(mit_logo, _FakeDoc())
+    assert "Muster AG" not in mit_logo.texte
+
+
 def test_adresse_pdf_zeigt_keinen_typ_praefix_fuer_geschaeftsadresse():
     kontakt = _kontakt(adressen=[{"typ": "work", "strasse": "Teststrasse 1", "plz": "8000", "ort": "Zuerich", "region": "", "land": ""}])
     text = generator._adresse_pdf(kontakt, privatadresse_zeigen=False)
@@ -188,19 +238,51 @@ def test_tabellenzeilen_firmenzeile_getrennt_von_mitarbeiterzeilen():
                             kategorie="292 Bauingenieur/in", rolle="Partnerin",
                             telefonnummern=[{"typ": "work", "nummer": "052 111 11 11"}],
                             emails=[{"typ": "internet", "email": "beispiel@beispiel.ch"}])
-    zeilen, grenzen = generator._tabellenzeilen(
+    zeilen, grenzen, verschachtelt = generator._tabellenzeilen(
         [firmenkontakt, mitarbeiter], privates_telefon_zeigen=False,
         private_email_zeigen=False, privatadresse_zeigen=False,
     )
+    # Ohne spaltenbreiten (Default) bleiben die Zeilen lose statt verschachtelt.
     assert len(zeilen) == 3  # Kopfzeile + Firmenzeile + 1 Mitarbeiterzeile
+    assert verschachtelt == []
     firmenzeile, mitarbeiterzeile = zeilen[1], zeilen[2]
-    assert firmenzeile[2] == "" and firmenzeile[3] == ""  # Sachbearbeitung/Funktion leer
+    assert firmenzeile[2] == "" and firmenzeile[3] == ""  # Sachbearbeitung/Rolle leer
     assert mitarbeiterzeile[0] == "" and mitarbeiterzeile[1] == ""  # BKP/Unternehmen leer
     assert grenzen == [1]  # eine Firmengruppe -> Trennlinie beginnt bei Zeile 1
 
 
+def test_tabellenzeilen_verschachtelt_firma_mit_mitarbeitern_als_eine_zeile():
+    """Mit spaltenbreiten (wie im echten PDF-Export) wird eine Firma samt
+    Mitarbeitern zu EINER unteilbaren Zeile verschachtelt - sonst reisst
+    reportlab den Block an der Seitengrenze auseinander (Nutzer-Befund: die
+    Firma blieb auf Seite 1, der erste Sachbearbeiter fiel allein auf Seite 2)."""
+    firmenkontakt = _kontakt(id=1, vorname="", nachname="", firma="Beispiel Bauingenieure AG",
+                              kategorie="292 Bauingenieur/in", rolle="",
+                              telefonnummern=[{"typ": "work", "nummer": "052 000 00 00"}],
+                              emails=[{"typ": "internet", "email": "info@beispiel.ch"}])
+    mitarbeiter = _kontakt(id=2, vorname="Astrid", nachname="Beispiel", firma="Beispiel Bauingenieure AG",
+                            kategorie="292 Bauingenieur/in", rolle="Partnerin",
+                            telefonnummern=[{"typ": "work", "nummer": "052 111 11 11"}],
+                            emails=[{"typ": "internet", "email": "beispiel@beispiel.ch"}])
+    zeilen, grenzen, verschachtelt = generator._tabellenzeilen(
+        [firmenkontakt, mitarbeiter], privates_telefon_zeigen=False,
+        private_email_zeigen=False, privatadresse_zeigen=False,
+        spaltenbreiten=[50, 50, 50, 50, 50, 50],
+    )
+    assert len(zeilen) == 2  # Kopfzeile + 1 verschachtelte Firmengruppen-Zeile
+    assert verschachtelt == [1]
+    assert grenzen == [1]
+
+    innere_tabelle = zeilen[1][0]
+    innere_zeilen = innere_tabelle._cellvalues
+    assert len(innere_zeilen) == 2  # Firmenzeile + 1 Mitarbeiterzeile
+    firmenzeile, mitarbeiterzeile = innere_zeilen
+    assert firmenzeile[2] == "" and firmenzeile[3] == ""  # Sachbearbeitung/Rolle leer
+    assert mitarbeiterzeile[0] == "" and mitarbeiterzeile[1] == ""  # BKP/Unternehmen leer
+
+
 def test_tabellenzeilen_hat_sechs_spalten_keine_eigene_mobil_spalte():
-    zeilen, _ = generator._tabellenzeilen(
+    zeilen, _, _ = generator._tabellenzeilen(
         [_kontakt()], privates_telefon_zeigen=False, private_email_zeigen=False, privatadresse_zeigen=False,
     )
     assert len(zeilen[0]) == 6
@@ -211,7 +293,7 @@ def test_webseite_erscheint_nur_auf_firmenzeile_nicht_bei_mitarbeitern():
     firmenkontakt = _kontakt(id=1, vorname="", nachname="", firma="Muster AG", urls=[])
     mitarbeiter = _kontakt(id=2, vorname="Sarina", nachname="Muster", firma="Muster AG",
                             urls=[{"typ": "homepage", "url": "www.muster.ch"}])
-    zeilen, _ = generator._tabellenzeilen(
+    zeilen, _, _ = generator._tabellenzeilen(
         [firmenkontakt, mitarbeiter], privates_telefon_zeigen=False,
         private_email_zeigen=False, privatadresse_zeigen=False,
     )
@@ -289,11 +371,32 @@ def test_export_route_nutzt_konfigurierten_firmennamen(tmp_db, monkeypatch):
     monkeypatch.setattr(settings, "_settings", {"export": {"firmenname": "Muster Architektur AG"}})
     queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster"})
 
+    # Genau ein Format ausgewaehlt -> direkt die PDF-Datei, kein Zip (siehe
+    # test_export_einzelnes_format_liefert_datei_ohne_zip).
     r = TestClient(app).post("/export", data={"ordner_id": "", "formate": ["pdf"]})
     assert r.status_code == 200
+    assert r.content.startswith(b"%PDF")
+
+
+def test_export_einzelnes_format_liefert_datei_ohne_zip(tmp_db):
+    queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster"})
+    client = TestClient(app)
+
+    r_csv = client.post("/export", data={"ordner_id": "", "formate": ["csv"]})
+    assert r_csv.headers["content-type"].startswith("text/csv")
+    assert r_csv.content.decode("utf-8-sig").startswith(";".join(generator.CSV_SPALTEN))
+
+    r_pdf = client.post("/export", data={"ordner_id": "", "formate": ["pdf"]})
+    assert r_pdf.headers["content-type"] == "application/pdf"
+    assert r_pdf.content.startswith(b"%PDF")
+
+
+def test_export_mehrere_formate_liefert_zip(tmp_db):
+    queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster"})
+    r = TestClient(app).post("/export", data={"ordner_id": "", "formate": ["pdf", "csv"]})
+    assert r.headers["content-type"] == "application/zip"
     zf = zipfile.ZipFile(BytesIO(r.content))
-    pdf_bytes = zf.read(zf.namelist()[0])
-    assert pdf_bytes.startswith(b"%PDF")
+    assert len(zf.namelist()) == 2
 
 
 def test_pdf_export_ignoriert_andere_ordner_zugehoerigkeit():

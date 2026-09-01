@@ -117,23 +117,37 @@ async def export_erzeugen(request: Request):
     firmenname = settings.get("export.firmenname", "") or ""
     logo = settings.logo_pfad()
 
+    dateien = {}
+    if "pdf" in formate:
+        dateien[f"{basisname}_{datum}.pdf"] = (
+            generator.kontakte_pdf(
+                ordner_name, kontakte, firmenname=firmenname,
+                logo_pfad=str(logo) if logo else "",
+                privates_telefon_zeigen=bool(settings.get("export.privates_telefon_zeigen", False)),
+                private_email_zeigen=bool(settings.get("export.private_email_zeigen", False)),
+                privatadresse_zeigen=bool(settings.get("export.privatadresse_zeigen", False)),
+            ),
+            "application/pdf",
+        )
+    if "csv" in formate:
+        dateien[f"{basisname}_{datum}.csv"] = (generator.kontakte_csv(kontakte), "text/csv")
+    if "vcard" in formate:
+        dateien[f"{basisname}_{datum}.vcf"] = (generator.kontakte_vcard(kontakte), "text/vcard")
+
+    # Bei genau EINEM gewaehlten Format direkt die Datei ausliefern statt eines
+    # Zip mit nur einem Eintrag (Nutzer-Vorgabe) - das Zip lohnt sich erst, wenn
+    # tatsaechlich mehrere Dateien zusammengefasst werden muessen.
+    if len(dateien) == 1:
+        dateiname, (inhalt, media_type) = next(iter(dateien.items()))
+        return Response(
+            content=inhalt, media_type=media_type,
+            headers={"Content-Disposition": f'attachment; filename="{dateiname}"'},
+        )
+
     puffer = BytesIO()
     with zipfile.ZipFile(puffer, "w", zipfile.ZIP_DEFLATED) as zf:
-        if "pdf" in formate:
-            zf.writestr(
-                f"{basisname}_{datum}.pdf",
-                generator.kontakte_pdf(
-                    ordner_name, kontakte, firmenname=firmenname,
-                    logo_pfad=str(logo) if logo else "",
-                    privates_telefon_zeigen=bool(settings.get("export.privates_telefon_zeigen", False)),
-                    private_email_zeigen=bool(settings.get("export.private_email_zeigen", False)),
-                    privatadresse_zeigen=bool(settings.get("export.privatadresse_zeigen", False)),
-                ),
-            )
-        if "csv" in formate:
-            zf.writestr(f"{basisname}_{datum}.csv", generator.kontakte_csv(kontakte))
-        if "vcard" in formate:
-            zf.writestr(f"{basisname}_{datum}.vcf", generator.kontakte_vcard(kontakte))
+        for dateiname, (inhalt, _media_type) in dateien.items():
+            zf.writestr(dateiname, inhalt)
 
     dateiname = f"{basisname}_{datum}.zip"
     return Response(

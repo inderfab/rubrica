@@ -3,8 +3,11 @@
 Vollständiger Durchlauf von der Installation bis zum Export. Gedacht zum Abhaken:
 jeder Punkt ist eine Handlung mit einer klaren Erwartung.
 
-**Stand:** Abschnitt B und C sind durch bis auf C11 und C17, von D fehlen noch D7–D9 und D11, F5–F7 offen.
-Offene Befunde siehe unten. Nächster Schritt: **1.29.2 installieren**.
+**Stand:** Abschnitt B und C sind durch bis auf C11 und C17, von D fehlen noch D7–D9 und D11, F5–F7 offen,
+C19 (aus 1.29.2) noch zu bestätigen. G2 und G8–G12 neu ab 1.30.0 (PDF-Export: Spalte „Rolle" statt
+„Funktion", Firmenname nur ohne Logo, Firma reisst nicht mehr über den Seitenumbruch, Adressformat,
+Export ohne Zip bei nur einem Format). Offene Befunde siehe unten. Nächster Schritt: **1.30.0
+installieren**.
 
 | Zeichen | Bedeutung |
 |---|---|
@@ -139,12 +142,17 @@ kommt zuerst als **Vorschlag**.
 | | Status | Handlung | Erwartung |
 |---|---|---|---|
 | G1 | ⬜ | Ordner wählen, alle drei Formate exportieren | ZIP mit PDF, CSV und `.vcf` |
-| G2 | ⬜ | PDF öffnen | Firmenname und Logo im Kopf, nach Funktion gruppiert |
+| G2 | ⬜ | PDF öffnen | Logo im Kopf (Firmenname nur, falls **kein** Logo hinterlegt ist), nach BKP-Funktion gruppiert, Spalte heisst **„Rolle"** (nicht „Funktion") |
 | G3 | ⬜ | CSV in Excel öffnen | Eigene Spalte je Kategorie, Umlaute korrekt |
 | G4 | ⬜ | Export → Darstellung: **Private Telefonnummer** aktivieren, neu exportieren | Private Nummern erscheinen jetzt im PDF |
 | G5 | ⬜ | Dieselbe Einstellung wieder deaktivieren | Sie verschwinden wieder |
 | G6 | ⬜ | Nach dem Speichern der Darstellung: Einstellungen prüfen | Mail-Zugangsdaten und Backup-Pfad sind unverändert |
 | G7 | ⬜ | `.vcf` per Doppelklick öffnen | Lässt sich in Kontakte.app übernehmen |
+| G8 | ⬜ | **Nur PDF** ankreuzen und exportieren | Es kommt direkt eine `.pdf`-Datei an, kein `.zip` |
+| G9 | ⬜ | **Nur CSV** ankreuzen und exportieren | Es kommt direkt eine `.csv`-Datei an, kein `.zip` |
+| G10 | ⬜ | Zwei oder drei Formate ankreuzen und exportieren | Weiterhin ein `.zip` mit den gewählten Dateien |
+| G11 | ⬜ | PDF eines Ordners mit vielen Firmen (mehrseitig) öffnen, an jedem Seitenumbruch prüfen | Eine Firma samt ihren Sachbearbeitern steht immer komplett auf einer Seite, reisst nie über den Seitenumbruch |
+| G12 | ⬜ | Im PDF eine Firmenadresse ansehen | Firmenname, Strasse und „PLZ Ort, Land" stehen auf drei festen eigenen Zeilen, kein unschöner Umbruch mitten im Text |
 
 ---
 
