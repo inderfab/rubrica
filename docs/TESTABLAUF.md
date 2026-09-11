@@ -6,10 +6,10 @@ jeder Punkt ist eine Handlung mit einer klaren Erwartung.
 **Stand:** Abschnitt B und C sind durch bis auf C11 und C17, von D fehlen noch D7–D9 und D11, F5–F7 offen,
 C19 (aus 1.29.2) noch zu bestätigen. G2 und G8–G12 neu ab 1.30.0 (PDF-Export: Spalte „Rolle" statt
 „Funktion", Firmenname nur ohne Logo, Firma reisst nicht mehr über den Seitenumbruch, Adressformat,
-Export ohne Zip bei nur einem Format). B17–B19 und C20 neu ab 1.31.0 (Geburtstag als Kontaktfeld,
-Adresse kein Pflichtfeld mehr) — **wichtig: der Produktivserver läuft auf dem iMac, nicht auf dem
-Mac Studio**, 1.31.0 muss dort installiert werden. Offene Befunde siehe unten. Nächster Schritt:
-**1.31.0 auf dem iMac installieren**, danach die 19 alten Geburtstage nachtragen (siehe Changelog).
+Export ohne Zip bei nur einem Format). 1.31.0 ist auf dem iMac (dem Produktivserver) installiert;
+die 19 alten Geburtstage sind nachgetragen und bestätigt in Kontakte.app angekommen (B18 ✅). B17,
+B19 und C20 (neu ab 1.31.0: optionales Anlegen ohne Geburtstag/Adresse, Export-Ausschluss,
+Änderungserkennung bei Geburtstag-Edit in Kontakte.app) noch offen. Offene Befunde siehe unten.
 
 | Zeichen | Bedeutung |
 |---|---|
@@ -63,7 +63,7 @@ synchronisieren** urteilen.
 | B15 | ✅ | Diesen Kontakt exportieren (PDF/CSV) | Erscheint unter **beiden** Funktionen, mit der jeweils passenden Rolle | neu ab 1.28.0 |
 | B16 | ✅ | Einstellungen → **Verlauf aller Kontakte** öffnen | Zeigt Änderungen quer über alle Kontakte, neueste zuerst, mit Link zum Kontakt und „Rückgängig” | neu ab 1.28.0 |
 | B17 | ⬜ | Neuen Kontakt anlegen **ohne** Geburtstag und **ohne** Adresse | Lässt sich trotzdem speichern, keine roten Pflichtfelder | neu ab 1.31.0 |
-| B18 | ⬜ | Bei einem Kontakt einen Geburtstag eintragen und speichern, nach einigen Minuten in Kontakte.app prüfen | Geburtstag erscheint dort ebenfalls | neu ab 1.31.0 |
+| B18 | ✅ | Bei einem Kontakt einen Geburtstag eintragen und speichern, nach einigen Minuten in Kontakte.app prüfen | Geburtstag erscheint dort ebenfalls | neu ab 1.31.0 — bestätigt beim Nachtragen der 19 alten Geburtstage |
 | B19 | ⬜ | Diesen Kontakt exportieren (PDF/CSV) | Geburtstag erscheint **nirgends** im Export | neu ab 1.31.0 |
 
 ---
