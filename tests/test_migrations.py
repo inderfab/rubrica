@@ -88,6 +88,35 @@ def test_kontakte_apple_uid_migration_fuegt_spalte_bei_bestehender_installation_
     assert conn.execute("SELECT apple_uid FROM kontakte WHERE id = 1").fetchone()["apple_uid"] is None
 
 
+def test_kontakte_geburtstag_migration_fuegt_spalte_bei_bestehender_installation_hinzu():
+    # Wie test_kontakte_apple_uid_migration_fuegt_spalte_bei_bestehender_installation_hinzu:
+    # simuliert eine Installation von VOR dieser Aenderung (kontakte ohne geburtstag-Spalte).
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.executescript("""
+        CREATE TABLE kontakte (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            vorname TEXT NOT NULL DEFAULT '', nachname TEXT NOT NULL DEFAULT ''
+        );
+        CREATE TABLE telefonnummern (id INTEGER PRIMARY KEY, kontakt_id INTEGER, typ TEXT NOT NULL DEFAULT '', nummer TEXT NOT NULL);
+        CREATE TABLE emails (id INTEGER PRIMARY KEY, kontakt_id INTEGER, typ TEXT NOT NULL DEFAULT '', email TEXT NOT NULL);
+        CREATE TABLE vorschlaege (
+            id INTEGER PRIMARY KEY, kontakt_id INTEGER, quelle TEXT NOT NULL DEFAULT 'import',
+            status TEXT NOT NULL DEFAULT 'offen', rohdaten TEXT NOT NULL DEFAULT '{}',
+            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+        );
+        CREATE TABLE projekte (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE);
+        CREATE TABLE _migrations (id TEXT PRIMARY KEY, applied_at TEXT);
+    """)
+    conn.execute("INSERT INTO kontakte (id, vorname, nachname) VALUES (1, 'Anna', 'Muster')")
+
+    migrations.run(conn)
+
+    spalten = {row["name"] for row in conn.execute("PRAGMA table_info(kontakte)")}
+    assert "geburtstag" in spalten
+    assert conn.execute("SELECT geburtstag FROM kontakte WHERE id = 1").fetchone()["geburtstag"] == ""
+
+
 def test_init_schema_reihenfolge_gegen_bestehende_installation_ohne_apple_uid():
     # Regression (Produktivfehler auf dem iMac nach dem Update auf 1.2.0): init_schema()
     # (db/connection.py) fuehrt IMMER zuerst schema.sql aus (CREATE TABLE IF NOT EXISTS -

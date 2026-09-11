@@ -88,8 +88,7 @@
                         <td class="zieh-griff" draggable="true"
                             ondragstart="rubricaDragStart(event, '{{ k.id }}', '{{ (k.vorname ~ ' ' ~ k.nachname)|trim|e }}')"
                             title="Zum Zuordnen auf einen Ordner links ziehen">⠿</td>
-                        <td class="{{ 'zelle-fehler' if k.fehlende_felder.vorname or k.fehlende_felder.nachname or k.fehlende_felder.adresse }}"
-                            {% if k.fehlende_felder.adresse and not (k.fehlende_felder.vorname or k.fehlende_felder.nachname) %}title="Adresse fehlt"{% endif %}>
+                        <td class="{{ 'zelle-fehler' if k.fehlende_felder.vorname or k.fehlende_felder.nachname }}">
                             {{ k.vorname }} {{ k.nachname }}
                         </td>
                         <td>{{ k.firma }}</td>

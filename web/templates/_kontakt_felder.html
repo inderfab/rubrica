@@ -49,6 +49,10 @@
         <input type="text" name="funktion_rolle" value="{{ erste_funktion.rolle or '' }}"
                placeholder="z. B. Geschäftsführer">
     </div>
+    <div class="field">
+        <label>Geburtstag <span style="color:#86868b">(optional)</span></label>
+        <input type="date" name="geburtstag" value="{{ kontakt.geburtstag if kontakt else '' }}">
+    </div>
 </div>
 
 <div class="grid-2">
@@ -85,8 +89,8 @@
     </fieldset>
 </div>
 
-<fieldset class="{{ 'feld-fehler' if fehlende_felder.adresse }}">
-    <legend>Adresse</legend>
+<fieldset>
+    <legend>Adresse <span style="color:#86868b">(optional)</span></legend>
     <div class="grid-adresse-art">
         <div class="field">
             <label>Art</label>

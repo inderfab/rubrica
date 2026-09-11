@@ -428,11 +428,11 @@ def pruefe_ordner_mitgliedschaften(conn, client=None) -> dict:
 # wuerde man trotzdem vergleichen, saehe der Import-Schnappschuss (immer ohne
 # Funktion) gegen den echten Serverstand wie eine staendige Aenderung aus, und das
 # Uebernehmen wuerde ein Pflichtfeld leeren.
-_VERGLEICHSFELDER = ("vorname", "nachname", "firma", "notizen",
+_VERGLEICHSFELDER = ("vorname", "nachname", "firma", "geburtstag", "notizen",
                      "telefonnummern", "emails", "adressen", "urls")
 
 _FELD_BESCHRIFTUNG = {
-    "vorname": "Vorname", "nachname": "Nachname", "firma": "Firma",
+    "vorname": "Vorname", "nachname": "Nachname", "firma": "Firma", "geburtstag": "Geburtstag",
     "notizen": "Notizen", "telefonnummern": "Telefon", "emails": "E-Mail",
     "adressen": "Adresse", "urls": "Web",
 }

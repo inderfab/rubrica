@@ -145,11 +145,11 @@ def create_kontakt(conn: sqlite3.Connection, daten: dict) -> int:
     # siehe _replace_funktionen.
     with conn:
         cur = conn.execute(
-            """INSERT INTO kontakte (vorname, nachname, firma, notizen, apple_uid)
-               VALUES (?, ?, ?, ?, ?)""",
+            """INSERT INTO kontakte (vorname, nachname, firma, geburtstag, notizen, apple_uid)
+               VALUES (?, ?, ?, ?, ?, ?)""",
             (
                 daten.get("vorname", ""), daten.get("nachname", ""),
-                daten.get("firma", ""),
+                daten.get("firma", ""), daten.get("geburtstag", ""),
                 daten.get("notizen", ""), daten.get("apple_uid") or None,
             ),
         )
@@ -167,10 +167,11 @@ def create_kontakt(conn: sqlite3.Connection, daten: dict) -> int:
 # ohne dass sich das irgendwo nachvollziehen liess). "funktionen" (Funktion/Rolle-
 # Paare, siehe kontakt_funktionen) ist ein Listenfeld wie Telefon/E-Mail/Adresse/
 # URL, kein Scalar mehr - ein Kontakt kann mehrere Paare gleichzeitig haben.
-VERLAUF_SKALARFELDER = ("vorname", "nachname", "firma", "notizen")
+VERLAUF_SKALARFELDER = ("vorname", "nachname", "firma", "geburtstag", "notizen")
 VERLAUF_LISTENFELDER = ("telefonnummern", "emails", "adressen", "urls", "funktionen")
 VERLAUF_FELD_BESCHRIFTUNG = {
-    "vorname": "Vorname", "nachname": "Nachname", "firma": "Firma", "notizen": "Notizen",
+    "vorname": "Vorname", "nachname": "Nachname", "firma": "Firma", "geburtstag": "Geburtstag",
+    "notizen": "Notizen",
     "telefonnummern": "Telefon", "emails": "E-Mail", "adressen": "Adresse", "urls": "Web",
     "funktionen": "Funktion/Rolle",
 }
@@ -358,10 +359,10 @@ def update_kontakt(conn: sqlite3.Connection, kontakt_id: int, daten: dict, quell
     with conn:
         conn.execute(
             """UPDATE kontakte SET vorname = ?, nachname = ?, firma = ?,
-               notizen = ?, updated_at = ? WHERE id = ?""",
+               geburtstag = ?, notizen = ?, updated_at = ? WHERE id = ?""",
             (
                 daten.get("vorname", ""), daten.get("nachname", ""),
-                daten.get("firma", ""),
+                daten.get("firma", ""), daten.get("geburtstag", ""),
                 daten.get("notizen", ""), _now(), kontakt_id,
             ),
         )
@@ -531,7 +532,7 @@ def merge_kontakt(conn: sqlite3.Connection, kontakt_id: int, daten: dict) -> Non
     with conn:
         conn.execute(
             """UPDATE kontakte SET vorname = ?, nachname = ?, firma = ?,
-               notizen = ?, apple_uid = ?, updated_at = ? WHERE id = ?""",
+               geburtstag = ?, notizen = ?, apple_uid = ?, updated_at = ? WHERE id = ?""",
             (
                 # Der NAME des bestehenden Kontakts gewinnt - anders als bei den
                 # uebrigen Feldern. Ein Merge entsteht aus einem Duplikat-VERDACHT,
@@ -545,6 +546,9 @@ def merge_kontakt(conn: sqlite3.Connection, kontakt_id: int, daten: dict) -> Non
                 bestehend["vorname"] or daten.get("vorname") or "",
                 bestehend["nachname"] or daten.get("nachname") or "",
                 bestehend["firma"] or daten.get("firma") or "",
+                # Wie apple_uid: einmal gesetzt bleibt der bestehende Geburtstag
+                # erhalten, ein Vorschlag fuellt ihn nur, wenn er noch leer ist.
+                bestehend.get("geburtstag") or daten.get("geburtstag") or "",
                 notizen,
                 # Einmal gesetzte apple_uid bleibt erhalten (verlaesslicher Wiedererkennungs-
                 # Anker) - wird nur befuellt, wenn der bestehende Kontakt noch keine hat.

@@ -39,6 +39,29 @@ def test_kontakt_zu_vcard_enthaelt_alle_felder():
     assert "NOTE:Testnotiz" in vcard
 
 
+def test_kontakt_zu_vcard_enthaelt_geburtstag():
+    vcard = radicale.kontakt_zu_vcard(_kontakt(geburtstag="1994-07-20"))
+    assert "BDAY:1994-07-20" in vcard
+
+
+def test_kontakt_zu_vcard_ohne_geburtstag_hat_kein_bday():
+    vcard = radicale.kontakt_zu_vcard(_kontakt(geburtstag=""))
+    assert "BDAY" not in vcard
+
+
+def test_geburtstag_ueberlebt_den_weg_durch_die_vcard():
+    """Wie test_kategorie_ueberlebt_den_weg_durch_die_vcard: Rubrica schreibt den
+    Geburtstag beim Push nach Kontakte.app und muss ihn beim naechsten
+    Aenderungs-Check (kontakte_app_intake) unveraendert zurueckbekommen -
+    sonst meldete jeder Sync-Lauf faelschlich eine Aenderung."""
+    import vobject
+    from importer import vcard as vcard_modul
+
+    kontakt = _kontakt(geburtstag="1994-07-20")
+    zurueck = vcard_modul._parse_kontakt(vobject.readOne(radicale.kontakt_zu_vcard(kontakt)))
+    assert zurueck["geburtstag"] == "1994-07-20"
+
+
 def test_kontakt_zu_vcard_escaped_sonderzeichen():
     vcard = radicale.kontakt_zu_vcard(_kontakt(
         vorname="A;B", nachname="C,D", firma="", funktionen=[],

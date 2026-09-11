@@ -502,3 +502,49 @@ def test_leere_karte_bleibt_ohne_namen():
     """)
     kontakt = parse_vcf(leer)[0]
     assert (kontakt["vorname"], kontakt["nachname"]) == ("", "")
+
+
+VCF_MIT_GEBURTSTAG = textwrap.dedent("""\
+    BEGIN:VCARD
+    VERSION:3.0
+    N:Muster;Anna;;;
+    FN:Anna Muster
+    BDAY:1994-07-20
+    TEL;TYPE=CELL:+41 79 123 45 67
+    END:VCARD
+""")
+
+
+def test_parse_vcf_extrahiert_geburtstag():
+    kontakt = parse_vcf(VCF_MIT_GEBURTSTAG)[0]
+    assert kontakt["geburtstag"] == "1994-07-20"
+
+
+def test_parse_vcf_ohne_bday_liefert_leeren_geburtstag():
+    kontakt = parse_vcf(VCF_NEU)[0]
+    assert kontakt["geburtstag"] == ""
+
+
+def test_import_ohne_treffer_uebernimmt_geburtstag(tmp_db):
+    kontakt_id = importiere(tmp_db, VCF_MIT_GEBURTSTAG, gruppen_als_ordner=False)[0]
+    assert queries.get_kontakt(tmp_db, kontakt_id)["geburtstag"] == "1994-07-20"
+
+
+def test_merge_kontakt_ergaenzt_fehlenden_geburtstag(tmp_db):
+    """Nutzer-Anlass: alte Geburtstage sollen in bereits bestehende Kontakte
+    nachgetragen werden koennen, ohne sonst etwas zu veraendern - additiv wie
+    Telefon/E-Mail/Adresse (siehe merge_kontakt). Ueber merge_kontakt direkt
+    getestet statt ueber importiere(): dessen Dateiimport matcht bewusst NUR
+    ueber Apple-UID/E-Mail, nie ueber den Namen (siehe _finde_match_fuer_import) -
+    ein Treffer allein durch den Namen entstuende dort gar nicht erst."""
+    kontakt_id = queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster"})
+    queries.merge_kontakt(tmp_db, kontakt_id, {"geburtstag": "1994-07-20"})
+    assert queries.get_kontakt(tmp_db, kontakt_id)["geburtstag"] == "1994-07-20"
+
+
+def test_merge_kontakt_ueberschreibt_bestehenden_geburtstag_nicht(tmp_db):
+    kontakt_id = queries.create_kontakt(tmp_db, {
+        "vorname": "Anna", "nachname": "Muster", "geburtstag": "1980-01-01",
+    })
+    queries.merge_kontakt(tmp_db, kontakt_id, {"geburtstag": "1994-07-20"})
+    assert queries.get_kontakt(tmp_db, kontakt_id)["geburtstag"] == "1980-01-01"

@@ -254,6 +254,17 @@ def _kontakte_zuletzt_gepushte_vcard(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE kontakte ADD COLUMN zuletzt_gepushte_vcard TEXT")
 
 
+def _kontakte_geburtstag(conn: sqlite3.Connection) -> None:
+    """ISO-Datum (JJJJ-MM-TT) fuer den Geburtstag - Nutzer-Meldung: "Es fehlen im
+    Kontakbuch die Geburtstage, die waren vorher drin" (beim alten, abgeloesten
+    Adressbuch). Bewusst ein Scalar auf kontakte statt einer eigenen Tabelle wie bei
+    Telefon/E-Mail/Adresse - eine Person hat nie mehrere Geburtstage. Gleiches
+    Guard-Muster wie _kontakte_apple_uid."""
+    spalten = {row["name"] for row in conn.execute("PRAGMA table_info(kontakte)")}
+    if "geburtstag" not in spalten:
+        conn.execute("ALTER TABLE kontakte ADD COLUMN geburtstag TEXT NOT NULL DEFAULT ''")
+
+
 def _aufraeum_erledigt_tabelle(conn: sqlite3.Connection) -> None:
     """Merkt, welche Verdachtsfaelle der Aufraeumseite als in Ordnung abgehakt sind."""
     conn.execute(
@@ -316,6 +327,7 @@ _PYTHON_MIGRATIONEN: list[tuple[str, "callable"]] = [
     ("2026-08-13_feste_adress_kategorien", _feste_adress_kategorien),
     ("2026-08-13_aufraeum_erledigt", _aufraeum_erledigt_tabelle),
     ("2026-08-14_kontakt_funktionen_uebernehmen", _kontakt_funktionen_uebernehmen),
+    ("2026-09-11_kontakte_geburtstag", _kontakte_geburtstag),
 ]
 
 

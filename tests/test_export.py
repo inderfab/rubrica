@@ -160,6 +160,27 @@ def test_email_pdf_private_nur_mit_flag_generische_typen_immer_sichtbar():
     assert "privat@example.com" in mit_privat
 
 
+def test_geburtstag_erscheint_nirgends_im_export():
+    """Nutzer-Vorgabe: der Geburtstag soll in Rubrica und im Adressbuch (Kontakte.app)
+    aufgefuehrt sein, aber NICHT im Export (PDF/CSV) sichtbar.
+
+    Die CSV-Spaltenliste und die PDF-Spaltenueberschriften lassen sich direkt
+    pruefen. Reportlab-PDFs sind dagegen komprimiert (kein direkter Text-Grep auf
+    den erzeugten Bytes moeglich, siehe test_pdf_export_ignoriert_andere_ordner_
+    zugehoerigkeit) - deshalb wie dort der Generator-Quellcode: "geburtstag" darf
+    darin nirgends gelesen werden, dann kann es auch nirgends im PDF landen."""
+    import inspect
+    assert "geburtstag" not in [s.lower() for s in generator.CSV_SPALTEN]
+    assert "geburtstag" not in [s.lower() for s in generator._TABELLEN_SPALTEN]
+    quelle = inspect.getsource(generator)
+    assert '"geburtstag"' not in quelle
+    assert "'geburtstag'" not in quelle
+    # Smoke-Test: ein Kontakt MIT Geburtstag im Datensatz bricht Export nicht ab.
+    kontakt = _kontakt(geburtstag="1994-07-20")
+    assert generator.kontakte_csv([kontakt]).decode("utf-8-sig")
+    assert generator.kontakte_pdf("Testordner", [kontakt]).startswith(b"%PDF")
+
+
 def test_tabellenspalte_heisst_rolle_nicht_funktion():
     """Die BKP-Nummer-Spalte zeigt bereits die Funktion (z.B. "292 Bauingenieur/
     in") - eine weitere Spalte mit demselben Namen "Funktion" wirkte wie eine

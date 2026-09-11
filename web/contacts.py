@@ -180,6 +180,7 @@ def _parse_kontakt_form(form) -> dict:
         "vorname": form.get("vorname", "").strip(),
         "nachname": form.get("nachname", "").strip(),
         "firma": form.get("firma", "").strip(),
+        "geburtstag": form.get("geburtstag", "").strip(),
         "notizen": form.get("notizen", "").strip(),
         "funktionen": [
             {"funktion": f.strip(), "rolle": r.strip()}
@@ -203,7 +204,7 @@ def _parse_kontakt_form(form) -> dict:
 
 PFLICHTFELDER_LABELS = {
     "vorname": "Vorname", "nachname": "Nachname", "kategorie": "Funktion",
-    "telefon": "Telefon", "email": "E-Mail", "adresse": "Adresse", "ordner": "Ordner",
+    "telefon": "Telefon", "email": "E-Mail", "ordner": "Ordner",
 }
 
 
@@ -231,8 +232,9 @@ def _validiere_pflichtfelder(daten: dict, ordner_ids: list) -> dict:
         fehlend["telefon"] = True
     if not any(e.get("email", "").strip() for e in daten.get("emails", [])):
         fehlend["email"] = True
-    if not any(a.get("strasse") or a.get("plz") or a.get("ort") for a in daten.get("adressen", [])):
-        fehlend["adresse"] = True
+    # Adresse bewusst NICHT mehr Pflicht (Nutzer-Vorgabe, 2026-09-11): manche
+    # Kontakte (z.B. reine Mobilnummer-Ansprechpartner) haben schlicht keine
+    # bekannte Adresse, und das Anlegen sollte daran nicht scheitern.
     if not ordner_ids:
         fehlend["ordner"] = True
     return fehlend

@@ -143,6 +143,8 @@ def kontakt_zu_vcard(kontakt: dict) -> str:
     ]
     if kontakt.get("firma"):
         zeilen.append(f"ORG:{_escape(kontakt['firma'])}")
+    if kontakt.get("geburtstag"):
+        zeilen.append(f"BDAY:{kontakt['geburtstag']}")
     # Funktion/Rolle sind seit kontakt_funktionen ein Paar, das mehrfach vorkommen
     # kann - eine vCard hat aber nur EIN TITLE-Feld. TITLE bekommt deshalb alle
     # Paare als lesbaren Text ("Funktion (Rolle)", mehrere durch "; " getrennt),

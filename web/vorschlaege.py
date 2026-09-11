@@ -130,7 +130,7 @@ _LISTENFELDER = {
     "funktionen": ("kategorie", lambda e: (
         queries._vergleichsform(e.get("funktion", "")), queries._vergleichsform(e.get("rolle", "")))),
 }
-_SCALARFELDER = ("vorname", "nachname", "firma", "notizen")
+_SCALARFELDER = ("vorname", "nachname", "firma", "geburtstag", "notizen")
 
 
 def _zusammenfuehrung_vorschau(bestehend: dict, neu: dict) -> tuple:

@@ -192,6 +192,11 @@ def _parse_kontakt(vcard) -> dict:
     # bewusst als Ganzes uebernommen statt geparst.
     rolle = vcard.title.value if hasattr(vcard, "title") else ""
     apple_uid = vcard.uid.value if hasattr(vcard, "uid") else None
+    # BDAY steht in echten Kontakte.app-Exporten durchgehend als reines "JJJJ-MM-TT"
+    # (vobject liefert es unveraendert als String, kein Date-Objekt) - ein Format
+    # ohne Jahr ("--MM-TT", vCard 4) kommt in der Praxis nicht vor und wird hier
+    # bewusst nicht unterstuetzt statt stillschweigend falsch interpretiert.
+    geburtstag = vcard.bday.value.strip() if hasattr(vcard, "bday") and vcard.bday.value else ""
 
     labels = _ab_labels(vcard)
     telefonnummern = [
@@ -229,6 +234,7 @@ def _parse_kontakt(vcard) -> dict:
         "nachname": nachname,
         "firma": firma,
         "funktionen": [{"funktion": "", "rolle": rolle}] if rolle else [],
+        "geburtstag": geburtstag,
         "notizen": notizen,
         "telefonnummern": telefonnummern,
         "emails": emails,

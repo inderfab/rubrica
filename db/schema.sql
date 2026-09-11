@@ -11,6 +11,12 @@ CREATE TABLE IF NOT EXISTS kontakte (
     rolle      TEXT    NOT NULL DEFAULT '',
     kategorie  TEXT    NOT NULL DEFAULT '',
     notizen    TEXT    NOT NULL DEFAULT '',
+    -- ISO-Datum (JJJJ-MM-TT), aus vCard BDAY bzw. HTML-<input type="date"> - bewusst
+    -- ohne eigene Tabelle: anders als Telefon/E-Mail/Adresse hat eine Person nie
+    -- mehrere Geburtstage. Erscheint in Rubrica und in Kontakte.app, NICHT im PDF/
+    -- CSV-Export (Nutzer-Vorgabe: "beim export soll es nicht sichtbar sein") - die
+    -- Spalte fehlt deshalb bewusst in export/generator.py.
+    geburtstag TEXT    NOT NULL DEFAULT '',
     status     TEXT    NOT NULL DEFAULT 'aktiv' CHECK (status IN ('aktiv', 'inaktiv')),
     -- Stabile Apple-Kontakt-ID aus dem vCard-UID-Feld (nur bei Kontakte.app-Import gesetzt) -
     -- der zuverlaessigste Wiedererkennungs-Anker bei erneutem Import desselben Adressbuchs,

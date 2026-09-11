@@ -151,6 +151,29 @@ def test_kontakt_anlegen_trotz_duplikat_erzwingt_neuanlage(tmp_db):
     assert len(queries.list_kontakte(tmp_db)) == 2
 
 
+def test_kontakt_anlegen_ohne_adresse_funktioniert(tmp_db):
+    """Nutzer-Vorgabe (2026-09-11): Adresse ist kein Pflichtfeld mehr - manche
+    Kontakte (z.B. eine reine Mobilnummer-Ansprechperson) haben schlicht keine
+    bekannte Adresse, das Anlegen darf daran nicht scheitern."""
+    projekt_id = queries.get_or_create_projekt(tmp_db, "Testprojekt")
+    client = _client(tmp_db)
+
+    r = client.post("/kontakte/neu", data={
+        "vorname": "Anna", "nachname": "Ohneadresse", "firma": "",
+        "ordner_ids": str(projekt_id),
+        "funktion": "Geologe", "funktion_rolle": "",
+        "telefon_typ": "mobil", "telefon_nummer": "079 111 22 33",
+        "email_typ": "arbeit", "email_adresse": "anna@beispiel.ch",
+        "adresse_typ": "arbeit", "adresse_strasse": "", "adresse_plz": "", "adresse_ort": "",
+        "adresse_region": "", "adresse_land": "",
+    }, follow_redirects=False)
+
+    assert r.status_code == 303
+    kontakt = queries.list_kontakte(tmp_db)[0]
+    assert kontakt["nachname"] == "Ohneadresse"
+    assert kontakt["adressen"] == []
+
+
 def test_kontakt_anlegen_ohne_pflichtfelder_zeigt_fehler(tmp_db):
     client = _client(tmp_db)
     r = client.post("/kontakte/neu", data={

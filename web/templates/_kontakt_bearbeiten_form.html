@@ -44,6 +44,11 @@
             <input type="text" name="firma" value="{{ kontakt.firma if kontakt else '' }}"
                class="{{ 'feld-fehler' if fehlende_felder.firma }}{{ markierung("firma") }}">
         </div>
+        <div class="field">
+            <label>Geburtstag</label>
+            <input type="date" name="geburtstag" value="{{ kontakt.geburtstag if kontakt else '' }}"
+                   class="{{ markierung("geburtstag") }}">
+        </div>
     </div>
 
     <fieldset class="{{ 'feld-fehler' if fehlende_felder.kategorie }}">
@@ -105,8 +110,8 @@
                 onclick="addRow('mail-rows', 'mail', this)">+ E-Mail</button>
     </fieldset>
 
-    <fieldset class="{{ 'feld-fehler' if fehlende_felder.adresse }}">
-        <legend>Adressen</legend>
+    <fieldset>
+        <legend>Adressen <span style="color:#86868b">(optional)</span></legend>
         <div id="adr-rows" data-optionen='{{ adresse_typen|tojson }}'>
             {% for a in (kontakt.adressen if kontakt else []) %}
             <div class="tel-row{{ markierung("adresse", loop.index0) }}">

@@ -6,8 +6,10 @@ jeder Punkt ist eine Handlung mit einer klaren Erwartung.
 **Stand:** Abschnitt B und C sind durch bis auf C11 und C17, von D fehlen noch D7–D9 und D11, F5–F7 offen,
 C19 (aus 1.29.2) noch zu bestätigen. G2 und G8–G12 neu ab 1.30.0 (PDF-Export: Spalte „Rolle" statt
 „Funktion", Firmenname nur ohne Logo, Firma reisst nicht mehr über den Seitenumbruch, Adressformat,
-Export ohne Zip bei nur einem Format). Offene Befunde siehe unten. Nächster Schritt: **1.30.0
-installieren**.
+Export ohne Zip bei nur einem Format). B17–B19 und C20 neu ab 1.31.0 (Geburtstag als Kontaktfeld,
+Adresse kein Pflichtfeld mehr) — **wichtig: der Produktivserver läuft auf dem iMac, nicht auf dem
+Mac Studio**, 1.31.0 muss dort installiert werden. Offene Befunde siehe unten. Nächster Schritt:
+**1.31.0 auf dem iMac installieren**, danach die 19 alten Geburtstage nachtragen (siehe Changelog).
 
 | Zeichen | Bedeutung |
 |---|---|
@@ -59,7 +61,10 @@ synchronisieren** urteilen.
 | B13 | ✅ | Bei diesem Verlaufseintrag **Rückgängig** klicken | Vorschau zeigt den alten Wert orange markiert; erst „Speichern“ setzt ihn zurück, „Abbrechen“ ändert nichts | neu ab 1.27.0 |
 | B14 | ✅ | Bei einem Kontakt **+ Funktion** klicken, zweites Funktion/Rolle-Paar ausfüllen, speichern | Beide Paare bleiben erhalten, erscheinen beim erneuten Öffnen wieder | neu ab 1.28.0 |
 | B15 | ✅ | Diesen Kontakt exportieren (PDF/CSV) | Erscheint unter **beiden** Funktionen, mit der jeweils passenden Rolle | neu ab 1.28.0 |
-| B16 | ✅ | Einstellungen → **Verlauf aller Kontakte** öffnen | Zeigt Änderungen quer über alle Kontakte, neueste zuerst, mit Link zum Kontakt und „Rückgängig“ | neu ab 1.28.0 |
+| B16 | ✅ | Einstellungen → **Verlauf aller Kontakte** öffnen | Zeigt Änderungen quer über alle Kontakte, neueste zuerst, mit Link zum Kontakt und „Rückgängig” | neu ab 1.28.0 |
+| B17 | ⬜ | Neuen Kontakt anlegen **ohne** Geburtstag und **ohne** Adresse | Lässt sich trotzdem speichern, keine roten Pflichtfelder | neu ab 1.31.0 |
+| B18 | ⬜ | Bei einem Kontakt einen Geburtstag eintragen und speichern, nach einigen Minuten in Kontakte.app prüfen | Geburtstag erscheint dort ebenfalls | neu ab 1.31.0 |
+| B19 | ⬜ | Diesen Kontakt exportieren (PDF/CSV) | Geburtstag erscheint **nirgends** im Export | neu ab 1.31.0 |
 
 ---
 
@@ -89,6 +94,7 @@ kommt zuerst als **Vorschlag**.
 | C17 | ⬜ | Einen Duplikat-Vorschlag **Zusammenführen**, bei dem der bestehende Kontakt einen Namen hat | Der Name des bestehenden Kontakts bleibt; nur Nummern, Adressen und Mails kommen dazu | neu ab 1.19.0 — genau hier gingen Kontakte verloren |
 | C18 | ✅ | In Kontakte.app eine Adresse/Nummer ändern, **bevor** der Vorschlag bestätigt ist **Einstellungen → Jetzt alles neu synchronisieren** klicken | Der Vorschlag bleibt mit dem geänderten Wert stehen — wird **nicht** stillschweigend mit dem alten Stand überschrieben | neu ab 1.26.0 — siehe Offene Befunde |
 | C19 | ⬜ | In Kontakte.app einen Kontakt anlegen, dessen Name **nicht** in Vor-/Nachname aufgeteilt ist (alles in ein Feld getippt) | Kommt trotzdem als Vorschlag an | neu ab 1.29.2 — kam vorher nie an |
+| C20 | ⬜ | Bei einem Kontakt in Kontakte.app den Geburtstag ändern | Kommt als Änderungsvorschlag (wie bei Telefon/Adresse), nicht stillschweigend | neu ab 1.31.0 |
 
 ---
 
