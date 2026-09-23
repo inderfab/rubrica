@@ -223,9 +223,14 @@ async def kategorien_wert_umbenennen(request: Request):
     return RedirectResponse(url=f"/einstellungen/kategorien?meldung={quote(text)}", status_code=303)
 
 
-@router.post("/einstellungen")
-async def einstellungen_speichern(request: Request):
-    form = await request.form()
+def _speichere_einstellungen_formular(form) -> None:
+    """Extrahiert und speichert alle Felder des gemeinsamen Einstellungen-Formulars -
+    von der Speichern-Route UND von jedem Aktions-Knopf (Verbindung testen, Testmail
+    senden, Jetzt prüfen/synchronisieren) aufgerufen, die dasselbe Formular einreichen.
+    Nutzer-Meldung: beim Klick auf "Testmail senden" waren gerade erst eingegebene, noch
+    nicht gespeicherte Werte danach wieder weg, weil dieser Knopf frueher nur seine eigene
+    Aktion ausloeste, ohne vorher zu speichern - jetzt speichert jeder dieser Knoepfe
+    zuerst das ganze Formular, bevor er seine eigentliche Aktion ausfuehrt."""
     signatur_db_path = (form.get("archivio_signatur_db_path") or "").strip()
     try:
         min_mails = int(form.get("archivio_min_mails") or 2)
@@ -283,16 +288,36 @@ async def einstellungen_speichern(request: Request):
     if radicale_password:
         htpasswd.set_password(radicale.RADICALE_BENUTZER, radicale_password)
 
+
+def _einstellungen_antwort(request: Request, text: str, redirect_feld: str):
+    """Liefert bei einem htmx-Aufruf (automatisches Speichern, Aktions-Knoepfe) nur das
+    kleine Ergebnis-Schnipsel zurueck, das per hx-target eingeschwenkt wird - kein
+    Redirect, also keine Seiten-Neuladung, kein Sprung nach oben und keine wieder
+    zugeklappten <details> (Nutzer-Meldung). Ausserhalb von htmx (z.B. direkter POST)
+    bleibt der bisherige Redirect mit Ergebnis-Text in der URL als Fallback bestehen."""
+    if request.headers.get("HX-Request") == "true":
+        return templates.TemplateResponse("_einstellungen_ergebnis.html", {"request": request, "text": text})
+    return RedirectResponse(url=f"/einstellungen?{redirect_feld}={quote(text)}", status_code=303)
+
+
+@router.post("/einstellungen")
+async def einstellungen_speichern(request: Request):
+    form = await request.form()
+    _speichere_einstellungen_formular(form)
+    if request.headers.get("HX-Request") == "true":
+        return templates.TemplateResponse("_einstellungen_ergebnis.html", {"request": request, "text": "Gespeichert."})
     return RedirectResponse(url="/einstellungen?gespeichert=1", status_code=303)
 
 
 @router.post("/einstellungen/mail-test")
-def einstellungen_mail_test():
+async def einstellungen_mail_test(request: Request):
     """Verbindungstest fuer das Mail-Eingang-Postfach - ein reiner Login+Logout,
     kein Abruf von Nachrichten (siehe mail_intake._client fuer die readonly-Garantie
-    des eigentlichen Abrufs). Testet die zuletzt GESPEICHERTEN Zugangsdaten - erst
-    "Speichern" klicken, falls die Felder gerade erst geaendert wurden (wie beim
-    bestehenden "Jetzt synchronisieren"-Knopf fuer Radicale)."""
+    des eigentlichen Abrufs). Speichert zuerst das eingereichte Formular (siehe
+    _speichere_einstellungen_formular), testet also immer die gerade eingegebenen
+    Zugangsdaten, nicht einen moeglicherweise aelteren gespeicherten Stand."""
+    form = await request.form()
+    _speichere_einstellungen_formular(form)
     if not mail_intake.konfiguriert():
         text = "Kein IMAP-Server konfiguriert (Host fehlt)."
     else:
@@ -302,44 +327,51 @@ def einstellungen_mail_test():
             text = "Verbindung erfolgreich."
         except Exception as exc:
             text = f"Verbindung fehlgeschlagen: {type(exc).__name__}: {exc}"
-    return RedirectResponse(url=f"/einstellungen?mail={quote(text)}", status_code=303)
+    return _einstellungen_antwort(request, text, "mail")
 
 
 @router.post("/einstellungen/mail-pruefen")
-def einstellungen_mail_pruefen():
+async def einstellungen_mail_pruefen(request: Request):
+    form = await request.form()
+    _speichere_einstellungen_formular(form)
     conn = get_connection()
     try:
         text = mail_intake.pruefe_und_beschreibe(conn)
     finally:
         conn.close()
-    return RedirectResponse(url=f"/einstellungen?mail={quote(text)}", status_code=303)
+    return _einstellungen_antwort(request, text, "mail")
 
 
 @router.post("/einstellungen/erinnerung-test")
-def einstellungen_erinnerung_test():
+async def einstellungen_erinnerung_test(request: Request):
     """Verschickt eine feste Testmail - prueft SMTP-Zugangsdaten und dass sie beim
-    konfigurierten Empfänger ankommt. Testet die zuletzt GESPEICHERTEN Zugangsdaten
-    (wie beim IMAP-Verbindungstest oben) - erst "Speichern" klicken, falls die Felder
-    gerade erst geaendert wurden."""
+    konfigurierten Empfänger ankommt. Speichert zuerst das eingereichte Formular, testet
+    also immer die gerade eingegebenen Zugangsdaten (wie beim IMAP-Verbindungstest oben)."""
+    form = await request.form()
+    _speichere_einstellungen_formular(form)
     text = mail_erinnerung.sende_testmail()
-    return RedirectResponse(url=f"/einstellungen?erinnerung={quote(text)}", status_code=303)
+    return _einstellungen_antwort(request, text, "erinnerung")
 
 
 @router.post("/einstellungen/erinnerung-pruefen")
-def einstellungen_erinnerung_pruefen():
+async def einstellungen_erinnerung_pruefen(request: Request):
+    form = await request.form()
+    _speichere_einstellungen_formular(form)
     conn = get_connection()
     try:
         text = mail_erinnerung.pruefe_und_beschreibe(conn)
     finally:
         conn.close()
-    return RedirectResponse(url=f"/einstellungen?erinnerung={quote(text)}", status_code=303)
+    return _einstellungen_antwort(request, text, "erinnerung")
 
 
 @router.post("/einstellungen/radicale-sync")
-def einstellungen_radicale_sync():
+async def einstellungen_radicale_sync(request: Request):
     """Stoesst einen sichtbaren Vollabgleich zu Radicale an: pusht alle Kontakte/
     Ordner neu und entfernt verwaiste vCards. Nuetzlich, um Datensaetze
-    nachzuziehen, deren automatischer Push frueher (still) fehlgeschlagen ist."""
+    nachzuziehen, deren automatischer Push frueher (still) fehlgeschlagen ist.
+    Eigenes Formular ohne Felder (siehe settings.html) - trotzdem ueber htmx ohne
+    Seiten-Neuladung, damit ein Klick hier nicht offene <details> andernorts zuklappt."""
     conn = get_connection()
     try:
         ergebnis = radicale.sync_alle(conn)
@@ -356,7 +388,7 @@ def einstellungen_radicale_sync():
                       f"Kontakte.app wartet auf der Vorschläge-Seite auf Entscheidung).")
         if ergebnis["fehler"]:
             text += f" {len(ergebnis['fehler'])} Fehler (z. B. {ergebnis['fehler'][0]})."
-    return RedirectResponse(url=f"/einstellungen?sync={quote(text)}", status_code=303)
+    return _einstellungen_antwort(request, text, "sync")
 
 
 @router.post("/einstellungen/alle-kontakte-loeschen")

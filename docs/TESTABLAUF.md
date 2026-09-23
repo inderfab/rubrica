@@ -10,8 +10,10 @@ Export ohne Zip bei nur einem Format). 1.31.0 ist auf dem iMac (dem Produktivser
 die 19 alten Geburtstage sind nachgetragen und bestätigt in Kontakte.app angekommen (B18 ✅). B17,
 B19 und C20 (neu ab 1.31.0: optionales Anlegen ohne Geburtstag/Adresse, Export-Ausschluss,
 Änderungserkennung bei Geburtstag-Edit in Kontakte.app) noch offen. E7–E10 neu ab 1.32.0
-(Erinnerungsmail für offene Vorschläge, eigene SMTP-Zugangsdaten in den Einstellungen). Offene
-Befunde siehe unten.
+(Erinnerungsmail für offene Vorschläge, eigene SMTP-Zugangsdaten in den Einstellungen), E7 vom
+Nutzer bestätigt. E11–E14 neu ab 1.32.1 (automatisches Speichern auf der Einstellungsseite,
+Aktions-Knöpfe laden die Seite nicht mehr neu, Passwörter maskiert). Offene Befunde siehe
+unten.
 
 | Zeichen | Bedeutung |
 |---|---|
@@ -128,10 +130,14 @@ kommt zuerst als **Vorschlag**.
 | E4 | ⬜ | Einstellungen → Mail-Eingang → **Verbindung testen** | Meldet Erfolg oder einen verständlichen Fehler |
 | E5 | ⬜ | Archivio-Import öffnen | Kandidaten aus den E-Mail-Signaturen erscheinen |
 | E6 | ⬜ | Einen Kandidaten übernehmen | Wird ein Kontakt; Kollegen der eigenen Domain tauchen gar nicht erst auf |
-| E7 | ⬜ | Einstellungen → Erinnerung an offene Vorschläge → SMTP-Daten eintragen, **Testmail senden** | Testmail kommt beim Empfänger an, oder verständliche Fehlermeldung | neu ab 1.32.0 |
+| E7 | ✅ | Einstellungen → Erinnerung an offene Vorschläge → SMTP-Daten eintragen, **Testmail senden** | Testmail kommt beim Empfänger an, oder verständliche Fehlermeldung | neu ab 1.32.0 |
 | E8 | ⬜ | Einen Vorschlag anlegen (Mail oder Kontakte.app), created_at testhalber >24h zurückdatieren, **Jetzt prüfen** | Sammel-Mail mit diesem Vorschlag kommt an | neu ab 1.32.0 |
 | E9 | ⬜ | Direkt danach nochmals **Jetzt prüfen** klicken, derselbe Vorschlag ist weiterhin offen | Keine zweite Mail für denselben Vorschlag | neu ab 1.32.0 — „nur einmal erinnern" |
 | E10 | ⬜ | Zwei gleichzeitig fällige Vorschläge | Landen in **einer** Sammel-Mail, nicht in zwei einzelnen | neu ab 1.32.0 |
+| E11 | ⬜ | Ein beliebiges Feld auf der Einstellungsseite ändern (z. B. SMTP-Server), wegklicken, Seite neu laden | Wert ist gespeichert, ohne „Speichern” geklickt zu haben | neu ab 1.32.1 — automatisches Speichern |
+| E12 | ⬜ | Feld ändern, ohne zu speichern, direkt **Testmail senden**/**Jetzt prüfen** klicken | Verwendet den gerade eingegebenen Wert, nicht den alten gespeicherten Stand | neu ab 1.32.1 |
+| E13 | ⬜ | Einen aufgeklappten Abschnitt (z. B. „Erinnerung an offene Vorschläge”) offen lassen, einen Knopf darin klicken (Testmail senden, Verbindung testen, Jetzt synchronisieren) | Seite lädt nicht neu, Abschnitt bleibt offen, keine Sprung nach oben | neu ab 1.32.1 |
+| E14 | ⬜ | Passwortfelder (Mail-Eingang, Erinnerung, Radicale) ansehen | Zeigen Punkte/Sterne statt Klartext | neu ab 1.32.1 |
 
 ---
 

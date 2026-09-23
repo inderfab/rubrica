@@ -504,3 +504,77 @@ def test_erinnerung_pruefen_ruft_mail_erinnerung_auf(tmp_db, monkeypatch):
     assert r.status_code == 303
     r2 = TestClient(app).get(r.headers["location"])
     assert "3 Vorschlägen verschickt" in r2.text
+
+
+# ── Automatisches Speichern (Nutzer-Meldung: beim Klick auf "Testmail senden" waren
+# gerade erst eingegebene, noch nicht gespeicherte Werte danach weg) ─────────────────
+
+def test_htmx_anfrage_an_einstellungen_liefert_schnipsel_statt_redirect(tmp_db, monkeypatch, tmp_path):
+    """Bei einer htmx-Anfrage (automatisches Speichern bei Feldaenderung) darf keine
+    Seiten-Neuladung passieren - sonst klappen aufgeklappte <details> wieder zu und die
+    Seite springt nach oben (Nutzer-Meldung)."""
+    config_pfad = tmp_path / "config.yaml"
+    config_pfad.write_text("database:\n  path: rubrica.db\n")
+    monkeypatch.setattr(settings, "_CONFIG_PATH", config_pfad)
+    monkeypatch.setattr(settings, "_settings", {})
+
+    r = TestClient(app).post("/einstellungen", data={"backup_pfad": "/Volumes/NAS"},
+                              headers={"HX-Request": "true"})
+    assert r.status_code == 200
+    assert "Gespeichert" in r.text
+    assert "<html" not in r.text.lower()  # nur das Schnipsel, keine ganze Seite
+    assert settings.get("backup.pfad") == "/Volumes/NAS"
+
+
+def test_htmx_anfrage_an_aktions_knopf_speichert_zuerst_das_formular(tmp_db, monkeypatch, tmp_path):
+    """Regression: "Testmail senden" (und die anderen Aktions-Knoepfe) testeten bisher
+    nur den zuletzt GESPEICHERTEN Stand, nicht die gerade im Formular eingegebenen,
+    noch nicht gespeicherten Werte - genau das war die Nutzer-Meldung."""
+    config_pfad = tmp_path / "config.yaml"
+    config_pfad.write_text("database:\n  path: rubrica.db\n")
+    monkeypatch.setattr(settings, "_CONFIG_PATH", config_pfad)
+    monkeypatch.setattr(settings, "_settings", {})
+
+    r = TestClient(app).post("/einstellungen/erinnerung-test", data={
+        "smtp_host": "smtp.beispiel.ch", "smtp_port": "465", "smtp_empfaenger": "muster@muster.ch",
+    }, headers={"HX-Request": "true"})
+
+    assert r.status_code == 200
+    assert "<html" not in r.text.lower()
+    # Die eben erst eingegebenen (nicht vorher gespeicherten) Werte sind jetzt persistiert.
+    assert settings.get("smtp.host") == "smtp.beispiel.ch"
+    assert settings.get("smtp.empfaenger") == "muster@muster.ch"
+
+
+def test_ohne_htmx_bleibt_der_redirect_bestehen(tmp_db, monkeypatch):
+    """Fallback ausserhalb von htmx (z.B. direkter POST ohne JS) - unveraendertes
+    Verhalten wie vor der Umstellung auf automatisches Speichern."""
+    monkeypatch.setattr(settings, "_settings", {"smtp": {"host": ""}})
+    r = TestClient(app).post("/einstellungen/erinnerung-test", follow_redirects=False)
+    assert r.status_code == 303
+    assert "erinnerung=" in r.headers["location"]
+
+
+def test_passwort_felder_zeigen_klartext_nicht_an(tmp_db, monkeypatch):
+    """Nutzer-Meldung: das Passwort soll nicht im Klartext angezeigt werden - die
+    Eingabefelder muessen type="password" sein (der Wert bleibt im HTML-Attribut
+    enthalten, wie zuvor, nur die Anzeige im Browser ist maskiert)."""
+    monkeypatch.setattr(settings, "_settings", {
+        "mail": {"password": "mailgeheim"},
+        "smtp": {"password": "smtpgeheim"},
+        "radicale": {"password": "radicalegeheim"},
+    })
+    text = TestClient(app).get("/einstellungen").text
+    for feldname, wert in [("mail_password", "mailgeheim"), ("smtp_password", "smtpgeheim"),
+                            ("radicale_password", "radicalegeheim")]:
+        ausschnitt = text[text.index(f'name="{feldname}"') - 40:text.index(f'name="{feldname}"') + 40]
+        assert 'type="password"' in ausschnitt
+        assert wert in text  # Wert bleibt im HTML (fuer erneutes Speichern), nur maskiert angezeigt
+
+
+def test_smtp_empfaenger_platzhalter_ist_generisch_nicht_persoenlich(tmp_db):
+    """Nutzer-Meldung: "fi" ist mein persönlicher Kürzel, nicht als Platzhalter
+    verwenden - immer ein generisches Beispiel wie bei den anderen Feldern."""
+    text = TestClient(app).get("/einstellungen").text
+    assert "muster@muster.ch" in text
+    assert "fi@" not in text

@@ -393,6 +393,13 @@ Feldumfang bewusst an der tatsächlichen Nutzung im bestehenden Apple-Adressbuch
 - Prüfung im selben Hintergrund-Thread wie die Kontakte.app-Checks (`web/main.py`,
   `_KONTAKTE_APP_INTERVALL`, 5 Minuten) — die eigentliche Abfrage ist billig, fällig wird ohnehin erst
   nach Stunden. Zusätzlich manuell über "Jetzt prüfen" bzw. "Testmail senden" in den Einstellungen.
+- **Nachbesserung (2026-09-23, v1.32.1):** Nutzer-Befund beim ersten Testen — "Testmail senden" testete
+  nur den zuletzt gespeicherten Stand, nicht die gerade eingegebenen Felder, und der anschliessende
+  Redirect klappte alle `<details>`-Abschnitte wieder zu. Die gesamte Einstellungsseite speichert seither
+  automatisch bei jeder Feldänderung (`hx-trigger="change"`) und jeder Aktions-Knopf speichert zuerst das
+  Formular, bevor er seine Aktion ausführt — alles über htmx ohne Seiten-Neuladung
+  (`web/settings.py::_speichere_einstellungen_formular`/`_einstellungen_antwort`). Bei dieser Gelegenheit
+  auch: Passwortfelder maskiert (`type="password"`).
 
 ## 6. Vorgeschlagener Tech-Stack
 

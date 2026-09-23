@@ -3,6 +3,12 @@
 {% block content %}
 <h1>Einstellungen</h1>
 
+{# Gemeinsames Ziel fuer alle Ergebnis-/Speicher-Meldungen der Seite - Aktions-Knoepfe
+   (Verbindung testen, Testmail senden, Jetzt prüfen/synchronisieren) und das automatische
+   Speichern bei jeder Feldaenderung schwenken hier per htmx nur dieses kleine Schnipsel ein,
+   statt die ganze Seite neu zu laden (Nutzer-Meldung: dabei gingen gerade erst eingegebene,
+   noch nicht gespeicherte Werte verloren, und aufgeklappte Abschnitte klappten wieder zu). #}
+<div id="einstellungen-status">
 {% if gespeichert %}
 <p style="color:#1a7f37; padding:0.5rem 0">Gespeichert.</p>
 {% endif %}
@@ -18,6 +24,7 @@
 {% if erinnerung_ergebnis %}
 <p style="color:#1a7f37; padding:0.5rem 0">{{ erinnerung_ergebnis }}</p>
 {% endif %}
+</div>
 
 <div class="formular-schmal">
 
@@ -42,7 +49,8 @@
         </span>
         {% endif %}
     </div>
-    <form method="post" action="/einstellungen/radicale-sync">
+    <form method="post" action="/einstellungen/radicale-sync"
+          hx-post="/einstellungen/radicale-sync" hx-target="#einstellungen-status" hx-swap="innerHTML">
         <button type="submit" class="sync-panel-knopf">Jetzt synchronisieren</button>
     </form>
 </div>
@@ -67,7 +75,9 @@
     </div>
     <div class="field">
         <label>Passwort</label>
-        <input type="text" name="radicale_password" form="einstellungen-form" value="{{ radicale_password }}">
+        <input type="password" name="radicale_password" form="einstellungen-form" value="{{ radicale_password }}"
+               hx-post="/einstellungen" hx-trigger="change" hx-target="#einstellungen-status" hx-swap="innerHTML"
+               hx-include="#einstellungen-form">
     </div>
     {% if ca_zertifikat_vorhanden %}
     <p class="empty" style="padding:0.3rem 0 0.5rem">
@@ -84,7 +94,9 @@
         <summary style="cursor:pointer; color:var(--text-hell); font-weight:normal">Interne Server-Adresse (fortgeschritten)</summary>
         <div class="field" style="margin-top:0.5rem">
             <input type="text" name="radicale_base_url" form="einstellungen-form" value="{{ radicale_base_url }}"
-                   placeholder="https://127.0.0.1:8443">
+                   placeholder="https://127.0.0.1:8443"
+                   hx-post="/einstellungen" hx-trigger="change" hx-target="#einstellungen-status" hx-swap="innerHTML"
+                   hx-include="#einstellungen-form">
             <p class="empty" style="padding:0.3rem 0 0; font-size:0.8rem">
                 Rubricas eigene Verbindung zu Radicale (localhost) – nicht die Adresse für Kontakte.app.
             </p>
@@ -103,8 +115,11 @@
 
 {# Ein gemeinsames Formular fuer alle Abschnitte: eingeklappte <details> senden ihre
    Felder trotzdem mit, ein Speichern-Knopf am Ende genuegt. Die CardDAV-Felder oben
-   haengen per form="…" an demselben Formular. #}
-<form method="post" action="/einstellungen" id="einstellungen-form">
+   haengen per form="…" an demselben Formular. Speichert automatisch bei jeder
+   Feldaenderung (hx-trigger="change", Nutzer-Vorgabe) - der "Speichern"-Knopf am Ende
+   bleibt zusaetzlich bestehen. #}
+<form method="post" action="/einstellungen" id="einstellungen-form"
+      hx-post="/einstellungen" hx-trigger="change" hx-target="#einstellungen-status" hx-swap="innerHTML">
     <details class="einstell-block">
         <summary>Mail-Eingang für Kontaktvorschläge</summary>
         <p class="empty" style="padding:0 0 0.5rem">
@@ -127,12 +142,14 @@
             </div>
             <div class="field">
                 <label>Passwort</label>
-                <input type="text" name="mail_password" value="{{ mail_password }}">
+                <input type="password" name="mail_password" value="{{ mail_password }}">
             </div>
         </div>
         <div class="actions" style="margin-top:0.5rem">
-            <button type="submit" formaction="/einstellungen/mail-test" class="secondary">Verbindung testen</button>
-            <button type="submit" formaction="/einstellungen/mail-pruefen" class="secondary">Jetzt prüfen</button>
+            <button type="submit" formaction="/einstellungen/mail-test" class="secondary"
+                    hx-post="/einstellungen/mail-test" hx-target="#einstellungen-status" hx-swap="innerHTML">Verbindung testen</button>
+            <button type="submit" formaction="/einstellungen/mail-pruefen" class="secondary"
+                    hx-post="/einstellungen/mail-pruefen" hx-target="#einstellungen-status" hx-swap="innerHTML">Jetzt prüfen</button>
         </div>
     </details>
 
@@ -159,16 +176,18 @@
             </div>
             <div class="field">
                 <label>Passwort</label>
-                <input type="text" name="smtp_password" value="{{ smtp_password }}">
+                <input type="password" name="smtp_password" value="{{ smtp_password }}">
             </div>
             <div class="field">
                 <label>Empfänger-Adresse</label>
-                <input type="text" name="smtp_empfaenger" value="{{ smtp_empfaenger }}" placeholder="fi@musterfirma.ch">
+                <input type="text" name="smtp_empfaenger" value="{{ smtp_empfaenger }}" placeholder="muster@muster.ch">
             </div>
         </div>
         <div class="actions" style="margin-top:0.5rem">
-            <button type="submit" formaction="/einstellungen/erinnerung-test" class="secondary">Testmail senden</button>
-            <button type="submit" formaction="/einstellungen/erinnerung-pruefen" class="secondary">Jetzt prüfen</button>
+            <button type="submit" formaction="/einstellungen/erinnerung-test" class="secondary"
+                    hx-post="/einstellungen/erinnerung-test" hx-target="#einstellungen-status" hx-swap="innerHTML">Testmail senden</button>
+            <button type="submit" formaction="/einstellungen/erinnerung-pruefen" class="secondary"
+                    hx-post="/einstellungen/erinnerung-pruefen" hx-target="#einstellungen-status" hx-swap="innerHTML">Jetzt prüfen</button>
         </div>
     </details>
 
@@ -211,7 +230,7 @@
         </div>
     </details>
 
-    <button type="submit">Speichern</button>
+    <button type="submit" hx-post="/einstellungen" hx-target="#einstellungen-status" hx-swap="innerHTML">Speichern</button>
 </form>
 
 <details class="einstell-block gefahr" style="margin-top:1.2rem">
