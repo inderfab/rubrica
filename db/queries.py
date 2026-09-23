@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 
 def _now() -> str:
@@ -959,6 +959,30 @@ def list_vorschlaege(conn: sqlite3.Connection, status: str = "offen",
             v["bestehender_kontakt"] = get_kontakt(conn, v["kontakt_id"])
         result.append(v)
     return result
+
+
+def vorschlaege_faellig_fuer_erinnerung(conn: sqlite3.Connection, schwellwert_stunden: int) -> list[dict]:
+    """Offene Vorschlaege, die schon laenger als schwellwert_stunden unbeachtet liegen und
+    noch keine Erinnerungsmail ausgeloest haben (siehe mail_erinnerung.py). Nutzer-Meldung:
+    Vorschlaege liegen teilweise lange unbemerkt herum. Jeder Vorschlag wird hoechstens
+    EINMAL gemeldet - markiere_erinnerung_gesendet haelt das fest, auch wenn er danach noch
+    tagelang offen bleibt (Nutzer-Vorgabe: keine taeglich wiederholte Mail, kein Spam bei
+    mehreren gleichzeitig faelligen Vorschlaegen aus einem Kontakte.app-Schub)."""
+    grenze = (datetime.now(timezone.utc) - timedelta(hours=schwellwert_stunden)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return [
+        v for v in list_vorschlaege(conn, status="offen")
+        if v["created_at"] <= grenze and not v.get("erinnerung_gesendet_am")
+    ]
+
+
+def markiere_erinnerung_gesendet(conn: sqlite3.Connection, vorschlag_ids: list[int]) -> None:
+    if not vorschlag_ids:
+        return
+    with conn:
+        conn.executemany(
+            "UPDATE vorschlaege SET erinnerung_gesendet_am = ? WHERE id = ?",
+            [(_now(), vid) for vid in vorschlag_ids],
+        )
 
 
 def list_import_zusammenfuehrungen(conn: sqlite3.Connection) -> list[dict]:

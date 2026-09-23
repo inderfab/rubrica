@@ -12,6 +12,7 @@ from starlette.concurrency import run_in_threadpool
 
 import backup
 import kontakte_app_intake
+import mail_erinnerung
 import mail_intake
 from db import connection
 from web.contacts import router as contacts_router
@@ -87,6 +88,18 @@ def _vorschlaege_ueberwachung():
                 kontakte_app_intake.pruefe_kontakt_aenderungen(conn)
         except Exception:
             log.exception("Aenderungserkennung fehlgeschlagen")
+        finally:
+            conn.close()
+
+        # Erinnerungsmail fuer laenger offene Vorschlaege - dieselbe Taktung wie die
+        # Kontakte.app-Checks oben genuegt: die eigentliche Pruefung ist eine einzelne,
+        # billige Abfrage, faellig wird ohnehin erst nach Stunden, nicht Minuten.
+        conn = connection.get_connection()
+        try:
+            if mail_erinnerung.konfiguriert():
+                mail_erinnerung.sende_erinnerung(conn)
+        except Exception:
+            log.exception("Erinnerungsmail fuer offene Vorschlaege fehlgeschlagen")
         finally:
             conn.close()
 

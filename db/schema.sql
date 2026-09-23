@@ -117,7 +117,12 @@ CREATE TABLE IF NOT EXISTS vorschlaege (
     status     TEXT    NOT NULL DEFAULT 'offen' CHECK (status IN ('offen', 'bestaetigt', 'abgelehnt')),
     rohdaten   TEXT    NOT NULL DEFAULT '{}',
     message_id TEXT,
-    created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+    created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    -- Zeitpunkt der Erinnerungsmail (siehe mail_erinnerung.py), NULL = noch keine
+    -- verschickt. Jeder Vorschlag wird hoechstens EINMAL gemeldet (Nutzer-Vorgabe:
+    -- keine taeglich wiederholte Mail) - einmal gesetzt, bleibt der Vorschlag auch
+    -- Tage spaeter noch offen unbemerkt von weiteren Erinnerungen.
+    erinnerung_gesendet_am TEXT
 );
 
 -- Postfach -> Ordner-Zuordnung fuer die Archivio-Signatur-Anbindung: markiert gefundene

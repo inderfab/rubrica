@@ -10,6 +10,7 @@ from urllib.parse import quote
 from fastapi import APIRouter, Request
 from fastapi.responses import FileResponse, RedirectResponse, Response
 
+import mail_erinnerung
 import mail_intake
 from config import settings
 from db import queries
@@ -25,7 +26,8 @@ def _ca_zertifikat_pfad() -> Path:
 
 
 @router.get("/einstellungen")
-def einstellungen_form(request: Request, gespeichert: str = "", sync: str = "", mail: str = "", reset: str = ""):
+def einstellungen_form(request: Request, gespeichert: str = "", sync: str = "", mail: str = "", reset: str = "",
+                        erinnerung: str = ""):
     # Abdeckung der Aenderungs-/Loescherkennung sichtbar machen: fehlt einem Kontakt
     # der Vergleichsstand, bleibt eine in Kontakte.app geloeschte oder geaenderte
     # Karte unbemerkt - eine stille Ursache, die man sonst nicht sieht.
@@ -41,6 +43,7 @@ def einstellungen_form(request: Request, gespeichert: str = "", sync: str = "", 
         "sync_ergebnis": sync,
         "mail_ergebnis": mail,
         "reset_ergebnis": reset,
+        "erinnerung_ergebnis": erinnerung,
         "archivio_signatur_db_path": settings.get("archivio.signatur_db_path", "") or "",
         "archivio_min_mails": settings.get("archivio.min_mails", 2),
         "archivio_eigene_domains": ", ".join(settings.get("archivio.eigene_domains", []) or []),
@@ -55,6 +58,11 @@ def einstellungen_form(request: Request, gespeichert: str = "", sync: str = "", 
         "mail_port": settings.get("mail.port", 993),
         "mail_username": settings.get("mail.username", "") or "",
         "mail_password": settings.get("mail.password", "") or "",
+        "smtp_host": settings.get("smtp.host", "") or "",
+        "smtp_port": settings.get("smtp.port", 587),
+        "smtp_username": settings.get("smtp.username", "") or "",
+        "smtp_password": settings.get("smtp.password", "") or "",
+        "smtp_empfaenger": settings.get("smtp.empfaenger", "") or "",
     })
 
 
@@ -238,6 +246,14 @@ async def einstellungen_speichern(request: Request):
         mail_port = 993
     mail_username = (form.get("mail_username") or "").strip()
     mail_password = form.get("mail_password") or ""
+    smtp_host = (form.get("smtp_host") or "").strip()
+    try:
+        smtp_port = int(form.get("smtp_port") or 587)
+    except ValueError:
+        smtp_port = 587
+    smtp_username = (form.get("smtp_username") or "").strip()
+    smtp_password = form.get("smtp_password") or ""
+    smtp_empfaenger = (form.get("smtp_empfaenger") or "").strip()
 
     # Firmenname, Logo und die sichtbaren Felder stehen bewusst auf der
     # Export-Seite (web/export.py) - sie wirken sich nur dort aus.
@@ -252,6 +268,11 @@ async def einstellungen_speichern(request: Request):
         "mail": {
             "host": mail_host, "port": mail_port,
             "username": mail_username, "password": mail_password,
+        },
+        "smtp": {
+            "host": smtp_host, "port": smtp_port,
+            "username": smtp_username, "password": smtp_password,
+            "empfaenger": smtp_empfaenger,
         },
     })
 
@@ -292,6 +313,26 @@ def einstellungen_mail_pruefen():
     finally:
         conn.close()
     return RedirectResponse(url=f"/einstellungen?mail={quote(text)}", status_code=303)
+
+
+@router.post("/einstellungen/erinnerung-test")
+def einstellungen_erinnerung_test():
+    """Verschickt eine feste Testmail - prueft SMTP-Zugangsdaten und dass sie beim
+    konfigurierten Empfänger ankommt. Testet die zuletzt GESPEICHERTEN Zugangsdaten
+    (wie beim IMAP-Verbindungstest oben) - erst "Speichern" klicken, falls die Felder
+    gerade erst geaendert wurden."""
+    text = mail_erinnerung.sende_testmail()
+    return RedirectResponse(url=f"/einstellungen?erinnerung={quote(text)}", status_code=303)
+
+
+@router.post("/einstellungen/erinnerung-pruefen")
+def einstellungen_erinnerung_pruefen():
+    conn = get_connection()
+    try:
+        text = mail_erinnerung.pruefe_und_beschreibe(conn)
+    finally:
+        conn.close()
+    return RedirectResponse(url=f"/einstellungen?erinnerung={quote(text)}", status_code=303)
 
 
 @router.post("/einstellungen/radicale-sync")

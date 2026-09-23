@@ -461,3 +461,46 @@ def test_aufraeumen_zeigt_den_wert_bei_jeder_gruppe(tmp_db):
     assert "<legend>geteilt@beispiel.ch</legend>" in text
     assert "Anna Muster" in text and "Bruno Beispiel" in text
     assert text.count("bearbeiten-flyover") >= 2
+
+
+def test_einstellungen_speichern_schreibt_smtp_config(tmp_db, monkeypatch, tmp_path):
+    config_pfad = tmp_path / "config.yaml"
+    config_pfad.write_text("database:\n  path: rubrica.db\n")
+    monkeypatch.setattr(settings, "_CONFIG_PATH", config_pfad)
+    monkeypatch.setattr(settings, "_settings", {})
+
+    r = TestClient(app).post("/einstellungen", data={
+        "smtp_host": "smtp.beispiel.ch", "smtp_port": "465",
+        "smtp_username": "rubrica@beispiel.ch", "smtp_password": "geheim",
+        "smtp_empfaenger": "fi@beispiel.ch",
+    }, follow_redirects=False)
+    assert r.status_code == 303
+
+    assert settings.get("smtp.host") == "smtp.beispiel.ch"
+    assert settings.get("smtp.port") == 465
+    assert settings.get("smtp.username") == "rubrica@beispiel.ch"
+    assert settings.get("smtp.password") == "geheim"
+    assert settings.get("smtp.empfaenger") == "fi@beispiel.ch"
+
+
+def test_erinnerung_test_ohne_konfiguration_meldet_kein_server(tmp_db, monkeypatch):
+    monkeypatch.setattr(settings, "_settings", {"smtp": {"host": ""}})
+    r = TestClient(app).post("/einstellungen/erinnerung-test", follow_redirects=False)
+    assert r.status_code == 303
+    assert "erinnerung=" in r.headers["location"]
+
+    r2 = TestClient(app).get(r.headers["location"])
+    assert "Kein SMTP-Server konfiguriert" in r2.text
+
+
+def test_erinnerung_pruefen_ruft_mail_erinnerung_auf(tmp_db, monkeypatch):
+    import web.settings as settings_modul
+
+    monkeypatch.setattr(settings_modul.mail_erinnerung, "sende_erinnerung", lambda conn: {
+        "aktiv": True, "anzahl": 3,
+    })
+
+    r = TestClient(app).post("/einstellungen/erinnerung-pruefen", follow_redirects=False)
+    assert r.status_code == 303
+    r2 = TestClient(app).get(r.headers["location"])
+    assert "3 Vorschlägen verschickt" in r2.text

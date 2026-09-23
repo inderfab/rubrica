@@ -375,6 +375,25 @@ Feldumfang bewusst an der tatsächlichen Nutzung im bestehenden Apple-Adressbuch
   Template, Route und CSS gehen damit automatisch ins `.pkg`. Ein eigener Copy-Eintrag ist im
   Gegensatz zu neuen Top-Level-Modulen nicht nötig.
 
+### 5.11 Erinnerungsmail für offene Vorschläge
+- **Umgesetzt (2026-09-23):** Nutzer-Meldung: Vorschläge (Mail-Eingang, Kontakte.app) liegen teilweise
+  lange unbemerkt herum. Statt einer Mail pro neuem Vorschlag (Spam-Risiko bei Schüben aus
+  Kontakte.app) eine Sammel-Erinnerung: sobald mindestens ein offener Vorschlag seit über
+  `mail_erinnerung.SCHWELLWERT_STUNDEN` (24) unbeachtet ist, geht **eine** Mail mit **allen** aktuell
+  offenen Vorschlägen raus, nicht nur dem fälligen.
+- Jeder Vorschlag wird höchstens **einmal** gemeldet (`vorschlaege.erinnerung_gesendet_am`,
+  `queries.markiere_erinnerung_gesendet`) — bleibt er danach noch tagelang offen, kommt keine weitere
+  Mail (Nutzer-Vorgabe: kein täglicher Spam). Ein neu hinzugekommener Vorschlag löst erst dann eine
+  eigene Erinnerung aus, wenn auch er die Schwelle erreicht.
+- Nur ausgehend (SMTP, `mail_erinnerung.py`) — eigenständiges Gegenstück zum rein eingehenden
+  `mail_intake.py` (IMAP, siehe 5.8). Eigene, vom Nutzer selbst einzugebende SMTP-Zugangsdaten unter
+  Einstellungen ("Erinnerung an offene Vorschläge"), unabhängig von den IMAP-Zugangsdaten des
+  Mail-Eingangs — Versand kann andere Authentifizierung brauchen als Abruf, auch beim selben
+  Postfach-Anbieter. Port 465 = SMTP_SSL, alles andere (typisch 587) = STARTTLS.
+- Prüfung im selben Hintergrund-Thread wie die Kontakte.app-Checks (`web/main.py`,
+  `_KONTAKTE_APP_INTERVALL`, 5 Minuten) — die eigentliche Abfrage ist billig, fällig wird ohnehin erst
+  nach Stunden. Zusätzlich manuell über "Jetzt prüfen" bzw. "Testmail senden" in den Einstellungen.
+
 ## 6. Vorgeschlagener Tech-Stack
 
 | Bereich | Empfehlung | Begründung |

@@ -265,6 +265,15 @@ def _kontakte_geburtstag(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE kontakte ADD COLUMN geburtstag TEXT NOT NULL DEFAULT ''")
 
 
+def _vorschlaege_erinnerung_gesendet(conn: sqlite3.Connection) -> None:
+    """Zeitpunkt der Erinnerungsmail fuer laenger offene Vorschlaege (siehe
+    mail_erinnerung.py) - NULL = noch keine verschickt. Gleiches Guard-Muster wie
+    _kontakte_apple_uid."""
+    spalten = {row["name"] for row in conn.execute("PRAGMA table_info(vorschlaege)")}
+    if "erinnerung_gesendet_am" not in spalten:
+        conn.execute("ALTER TABLE vorschlaege ADD COLUMN erinnerung_gesendet_am TEXT")
+
+
 def _aufraeum_erledigt_tabelle(conn: sqlite3.Connection) -> None:
     """Merkt, welche Verdachtsfaelle der Aufraeumseite als in Ordnung abgehakt sind."""
     conn.execute(
@@ -328,6 +337,7 @@ _PYTHON_MIGRATIONEN: list[tuple[str, "callable"]] = [
     ("2026-08-13_aufraeum_erledigt", _aufraeum_erledigt_tabelle),
     ("2026-08-14_kontakt_funktionen_uebernehmen", _kontakt_funktionen_uebernehmen),
     ("2026-09-11_kontakte_geburtstag", _kontakte_geburtstag),
+    ("2026-09-23_vorschlaege_erinnerung_gesendet", _vorschlaege_erinnerung_gesendet),
 ]
 
 
