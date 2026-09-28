@@ -153,6 +153,20 @@ def _vorschlaege_konfiguriert() -> bool:
 templates.env.globals["vorschlaege_konfiguriert"] = _vorschlaege_konfiguriert
 
 
+def _offene_vorschlaege_anzahl() -> int:
+    """Fuer den Zahlen-Banner neben "Vorschläge" in der Navigation (Nutzer-Vorgabe) -
+    dieselbe Definition wie die Vorschläge-Seite selbst (status = 'offen'), damit die Zahl
+    im Menü immer zur Liste passt, die sich dahinter oeffnet."""
+    conn = get_connection()
+    try:
+        return conn.execute("SELECT COUNT(*) FROM vorschlaege WHERE status = 'offen'").fetchone()[0]
+    finally:
+        conn.close()
+
+
+templates.env.globals["offene_vorschlaege_anzahl"] = _offene_vorschlaege_anzahl
+
+
 def _archivio_konfiguriert() -> bool:
     """Prueft nicht nur, ob ein Pfad eingetragen ist, sondern ob dort tatsaechlich eine
     Datei liegt - ein veralteter/falscher Pfad soll den Nav-Punkt nicht anzeigen."""

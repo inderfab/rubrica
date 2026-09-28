@@ -103,6 +103,18 @@ def _vorschlaege_ueberwachung():
         finally:
             conn.close()
 
+        # Zweite Erinnerung an die optionale Ausweich-Adresse - eigener, unabhaengiger
+        # Check (siehe mail_erinnerung.sende_eskalation), damit ein Fehler bei der ersten
+        # Erinnerung die zweite nicht mitreisst.
+        conn = connection.get_connection()
+        try:
+            if mail_erinnerung.eskalation_konfiguriert():
+                mail_erinnerung.sende_eskalation(conn)
+        except Exception:
+            log.exception("Zweite Erinnerungsmail (Ausweich-Adresse) fehlgeschlagen")
+        finally:
+            conn.close()
+
         time.sleep(_KONTAKTE_APP_INTERVALL)
 
 

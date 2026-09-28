@@ -63,6 +63,8 @@ def einstellungen_form(request: Request, gespeichert: str = "", sync: str = "", 
         "smtp_username": settings.get("smtp.username", "") or "",
         "smtp_password": settings.get("smtp.password", "") or "",
         "smtp_empfaenger": settings.get("smtp.empfaenger", "") or "",
+        "smtp_empfaenger2": settings.get("smtp.empfaenger2", "") or "",
+        "smtp_eskalation_tage": settings.get("smtp.eskalation_tage", 0) or 0,
     })
 
 
@@ -259,6 +261,11 @@ def _speichere_einstellungen_formular(form) -> None:
     smtp_username = (form.get("smtp_username") or "").strip()
     smtp_password = form.get("smtp_password") or ""
     smtp_empfaenger = (form.get("smtp_empfaenger") or "").strip()
+    smtp_empfaenger2 = (form.get("smtp_empfaenger2") or "").strip()
+    try:
+        smtp_eskalation_tage = int(form.get("smtp_eskalation_tage") or 0)
+    except ValueError:
+        smtp_eskalation_tage = 0
 
     # Firmenname, Logo und die sichtbaren Felder stehen bewusst auf der
     # Export-Seite (web/export.py) - sie wirken sich nur dort aus.
@@ -278,6 +285,7 @@ def _speichere_einstellungen_formular(form) -> None:
             "host": smtp_host, "port": smtp_port,
             "username": smtp_username, "password": smtp_password,
             "empfaenger": smtp_empfaenger,
+            "empfaenger2": smtp_empfaenger2, "eskalation_tage": smtp_eskalation_tage,
         },
     })
 

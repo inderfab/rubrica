@@ -400,6 +400,17 @@ Feldumfang bewusst an der tatsächlichen Nutzung im bestehenden Apple-Adressbuch
   Formular, bevor er seine Aktion ausführt — alles über htmx ohne Seiten-Neuladung
   (`web/settings.py::_speichere_einstellungen_formular`/`_einstellungen_antwort`). Bei dieser Gelegenheit
   auch: Passwortfelder maskiert (`type="password"`).
+- **Nachbesserung (2026-09-28, v1.32.2):** drei weitere Nutzer-Befunde nach dem ersten produktiven Einsatz.
+  (1) Das Datum je Vorschlag in der Mail stand als ISO-Rohform da ("seit 2026-09-25T14:04:35Z offen") -
+  `mail_erinnerung._lesbares_datum` formatiert das jetzt als "14:04 25.09.2026". (2) Optionale ZWEITE
+  Erinnerung an eine Ausweich-Adresse (Nutzer-Anlass: "wenn Empfänger 1 in den Ferien ist") - eigene
+  Einstellungsfelder `smtp.empfaenger2`/`smtp.eskalation_tage` (Dropdown 3/7/14 Tage), eigener
+  Schwellwert-Check (`mail_erinnerung.sende_eskalation`) und eigenes "schon gesendet"-Feld
+  (`vorschlaege.eskalation_gesendet_am`), unabhängig von der ersten Erinnerung - ein Vorschlag kann die
+  erste laengst bekommen haben und trotzdem separat fuer die zweite faellig sein. (3) Zahlen-Banner neben
+  "Vorschläge" in der Navigation (`web/shared.py::_offene_vorschlaege_anzahl`, als Jinja-Global bei jedem
+  Seitenaufruf neu berechnet wie `archivio_konfiguriert`) - zeigt die Anzahl offener Vorschläge, damit man
+  sie nicht erst auf der Vorschläge-Seite selbst sieht.
 
 ## 6. Vorgeschlagener Tech-Stack
 

@@ -20,7 +20,11 @@
                 <a href="/archivio-import" class="{{ 'aktiv' if pfad.startswith('/archivio-import') else '' }}">Archivio-Import</a>
                 {% endif %}
                 {% if vorschlaege_konfiguriert() %}
-                <a href="/vorschlaege" class="{{ 'aktiv' if pfad.startswith('/vorschlaege') else '' }}">Vorschläge</a>
+                {% set offene_vorschlaege = offene_vorschlaege_anzahl() %}
+                <a href="/vorschlaege" class="{{ 'aktiv' if pfad.startswith('/vorschlaege') else '' }}">
+                    Vorschläge
+                    {% if offene_vorschlaege %}<span class="nav-badge">{{ offene_vorschlaege }}</span>{% endif %}
+                </a>
                 {% endif %}
                 <a href="/export" class="{{ 'aktiv' if pfad.startswith('/export') else '' }}">Export</a>
                 <a href="/einstellungen" class="{{ 'aktiv' if pfad.startswith('/einstellungen') else '' }}">Einstellungen</a>

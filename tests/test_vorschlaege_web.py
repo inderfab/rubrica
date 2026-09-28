@@ -1,6 +1,7 @@
 import httpx
 from fastapi.testclient import TestClient
 
+from config import settings
 from db import queries
 from sync import radicale
 from web.main import app
@@ -548,3 +549,37 @@ def test_zusammenfuehren_speichern_schreibt_auf_den_bestehenden_kontakt(tmp_db):
     kontakt = queries.get_kontakt(tmp_db, bestehender_id)
     assert kontakt["funktionen"][0]["funktion"] == "Architektin"
     assert queries.get_vorschlag(tmp_db, vorschlag_id)["status"] == "bestaetigt"
+
+
+# ── Zahlen-Banner neben "Vorschläge" in der Navigation (Nutzer-Vorgabe) ────────────
+
+def _vorschlaege_sichtbar(monkeypatch):
+    """vorschlaege_konfiguriert() (web/shared.py) braucht Mail-Eingang ODER Radicale-Sync -
+    ohne das waere der Nav-Punkt (und damit der Banner) gar nicht sichtbar."""
+    monkeypatch.setattr(settings, "_settings", {"radicale": {"base_url": "https://127.0.0.1:8443"}})
+
+
+def test_nav_zeigt_keinen_banner_ohne_offene_vorschlaege(tmp_db, monkeypatch):
+    _vorschlaege_sichtbar(monkeypatch)
+    text = _client().get("/vorschlaege").text
+    assert "nav-badge" not in text
+
+
+def test_nav_zeigt_banner_mit_anzahl_offener_vorschlaege(tmp_db, monkeypatch):
+    _vorschlaege_sichtbar(monkeypatch)
+    queries.create_vorschlag(tmp_db, {"vorname": "Anna", "nachname": "Muster"}, quelle="mail")
+    queries.create_vorschlag(tmp_db, {"vorname": "Bob", "nachname": "Beispiel"}, quelle="kontakte_app")
+
+    text = _client().get("/vorschlaege").text
+    assert '<span class="nav-badge">2</span>' in text
+
+
+def test_nav_banner_zaehlt_nur_offene_nicht_bestaetigte_oder_abgelehnte(tmp_db, monkeypatch):
+    _vorschlaege_sichtbar(monkeypatch)
+    offen_id = queries.create_vorschlag(tmp_db, {"vorname": "Anna", "nachname": "Muster"}, quelle="mail")
+    bestaetigt_id = queries.create_vorschlag(tmp_db, {"vorname": "Bob", "nachname": "Beispiel"}, quelle="mail")
+    queries.set_vorschlag_status(tmp_db, bestaetigt_id, "bestaetigt")
+
+    text = _client().get("/vorschlaege").text
+    assert '<span class="nav-badge">1</span>' in text
+    assert queries.get_vorschlag(tmp_db, offen_id)["status"] == "offen"

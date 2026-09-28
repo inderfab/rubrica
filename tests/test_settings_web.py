@@ -473,6 +473,7 @@ def test_einstellungen_speichern_schreibt_smtp_config(tmp_db, monkeypatch, tmp_p
         "smtp_host": "smtp.beispiel.ch", "smtp_port": "465",
         "smtp_username": "rubrica@beispiel.ch", "smtp_password": "geheim",
         "smtp_empfaenger": "fi@beispiel.ch",
+        "smtp_empfaenger2": "vertretung@beispiel.ch", "smtp_eskalation_tage": "7",
     }, follow_redirects=False)
     assert r.status_code == 303
 
@@ -481,6 +482,15 @@ def test_einstellungen_speichern_schreibt_smtp_config(tmp_db, monkeypatch, tmp_p
     assert settings.get("smtp.username") == "rubrica@beispiel.ch"
     assert settings.get("smtp.password") == "geheim"
     assert settings.get("smtp.empfaenger") == "fi@beispiel.ch"
+    assert settings.get("smtp.empfaenger2") == "vertretung@beispiel.ch"
+    assert settings.get("smtp.eskalation_tage") == 7
+
+
+def test_einstellungen_formular_zeigt_eskalation_dropdown_ausgewaehlt(tmp_db, monkeypatch):
+    monkeypatch.setattr(settings, "_settings", {"smtp": {"empfaenger2": "vertretung@beispiel.ch", "eskalation_tage": 7}})
+    text = TestClient(app).get("/einstellungen").text
+    ausschnitt = text[text.index('value="7"'):text.index('value="7"') + 30]
+    assert "selected" in ausschnitt
 
 
 def test_erinnerung_test_ohne_konfiguration_meldet_kein_server(tmp_db, monkeypatch):

@@ -15,12 +15,14 @@ class _FakeSMTP:
         self.quit_aufgerufen = True
 
 
-def _konfiguriere_smtp(monkeypatch):
-    monkeypatch.setattr(settings, "_settings", {"smtp": {
+def _konfiguriere_smtp(monkeypatch, **zusatz):
+    smtp = {
         "host": "smtp.beispiel.ch", "port": 587,
         "username": "rubrica@beispiel.ch", "password": "geheim",
         "empfaenger": "fi@beispiel.ch",
-    }})
+    }
+    smtp.update(zusatz)
+    monkeypatch.setattr(settings, "_settings", {"smtp": smtp})
 
 
 def _offener_vorschlag_vor(tmp_db, stunden: float, vorname="Anna", nachname="Muster", quelle="mail") -> int:
@@ -31,6 +33,13 @@ def _offener_vorschlag_vor(tmp_db, stunden: float, vorname="Anna", nachname="Mus
         tmp_db.execute("UPDATE vorschlaege SET created_at = '2000-01-01T00:00:00Z' WHERE id = ?", (vid,))
     else:
         tmp_db.execute("UPDATE vorschlaege SET created_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ?", (vid,))
+    tmp_db.commit()
+    return vid
+
+
+def _offener_vorschlag_seit(tmp_db, iso_created_at: str, vorname="Anna", nachname="Muster", quelle="mail") -> int:
+    vid = queries.create_vorschlag(tmp_db, {"vorname": vorname, "nachname": nachname}, quelle=quelle)
+    tmp_db.execute("UPDATE vorschlaege SET created_at = ? WHERE id = ?", (iso_created_at, vid))
     tmp_db.commit()
     return vid
 
@@ -208,3 +217,124 @@ def test_verbindung_nutzt_starttls_ausser_bei_port_465(monkeypatch):
     }})
     mail_erinnerung._verbindung()
     assert aufrufe == [("ssl", "smtp.beispiel.ch", 465), ("login", "u", "p")]
+
+
+# ── Datumsformat in der Mail (Nutzer-Meldung: "seit 2026-09-25T14:04:35Z offen" war
+# schwer lesbar) ──────────────────────────────────────────────────────────────────
+
+def test_lesbares_datum_formatiert_iso_als_zeit_und_datum():
+    assert mail_erinnerung._lesbares_datum("2026-09-25T14:04:35Z") == "14:04 25.09.2026"
+
+
+def test_lesbares_datum_faellt_bei_unerwartetem_format_auf_rohwert_zurueck():
+    assert mail_erinnerung._lesbares_datum("nicht-iso") == "nicht-iso"
+
+
+def test_erinnerung_mail_enthaelt_lesbares_datum_nicht_die_iso_rohform(tmp_db, monkeypatch):
+    _konfiguriere_smtp(monkeypatch)
+    fake = _FakeSMTP()
+    monkeypatch.setattr(mail_erinnerung, "_verbindung", lambda: fake)
+    _offener_vorschlag_seit(tmp_db, "2026-09-25T14:04:35Z")
+
+    mail_erinnerung.sende_erinnerung(tmp_db)
+
+    text = fake.gesendet[0].get_payload(decode=True).decode("utf-8")
+    assert "14:04 25.09.2026" in text
+    assert "2026-09-25T14:04:35Z" not in text
+
+
+# ── Zweite Erinnerung an eine Ausweich-Adresse (Nutzer-Anlass: "wenn Empfänger 1 in
+# den Ferien ist") ────────────────────────────────────────────────────────────────
+
+def _konfiguriere_eskalation(monkeypatch, tage=3):
+    _konfiguriere_smtp(monkeypatch, empfaenger2="stellvertretung@beispiel.ch", eskalation_tage=tage)
+
+
+def _offener_vorschlag_vor_tagen(tmp_db, tage: float, **kwargs) -> int:
+    from datetime import datetime, timedelta, timezone
+    iso = (datetime.now(timezone.utc) - timedelta(days=tage)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return _offener_vorschlag_seit(tmp_db, iso, **kwargs)
+
+
+def test_eskalation_konfiguriert_erfordert_zweite_adresse_und_tage(tmp_db, monkeypatch):
+    _konfiguriere_smtp(monkeypatch)  # keine zweite Adresse/Tage
+    assert mail_erinnerung.eskalation_konfiguriert() is False
+
+    _konfiguriere_eskalation(monkeypatch, tage=3)
+    assert mail_erinnerung.eskalation_konfiguriert() is True
+
+    _konfiguriere_smtp(monkeypatch, empfaenger2="stellvertretung@beispiel.ch", eskalation_tage=0)
+    assert mail_erinnerung.eskalation_konfiguriert() is False
+
+
+def test_vorschlaege_faellig_fuer_eskalation_findet_nur_genug_alte(tmp_db):
+    alter_id = _offener_vorschlag_vor_tagen(tmp_db, 4)
+    _offener_vorschlag_vor_tagen(tmp_db, 1, vorname="Bob", nachname="Neu")
+
+    faellige = queries.vorschlaege_faellig_fuer_eskalation(tmp_db, 3 * 24)
+    assert [v["id"] for v in faellige] == [alter_id]
+
+
+def test_eskalation_und_erinnerung_blockieren_sich_nicht_gegenseitig(tmp_db):
+    """Ein Vorschlag kann die erste Erinnerung schon bekommen haben (erinnerung_gesendet_am
+    gesetzt) und trotzdem noch fuer die zweite faellig sein - eigenes Feld, siehe Schema."""
+    vid = _offener_vorschlag_vor_tagen(tmp_db, 4)
+    queries.markiere_erinnerung_gesendet(tmp_db, [vid])
+
+    assert [v["id"] for v in queries.vorschlaege_faellig_fuer_eskalation(tmp_db, 3 * 24)] == [vid]
+
+
+def test_sende_eskalation_ohne_konfiguration_tut_nichts(tmp_db, monkeypatch):
+    _konfiguriere_smtp(monkeypatch)  # nur die erste Adresse, keine Eskalation
+    _offener_vorschlag_vor_tagen(tmp_db, 10)
+
+    assert mail_erinnerung.sende_eskalation(tmp_db) == {"aktiv": False, "anzahl": 0}
+
+
+def test_sende_eskalation_verschickt_an_zweite_adresse(tmp_db, monkeypatch):
+    _konfiguriere_eskalation(monkeypatch, tage=3)
+    fake = _FakeSMTP()
+    monkeypatch.setattr(mail_erinnerung, "_verbindung", lambda: fake)
+    vid = _offener_vorschlag_vor_tagen(tmp_db, 4, vorname="Anna", nachname="Lang-Offen")
+
+    ergebnis = mail_erinnerung.sende_eskalation(tmp_db)
+
+    assert ergebnis == {"aktiv": True, "anzahl": 1}
+    assert len(fake.gesendet) == 1
+    assert fake.gesendet[0]["To"] == "stellvertretung@beispiel.ch"
+    text = fake.gesendet[0].get_payload(decode=True).decode("utf-8")
+    assert "Anna Lang-Offen" in text
+    assert "3 Tagen" in text
+    assert queries.get_vorschlag(tmp_db, vid)["eskalation_gesendet_am"]
+
+
+def test_sende_eskalation_meldet_jeden_vorschlag_nur_einmal(tmp_db, monkeypatch):
+    _konfiguriere_eskalation(monkeypatch, tage=3)
+    fake = _FakeSMTP()
+    monkeypatch.setattr(mail_erinnerung, "_verbindung", lambda: fake)
+    _offener_vorschlag_vor_tagen(tmp_db, 4)
+
+    mail_erinnerung.sende_eskalation(tmp_db)
+    zweiter_lauf = mail_erinnerung.sende_eskalation(tmp_db)
+
+    assert zweiter_lauf == {"aktiv": True, "anzahl": 0}
+    assert len(fake.gesendet) == 1
+
+
+def test_pruefe_und_beschreibe_erwaehnt_eskalation_wenn_konfiguriert(tmp_db, monkeypatch):
+    _konfiguriere_eskalation(monkeypatch, tage=3)
+    monkeypatch.setattr(mail_erinnerung, "_verbindung", lambda: _FakeSMTP())
+    _offener_vorschlag_vor_tagen(tmp_db, 4)
+
+    text = mail_erinnerung.pruefe_und_beschreibe(tmp_db)
+    assert "Erinnerungsmail mit 1 Vorschlägen verschickt." in text
+    assert "Zweite Erinnerung mit 1 Vorschlägen an die zweite Adresse verschickt." in text
+
+
+def test_pruefe_und_beschreibe_ohne_eskalation_erwaehnt_sie_nicht(tmp_db, monkeypatch):
+    _konfiguriere_smtp(monkeypatch)  # keine Eskalation konfiguriert
+    monkeypatch.setattr(mail_erinnerung, "_verbindung", lambda: _FakeSMTP())
+    _offener_vorschlag_vor(tmp_db, 24)
+
+    text = mail_erinnerung.pruefe_und_beschreibe(tmp_db)
+    assert "Zweite Erinnerung" not in text

@@ -182,6 +182,19 @@
                 <label>Empfänger-Adresse</label>
                 <input type="text" name="smtp_empfaenger" value="{{ smtp_empfaenger }}" placeholder="muster@muster.ch">
             </div>
+            <div class="field">
+                <label>Zweite Empfänger-Adresse <span style="color:#86868b">(optional)</span></label>
+                <input type="text" name="smtp_empfaenger2" value="{{ smtp_empfaenger2 }}" placeholder="stellvertretung@muster.ch">
+            </div>
+            <div class="field">
+                <label>Zusätzlich erinnern nach <span style="color:#86868b">(z. B. falls Empfänger 1 abwesend ist)</span></label>
+                <select name="smtp_eskalation_tage">
+                    <option value="0" {{ 'selected' if smtp_eskalation_tage == 0 }}>Aus</option>
+                    <option value="3" {{ 'selected' if smtp_eskalation_tage == 3 }}>3 Tagen</option>
+                    <option value="7" {{ 'selected' if smtp_eskalation_tage == 7 }}>7 Tagen</option>
+                    <option value="14" {{ 'selected' if smtp_eskalation_tage == 14 }}>14 Tagen</option>
+                </select>
+            </div>
         </div>
         <div class="actions" style="margin-top:0.5rem">
             <button type="submit" formaction="/einstellungen/erinnerung-test" class="secondary"

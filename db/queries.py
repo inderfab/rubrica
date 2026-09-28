@@ -961,6 +961,17 @@ def list_vorschlaege(conn: sqlite3.Connection, status: str = "offen",
     return result
 
 
+def _vorschlaege_faellig(conn: sqlite3.Connection, schwellwert_stunden: int, gesendet_feld: str) -> list[dict]:
+    """Gemeinsame Grundlage fuer vorschlaege_faellig_fuer_erinnerung/_eskalation: offene
+    Vorschlaege, die schon laenger als schwellwert_stunden unbeachtet liegen und fuer die
+    gesendet_feld noch nicht gesetzt ist."""
+    grenze = (datetime.now(timezone.utc) - timedelta(hours=schwellwert_stunden)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return [
+        v for v in list_vorschlaege(conn, status="offen")
+        if v["created_at"] <= grenze and not v.get(gesendet_feld)
+    ]
+
+
 def vorschlaege_faellig_fuer_erinnerung(conn: sqlite3.Connection, schwellwert_stunden: int) -> list[dict]:
     """Offene Vorschlaege, die schon laenger als schwellwert_stunden unbeachtet liegen und
     noch keine Erinnerungsmail ausgeloest haben (siehe mail_erinnerung.py). Nutzer-Meldung:
@@ -968,11 +979,7 @@ def vorschlaege_faellig_fuer_erinnerung(conn: sqlite3.Connection, schwellwert_st
     EINMAL gemeldet - markiere_erinnerung_gesendet haelt das fest, auch wenn er danach noch
     tagelang offen bleibt (Nutzer-Vorgabe: keine taeglich wiederholte Mail, kein Spam bei
     mehreren gleichzeitig faelligen Vorschlaegen aus einem Kontakte.app-Schub)."""
-    grenze = (datetime.now(timezone.utc) - timedelta(hours=schwellwert_stunden)).strftime("%Y-%m-%dT%H:%M:%SZ")
-    return [
-        v for v in list_vorschlaege(conn, status="offen")
-        if v["created_at"] <= grenze and not v.get("erinnerung_gesendet_am")
-    ]
+    return _vorschlaege_faellig(conn, schwellwert_stunden, "erinnerung_gesendet_am")
 
 
 def markiere_erinnerung_gesendet(conn: sqlite3.Connection, vorschlag_ids: list[int]) -> None:
@@ -981,6 +988,25 @@ def markiere_erinnerung_gesendet(conn: sqlite3.Connection, vorschlag_ids: list[i
     with conn:
         conn.executemany(
             "UPDATE vorschlaege SET erinnerung_gesendet_am = ? WHERE id = ?",
+            [(_now(), vid) for vid in vorschlag_ids],
+        )
+
+
+def vorschlaege_faellig_fuer_eskalation(conn: sqlite3.Connection, schwellwert_stunden: int) -> list[dict]:
+    """Wie vorschlaege_faellig_fuer_erinnerung, aber fuer die ZWEITE Erinnerung an eine
+    optionale Ausweich-Adresse (Nutzer-Anlass: "wenn Empfänger 1 in den Ferien ist") - eigenes
+    gesendet_feld (eskalation_gesendet_am), damit die erste und zweite Erinnerung sich nicht
+    gegenseitig blockieren: ein Vorschlag kann die erste Erinnerung schon bekommen haben und
+    trotzdem noch fuer die zweite faellig sein."""
+    return _vorschlaege_faellig(conn, schwellwert_stunden, "eskalation_gesendet_am")
+
+
+def markiere_eskalation_gesendet(conn: sqlite3.Connection, vorschlag_ids: list[int]) -> None:
+    if not vorschlag_ids:
+        return
+    with conn:
+        conn.executemany(
+            "UPDATE vorschlaege SET eskalation_gesendet_am = ? WHERE id = ?",
             [(_now(), vid) for vid in vorschlag_ids],
         )
 

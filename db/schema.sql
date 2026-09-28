@@ -122,7 +122,12 @@ CREATE TABLE IF NOT EXISTS vorschlaege (
     -- verschickt. Jeder Vorschlag wird hoechstens EINMAL gemeldet (Nutzer-Vorgabe:
     -- keine taeglich wiederholte Mail) - einmal gesetzt, bleibt der Vorschlag auch
     -- Tage spaeter noch offen unbemerkt von weiteren Erinnerungen.
-    erinnerung_gesendet_am TEXT
+    erinnerung_gesendet_am TEXT,
+    -- Wie erinnerung_gesendet_am, aber fuer die optionale ZWEITE Erinnerung an eine
+    -- Ausweich-Adresse nach mehreren Tagen (Nutzer-Anlass: "wenn Empfänger 1 in den
+    -- Ferien ist") - eigenes Feld, damit sich die beiden Erinnerungen nicht gegenseitig
+    -- blockieren.
+    eskalation_gesendet_am TEXT
 );
 
 -- Postfach -> Ordner-Zuordnung fuer die Archivio-Signatur-Anbindung: markiert gefundene
