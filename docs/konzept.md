@@ -205,6 +205,27 @@ Feldumfang bewusst an der tatsächlichen Nutzung im bestehenden Apple-Adressbuch
   bestehen, nur der Inhalt fehlt bei deaktiviertem Flag. (3) Der Abschnitt "Darstellung der PDF-Liste"
   auf `/export` hiess um in "Sichtbare Spalten" und ist kein `<details>` mehr, sondern immer
   ausgeklappt (Nutzer-Vorgabe) - er betrifft jetzt PDF UND CSV gleichermassen.
+- **Ursache des "Internal Server Error" gefunden (2026-09-29, v1.33.1):** dank des in v1.33.0 ergänzten
+  Loggings lag der Traceback vor - `reportlab.platypus.doctemplate.LayoutError`: eine einzelne Firma mit
+  sehr vielen Mitarbeitenden ergab einen verschachtelten Block (siehe 5.7-Absatz zu "eine Firma reisst
+  nicht mehr über den Seitenumbruch"), der selbst schon höher als eine GANZE Seite war - eine solche
+  atomare Tabelle kann reportlab auf keiner Seite platzieren und bricht komplett ab, statt sie zu
+  splitten. Fix in `export/generator._tabellenzeilen`: jede verschachtelte Tabelle wird vorab vermessen
+  (`Table.wrap`); passt sie nicht auf eine leere Seite (`doc.height`), fällt genau dieser eine Block auf
+  lose Zeilen zurück (reisst dann zwar über den Seitenumbruch, aber der Export bricht nicht mehr ab) -
+  Reproduktion und Fix bestätigt mit einer synthetischen 80-Personen-Firma, die denselben
+  `LayoutError` auslöste.
+- **Allgemeine/Zentralen-Nummer bei einer/einem Mitarbeitenden statt bei einem eigenen namenlosen
+  Firmenkontakt (2026-09-29, v1.33.1):** die bisherige Firmenzeilen-Logik erkannte eine "allgemeine
+  Nummer" nur über einen eigenen namenlosen Firmenkontakt (`_ist_firmenkontakt`). In der Praxis trägt
+  eine/ein Mitarbeitende die Zentralennummer aber oft direkt bei sich selbst mit dem Telefontyp
+  "Zentrale" ein - sie erschien dadurch nur zufällig bei genau dieser einen Person statt auf der
+  Firmenzeile, UND zusätzlich (da Telefon keine eigene Allgemein-Spalte mehr kennt, siehe
+  `_telefon_kategorie`) gemeinsam mit der eigenen Direktnummer in derselben Zelle dieser Person. Fix:
+  `_ALLGEMEIN_TYPEN` um `"zentrale"` ergänzt; `_zentralen_nummern` sammelt alle so getypten Nummern
+  über die ganze Firmengruppe (analog zu `_firmen_webseiten_pdf`) und zeigt sie zusätzlich zum
+  namenlosen Firmenkontakt auf der Firmenzeile; `_direktwahl_ohne_zentrale_pdf` blendet sie in der
+  eigenen Zeile der jeweiligen Person aus.
 
 ### 5.8 Mail-Eingang — Kontakte von unterwegs per Mail einreichen
 - **Umgesetzt (2026-07-28):** ein drittes Erfassungs­gleis neben Web-Neuanlage (5.1) und Import (5.6) für

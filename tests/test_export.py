@@ -339,6 +339,92 @@ def test_tabellenzeilen_verschachtelt_firma_mit_mitarbeitern_als_eine_zeile():
     assert mitarbeiterzeile[0] == "" and mitarbeiterzeile[1] == ""  # BKP/Unternehmen leer
 
 
+def test_tabellenzeilen_zu_grosser_block_faellt_auf_lose_zeilen_zurueck():
+    """Regression (Nutzer-Meldung: "Alle Kontakte" exportieren ergab einen "Internal
+    Server Error"): eine verschachtelte Firma-Tabelle, die selbst schon groesser als
+    eine ganze Seite ist, kann reportlab auf KEINER Seite platzieren
+    (reportlab.platypus.doctemplate.LayoutError). max_block_hoehe faengt genau das ab -
+    ein winziger Schwellwert zwingt hier jeden Block in den Fallback, auch einen sonst
+    problemlos verschachtelbaren."""
+    firmenkontakt = _kontakt(id=1, vorname="", nachname="", firma="Beispiel Bauingenieure AG",
+                              kategorie="292 Bauingenieur/in", rolle="",
+                              telefonnummern=[{"typ": "work", "nummer": "052 000 00 00"}],
+                              emails=[{"typ": "internet", "email": "info@beispiel.ch"}])
+    mitarbeiter = _kontakt(id=2, vorname="Astrid", nachname="Beispiel", firma="Beispiel Bauingenieure AG",
+                            kategorie="292 Bauingenieur/in", rolle="Partnerin",
+                            telefonnummern=[{"typ": "work", "nummer": "052 111 11 11"}],
+                            emails=[{"typ": "internet", "email": "beispiel@beispiel.ch"}])
+    zeilen, grenzen, verschachtelt = generator._tabellenzeilen(
+        [firmenkontakt, mitarbeiter], privates_telefon_zeigen=False,
+        private_email_zeigen=False, privatadresse_zeigen=False,
+        spaltenbreiten=[50, 50, 50, 50, 50, 50], max_block_hoehe=1,
+    )
+    assert verschachtelt == []
+    assert len(zeilen) == 3  # Kopfzeile + Firmenzeile + 1 Mitarbeiterzeile, lose
+
+
+def test_kontakte_pdf_riesige_firma_bricht_nicht_ab():
+    """End-zu-Ende-Reproduktion des echten Absturzes: eine einzelne Firma mit sehr
+    vielen Mitarbeitenden (deren verschachtelter Block dadurch hoeher als jede Seite
+    ist) durfte den gesamten Export nicht mehr zum Absturz bringen."""
+    mitarbeiter = [
+        _kontakt(id=i, vorname=f"Max{i}", nachname=f"Muster{i}", firma="Grosse Firma AG",
+                 telefonnummern=[{"typ": "work", "nummer": f"044 000 00 {i:02d}"}],
+                 emails=[{"typ": "internet", "email": f"max{i}@firma.ch"}], adressen=[], urls=[])
+        for i in range(80)
+    ]
+    daten = generator.kontakte_pdf("Testliste", mitarbeiter)
+    assert daten.startswith(b"%PDF")
+
+
+# ── Zentrale/allgemeine Telefonnummer bei einer/einem Mitarbeitenden statt bei einem
+# eigenen namenlosen Firmenkontakt (Nutzer-Befund) ──────────────────────────────────
+
+def test_zentralen_nummern_sammelt_ueber_alle_kontakte_und_dedupliziert():
+    kontakte = [
+        _kontakt(id=1, vorname="Anna", nachname="Eins", firma="Firma AG",
+                 telefonnummern=[{"typ": "Zentrale", "nummer": "052 000 00 00"},
+                                  {"typ": "Direkt", "nummer": "052 111 11 11"}]),
+        _kontakt(id=2, vorname="Bob", nachname="Zwei", firma="Firma AG",
+                 telefonnummern=[{"typ": "Zentrale", "nummer": "052 000 00 00"}]),  # Dublette
+    ]
+    assert generator._zentralen_nummern(kontakte) == ["052 000 00 00"]
+
+
+def test_direktwahl_ohne_zentrale_pdf_schliesst_nur_zentrale_aus():
+    """Regression: bei Peter Kunz standen seine eigene Direktnummer UND die
+    Zentralennummer in derselben Zelle, weil eine als "Zentrale" getypte Nummer beim
+    Telefon technisch als "Direkt" gilt (siehe _telefon_kategorie)."""
+    kontakt = _kontakt(telefonnummern=[
+        {"typ": "Zentrale", "nummer": "052 213 33 60"},
+        {"typ": "Direkt", "nummer": "052 213 33 68"},
+    ])
+    ergebnis = generator._direktwahl_ohne_zentrale_pdf(kontakt, privates_telefon_zeigen=False)
+    assert "052 213 33 68" in ergebnis
+    assert "052 213 33 60" not in ergebnis
+
+
+def test_firmengruppen_zeilen_zieht_zentrale_nummer_von_mitarbeiter_auf_firmenzeile():
+    """Nutzer-Befund: die Zentralennummer war nur bei EINER Mitarbeiterin sichtbar
+    (weil sie dort eingetragen ist), nicht auf der Firmenzeile "auf Hoehe der
+    Webseite, ganz oben". Zusaetzlich darf sie danach nicht mehr in der eigenen Zeile
+    dieser Person stehen."""
+    mit_zentrale = _kontakt(id=1, vorname="Corinne", nachname="Beispiel", firma="Muster Bau AG",
+                             telefonnummern=[{"typ": "Zentrale", "nummer": "052 213 33 60"},
+                                              {"typ": "Direkt", "nummer": "052 214 20 24"}])
+    andere = _kontakt(id=2, vorname="Reto", nachname="Muster", firma="Muster Bau AG",
+                       telefonnummern=[{"typ": "Direkt", "nummer": "052 214 20 37"}])
+    zeilen, _, _ = generator._tabellenzeilen(
+        [mit_zentrale, andere], privates_telefon_zeigen=False, private_email_zeigen=False, privatadresse_zeigen=False,
+    )
+    firmenzeile = zeilen[1]
+    beispiel_zeile = next(z for z in zeilen[2:] if "Corinne" in z[2].text)
+
+    assert "052 213 33 60" in firmenzeile[4].text  # auf der Firmenzeile
+    assert "052 213 33 60" not in beispiel_zeile[4].text  # nicht mehr bei ihr selbst
+    assert "052 214 20 24" in beispiel_zeile[4].text  # ihre eigene Direktnummer bleibt
+
+
 def test_tabellenzeilen_hat_sechs_spalten_keine_eigene_mobil_spalte():
     zeilen, _, _ = generator._tabellenzeilen(
         [_kontakt()], privates_telefon_zeigen=False, private_email_zeigen=False, privatadresse_zeigen=False,

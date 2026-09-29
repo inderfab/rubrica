@@ -32,9 +32,12 @@ CSV_SPALTEN = [
 
 # Altwerte bleiben in der Zuordnung enthalten: der Export laeuft auch ueber Daten,
 # die (noch) nicht durch die Migration gegangen sind, etwa aus einem gerade
-# eingelesenen Vorschlag.
+# eingelesenen Vorschlag. "zentrale" ergaenzt (Nutzer-Befund): eine Zentralennummer
+# wird in der Praxis oft direkt bei einer/einem Mitarbeitenden mit diesem Typ
+# eingetragen statt bei einem eigenen namenlosen Firmenkontakt (siehe
+# _zentralen_nummern).
 _PRIVAT_TYPEN = {"private", "home"}
-_ALLGEMEIN_TYPEN = {"allgemein", "main"}
+_ALLGEMEIN_TYPEN = {"allgemein", "main", "zentrale"}
 _HANDY_TYPEN = {"cell", "mobil", "mobile", "iphone", "natel"}
 
 
@@ -123,6 +126,40 @@ def _direktwahl_pdf(kontakt: dict, privates_telefon_zeigen: bool) -> str:
         if not (_ist_privat_typ(t.get("typ", "")) and not privates_telefon_zeigen)
     ]
     return "<br/>".join(escape(n) for n in ergebnis)
+
+
+def _direktwahl_ohne_zentrale_pdf(kontakt: dict, privates_telefon_zeigen: bool) -> str:
+    """Wie _direktwahl_pdf, aber ohne als "Allgemein"/"Zentrale" getypte Nummern - die
+    erscheinen stattdessen einmalig auf der Firmenzeile (siehe _zentralen_nummern),
+    nicht zusaetzlich bei der einzelnen Person. Nutzer-Befund: bei einem Kontakt standen
+    seine eigene Direktnummer UND die Zentralennummer der Firma in derselben Zelle,
+    weil eine als "Zentrale" getypte Nummer beim Telefon technisch als "Direkt" gilt
+    (siehe _telefon_kategorie - Telefon kennt keine eigene Allgemein-Spalte mehr)."""
+    ergebnis = [
+        t["nummer"] for t in kontakt.get("telefonnummern", [])
+        if not (_ist_privat_typ(t.get("typ", "")) and not privates_telefon_zeigen)
+        and _kategorie_von_typ(t.get("typ", "")) != "Allgemein"
+    ]
+    return "<br/>".join(escape(n) for n in ergebnis)
+
+
+def _zentralen_nummern(alle_kontakte: list[dict]) -> list[str]:
+    """Alle als "Allgemein"/"Zentrale" getypten Telefonnummern innerhalb einer
+    Firmengruppe (unabhaengig davon, an welchem Kontakt sie haengen - siehe
+    _ALLGEMEIN_TYPEN), dedupliziert und in der Reihenfolge des ersten Auftretens.
+    Rohe Liste statt fertigem HTML-Text, weil sie in _firmengruppen_zeilen noch mit
+    den Nummern des Firmenkontakts zusammengefuehrt/erneut entduplifiziert wird, bevor
+    daraus eine einzelne Zelle wird. Nutzer-Befund: eine Zentralennummer wird in der
+    Praxis oft direkt bei einer/einem Mitarbeitenden eingetragen statt bei einem
+    eigenen namenlosen Firmenkontakt - ohne diese Sammlung waere sie nur zufaellig bei
+    genau der einen Person sichtbar gewesen, die sie eingetragen hat, statt auf der
+    Firmenzeile (auf Hoehe der Webseite, ganz oben)."""
+    gesehen = []
+    for k in alle_kontakte:
+        for t in k.get("telefonnummern", []):
+            if _kategorie_von_typ(t.get("typ", "")) == "Allgemein" and t["nummer"] not in gesehen:
+                gesehen.append(t["nummer"])
+    return gesehen
 
 
 def _email_pdf(kontakt: dict, private_email_zeigen: bool) -> str:
@@ -379,9 +416,18 @@ def _firmen_adresse_pdf(alle_kontakte: list[dict], privatadresse_zeigen: bool) -
 
 def _mitarbeiter_zeile(
     kontakt: dict, privates_telefon_zeigen: bool, private_email_zeigen: bool, bkp_zelle="",
+    zentrale_ausschliessen: bool = False,
 ) -> list:
+    """zentrale_ausschliessen=True innerhalb einer Firmengruppe (siehe
+    _firmengruppen_zeilen): eine als "Zentrale" getypte Nummer erscheint dort schon
+    auf der Firmenzeile (_zentralen_nummern) und soll nicht doppelt bei der
+    einzelnen Person stehen. False fuer BKP-lose Einzelkontakte ohne Firma - dort gibt
+    es keine Firmenzeile, auf die eine Zentralennummer ausweichen koennte."""
     name = f"{kontakt.get('vorname', '')} {kontakt.get('nachname', '')}".strip()
-    telefon = _direktwahl_pdf(kontakt, privates_telefon_zeigen)
+    telefon = (
+        _direktwahl_ohne_zentrale_pdf(kontakt, privates_telefon_zeigen) if zentrale_ausschliessen
+        else _direktwahl_pdf(kontakt, privates_telefon_zeigen)
+    )
     email = _email_pdf(kontakt, private_email_zeigen)
     return [
         bkp_zelle,
@@ -420,7 +466,18 @@ def _firmengruppen_zeilen(
             unternehmen_teile.append(adresse)
         unternehmen_zelle = Paragraph("<br/>".join(unternehmen_teile), _STIL_ZELLE)
 
-        allg_telefon = _direktwahl_pdf(firmenkontakt, privates_telefon_zeigen) if firmenkontakt else ""
+        # Allgemeine Nummer: entweder vom namenlosen Firmenkontakt (alle seine
+        # Nummern gelten als allgemein, unabhaengig vom Typ - er steht ja nur fuer
+        # die Firma selbst) ODER als "Allgemein"/"Zentrale" getypte Nummer(n) bei
+        # echten Mitarbeitenden (haeufigere reale Praxis, Nutzer-Befund) - beide
+        # Quellen zusammen, dedupliziert. Nur auf der Firmenzeile, nie zusaetzlich
+        # bei der einzelnen Person (siehe _mitarbeiter_zeile zentrale_ausschliessen).
+        firmenkontakt_nummern = [
+            n["nummer"] for n in firmenkontakt.get("telefonnummern", [])
+            if privates_telefon_zeigen or not _ist_privat_typ(n.get("typ", ""))
+        ] if firmenkontakt else []
+        allg_nummern = list(dict.fromkeys(firmenkontakt_nummern + _zentralen_nummern(mitarbeiter)))
+        allg_telefon = "<br/>".join(escape(n) for n in allg_nummern)
         allg_email = _email_pdf(firmenkontakt, private_email_zeigen) if firmenkontakt else ""
         allg_web = _firmen_webseiten_pdf(alle_kontakte)
         allg_email_zelle = "<br/>".join(t for t in (allg_email, allg_web) if t)
@@ -431,7 +488,9 @@ def _firmengruppen_zeilen(
         ])
 
         for k in mitarbeiter:
-            zeilen.append(_mitarbeiter_zeile(k, privates_telefon_zeigen, private_email_zeigen))
+            zeilen.append(_mitarbeiter_zeile(
+                k, privates_telefon_zeigen, private_email_zeigen, zentrale_ausschliessen=True,
+            ))
     else:
         for i, k in enumerate(alle_kontakte):
             zeilen.append(_mitarbeiter_zeile(
@@ -451,7 +510,7 @@ _INNERE_TABELLEN_STIL = TableStyle([
 
 def _tabellenzeilen(
     kontakte: list[dict], privates_telefon_zeigen: bool, private_email_zeigen: bool, privatadresse_zeigen: bool,
-    spaltenbreiten: list[float] | None = None,
+    spaltenbreiten: list[float] | None = None, max_block_hoehe: float | None = None,
 ) -> tuple[list[list], list[int], list[int]]:
     """Baut die Datenzeilen der Kontakttabelle (siehe _firmengruppen_zeilen fuer
     eine einzelne Firma). Eine Firma MIT Mitarbeiterzeilen wird als EINE
@@ -462,6 +521,18 @@ def _tabellenzeilen(
     Seite 2 - Nutzer-Befund anhand echter mehrseitiger Adresslisten). Ohne
     spaltenbreiten (z.B. in bestehenden Tests) bleiben die Zeilen lose, wie vor
     dieser Verschachtelung.
+
+    max_block_hoehe (die verfuegbare Rahmenhoehe einer Seite, siehe kontakte_pdf):
+    eine verschachtelte, unteilbare Tabelle, die selbst schon groesser als eine
+    GANZE Seite ist, kann reportlab auf KEINER Seite platzieren und bricht mit
+    einem LayoutError komplett ab (Nutzer-Meldung: "Alle Kontakte" exportieren
+    ergab einen "Internal Server Error" - eine einzelne, sehr grosse Firma mit
+    vielen Mitarbeitenden war schlicht zu hoch fuer eine einzelne Seite). Deshalb
+    wird jede verschachtelte Tabelle vorab vermessen (Table.wrap) - passt sie nicht
+    auf eine leere Seite, faellt dieser EINE Block auf lose Zeilen zurueck (reisst
+    dann zwar ueber den Seitenumbruch, aber der Export bricht nicht mehr komplett
+    ab). Ohne max_block_hoehe (z.B. in bestehenden Tests) entfaellt diese Pruefung.
+
     Gibt zusaetzlich die Zeilenindizes zurueck, an denen eine neue Firma
     beginnt (fuer die Trennlinie zwischen den Bloecken), sowie die Indizes der
     verschachtelten Zeilen (muessen ueber alle 6 Spalten verschmolzen werden,
@@ -480,9 +551,15 @@ def _tabellenzeilen(
             )
             gruppengrenzen.append(len(zeilen))
 
+            innere = None
             if firma and len(block_zeilen) > 1 and spaltenbreiten:
                 innere = Table(block_zeilen, colWidths=spaltenbreiten)
                 innere.setStyle(_INNERE_TABELLEN_STIL)
+                if max_block_hoehe is not None:
+                    _, innere_hoehe = innere.wrap(sum(spaltenbreiten), 0xFFFFFF)
+                    if innere_hoehe > max_block_hoehe:
+                        innere = None  # passt auf keine Seite - lose Zeilen statt Absturz
+            if innere is not None:
                 verschachtelte_zeilen.append(len(zeilen))
                 zeilen.append([innere, "", "", "", "", ""])
             else:
@@ -514,6 +591,7 @@ def kontakte_pdf(
         spaltenbreiten = [doc.width * anteil for anteil in _SPALTEN_ANTEILE]
         zeilen, gruppengrenzen, verschachtelte_zeilen = _tabellenzeilen(
             kontakte, privates_telefon_zeigen, private_email_zeigen, privatadresse_zeigen, spaltenbreiten,
+            max_block_hoehe=doc.height,
         )
         tabelle = Table(zeilen, colWidths=spaltenbreiten, repeatRows=1)
         stil = [

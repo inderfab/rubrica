@@ -14,10 +14,12 @@ B19 und C20 (neu ab 1.31.0: optionales Anlegen ohne Geburtstag/Adresse, Export-A
 Nutzer bestätigt. E11–E14 neu ab 1.32.1 (automatisches Speichern auf der Einstellungsseite,
 Aktions-Knöpfe laden die Seite nicht mehr neu, Passwörter maskiert). E15–E17 neu ab 1.32.2
 (lesbares Datum in der Erinnerungsmail, zweite Erinnerungs-Adresse mit Tage-Schwelle,
-Zahlen-Banner in der Navigation), E15 vom Nutzer bestätigt. G13–G15 neu ab 1.33.0
-(Export-Absturz bei „Alle Kontakte" abgefangen — Ursache lokal nicht reproduzierbar,
-**G13 dringend prüfen**; CSV folgt jetzt denselben Sichtbarkeits-Flags wie PDF; Abschnitt
-„Sichtbare Spalten" immer ausgeklappt). Offene Befunde siehe unten.
+Zahlen-Banner in der Navigation), E15 vom Nutzer bestätigt. G13–G15 neu ab 1.33.0 (CSV
+folgt jetzt denselben Sichtbarkeits-Flags wie PDF; Abschnitt „Sichtbare Spalten" immer
+ausgeklappt); G13 („Alle Kontakte" exportieren) war zunächst ein „Internal Server
+Error", Ursache dank Nutzer-Traceback gefunden und in 1.33.1 behoben (✅). G16–G18 neu
+ab 1.33.1 (Zentralennummer bei einer/einem Mitarbeitenden statt nur bei einem eigenen
+namenlosen Firmenkontakt). Offene Befunde siehe unten.
 
 | Zeichen | Bedeutung |
 |---|---|
@@ -178,7 +180,10 @@ kommt zuerst als **Vorschlag**.
 | G10 | ⬜ | Zwei oder drei Formate ankreuzen und exportieren | Weiterhin ein `.zip` mit den gewählten Dateien |
 | G11 | ⬜ | PDF eines Ordners mit vielen Firmen (mehrseitig) öffnen, an jedem Seitenumbruch prüfen | Eine Firma samt ihren Sachbearbeitern steht immer komplett auf einer Seite, reisst nie über den Seitenumbruch |
 | G12 | ⬜ | Im PDF eine Firmenadresse ansehen | Firmenname, Strasse und „PLZ Ort, Land" stehen auf drei festen eigenen Zeilen, kein unschöner Umbruch mitten im Text |
-| G13 | ⬜ | **Alle Kontakte** (kein Ordner) exportieren, alle drei Formate | Funktioniert ohne Fehler — **bisher „Internal Server Error"**, bitte genau prüfen; falls wieder ein Fehler kommt: `tail -100 "~/Library/Application Support/Rubrica/logs/server.log"` und mir den Traceback schicken | ab 1.33.0 — konnte lokal nicht nachgestellt werden |
+| G13 | ✅ | **Alle Kontakte** (kein Ordner) exportieren, alle drei Formate | Funktioniert ohne Fehler | Ursache gefunden + behoben in 1.33.1 (Firma mit sehr vielen Mitarbeitenden sprengte eine Seite) |
+| G16 | ⬜ | Firmenzeile einer Firma ansehen, bei der eine/ein Mitarbeitende eine Nummer mit Typ **„Zentrale"** hat | Diese Nummer steht auf der Firmenzeile (Höhe der Webseite, ganz oben) | ab 1.33.1 |
+| G17 | ⬜ | Zeile dieser/dieses Mitarbeitenden ansehen | Zentralennummer steht dort **nicht** mehr, nur die eigene Direktnummer | ab 1.33.1 |
+| G18 | ⬜ | Firma mit **zwei** Mitarbeitenden, die beide eine „Zentrale"-Nummer eingetragen haben (gleiche Nummer) | Nummer erscheint auf der Firmenzeile nur **einmal** (keine Dublette) | ab 1.33.1 |
 | G14 | ⬜ | Export-Seite öffnen | Abschnitt heisst „Sichtbare Spalten" (nicht mehr „Darstellung der PDF-Liste") und ist **immer aufgeklappt**, kein Klick zum Ausklappen nötig | ab 1.33.0 |
 | G15 | ⬜ | Sichtbare Spalten: **Private E-Mail-Adresse** deaktiviert lassen, CSV exportieren, Spalte „E-Mail Privat" ansehen | Spalte ist vorhanden, aber leer — kein privater Wert drin | ab 1.33.0 |
 
