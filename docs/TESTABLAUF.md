@@ -19,7 +19,10 @@ folgt jetzt denselben Sichtbarkeits-Flags wie PDF; Abschnitt „Sichtbare Spalte
 ausgeklappt); G13 („Alle Kontakte" exportieren) war zunächst ein „Internal Server
 Error", Ursache dank Nutzer-Traceback gefunden und in 1.33.1 behoben (✅). G16–G18 neu
 ab 1.33.1 (Zentralennummer bei einer/einem Mitarbeitenden statt nur bei einem eigenen
-namenlosen Firmenkontakt). Offene Befunde siehe unten.
+namenlosen Firmenkontakt). B20 und G19 neu ab 1.34.0 (Telefonnummern-Liste im
+Kontaktformular in fester Reihenfolge statt Einfügereihenfolge; CSV hat jetzt eine
+eigene Spalte „Telefon Allgemein", damit eine „Zentrale"-Nummer nicht mehr zusammen
+mit der Direktnummer in derselben CSV-Zelle steht). Offene Befunde siehe unten.
 
 | Zeichen | Bedeutung |
 |---|---|
@@ -75,6 +78,7 @@ synchronisieren** urteilen.
 | B17 | ⬜ | Neuen Kontakt anlegen **ohne** Geburtstag und **ohne** Adresse | Lässt sich trotzdem speichern, keine roten Pflichtfelder | neu ab 1.31.0 |
 | B18 | ✅ | Bei einem Kontakt einen Geburtstag eintragen und speichern, nach einigen Minuten in Kontakte.app prüfen | Geburtstag erscheint dort ebenfalls | neu ab 1.31.0 — bestätigt beim Nachtragen der 19 alten Geburtstage |
 | B19 | ⬜ | Diesen Kontakt exportieren (PDF/CSV) | Geburtstag erscheint **nirgends** im Export | neu ab 1.31.0 |
+| B20 | ⬜ | Bei einem Kontakt mit mehreren Telefonnummern verschiedenen Typs (z.B. Zentrale, Privat Handy, Direkt) die Liste ansehen | Nummern erscheinen immer in derselben Reihenfolge (Direkt, Direkt Handy, Privat, Privat Handy, dann weitere), unabhängig davon, welche zuerst eingetragen wurde | neu ab 1.34.0 |
 
 ---
 
@@ -186,6 +190,7 @@ kommt zuerst als **Vorschlag**.
 | G18 | ⬜ | Firma mit **zwei** Mitarbeitenden, die beide eine „Zentrale"-Nummer eingetragen haben (gleiche Nummer) | Nummer erscheint auf der Firmenzeile nur **einmal** (keine Dublette) | ab 1.33.1 |
 | G14 | ⬜ | Export-Seite öffnen | Abschnitt heisst „Sichtbare Spalten" (nicht mehr „Darstellung der PDF-Liste") und ist **immer aufgeklappt**, kein Klick zum Ausklappen nötig | ab 1.33.0 |
 | G15 | ⬜ | Sichtbare Spalten: **Private E-Mail-Adresse** deaktiviert lassen, CSV exportieren, Spalte „E-Mail Privat" ansehen | Spalte ist vorhanden, aber leer — kein privater Wert drin | ab 1.33.0 |
+| G19 | ⬜ | CSV einer/eines Mitarbeitenden mit eigener „Zentrale"-Nummer öffnen | Zentralennummer steht in eigener Spalte „Telefon Allgemein", **nicht** mehr zusammen mit der Direktnummer in „Telefon Direkt" | ab 1.34.0 |
 
 ---
 

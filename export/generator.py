@@ -18,13 +18,14 @@ from reportlab.platypus import Paragraph, SimpleDocTemplate, Table, TableStyle
 
 from sync.radicale import kontakt_zu_vcard
 
-# Telefon hat seit 2026-08-06 vier feste Kategorien (Direkt, Direkt Handy, Privat,
-# Privat Handy) und kein "Allgemein" mehr; E-Mail behaelt Direkt/Allgemein/Privat
-# (siehe web/contacts.py). Die Spalten folgen dem, damit der Export dieselbe
-# Einteilung zeigt wie die Oberflaeche.
+# Telefon/E-Mail/Adresse haben je eine "Allgemein"-Spalte fuer Zentralen-/Sammel-
+# nummern usw. (seit 2026-09-29 auch Telefon - vorher fiel eine als "Zentrale"
+# hinterlegte Nummer in "Telefon Direkt", was z.B. bei einer/einem Mitarbeitenden
+# mit eigener Zentralen-Nummer zu zwei Nummern in derselben Spalte fuehrte).
 CSV_SPALTEN = [
     "Vorname", "Nachname", "Firma", "Funktion", "Rolle",
     "Telefon Direkt", "Telefon Direkt Handy", "Telefon Privat", "Telefon Privat Handy",
+    "Telefon Allgemein",
     "E-Mail Direkt", "E-Mail Privat", "E-Mail Allgemein",
     "Adresse Direkt", "Adresse Privat", "Adresse Allgemein",
     "Homepage", "Notizen",
@@ -75,18 +76,9 @@ def _kategorie_von_typ(typ: str) -> str:
     return "Direkt Handy" if handy else "Direkt"
 
 
-def _telefon_kategorie(typ: str) -> str:
-    """Telefon-Variante von _kategorie_von_typ: es gibt hier kein "Allgemein" mehr
-    (siehe web/contacts.py TELEFON_TYPEN). Ohne diese Umlenkung fiele eine noch als
-    "allgemein"/"main" gefuehrte Nummer durch alle Spalten und verschwaende
-    stillschweigend aus dem CSV."""
-    kategorie = _kategorie_von_typ(typ)
-    return "Direkt" if kategorie == "Allgemein" else kategorie
-
-
 def _telefon_kategorie_text(kontakt: dict, kategorie: str) -> str:
     return "; ".join(
-        t["nummer"] for t in kontakt.get("telefonnummern", []) if _telefon_kategorie(t.get("typ", "")) == kategorie
+        t["nummer"] for t in kontakt.get("telefonnummern", []) if _kategorie_von_typ(t.get("typ", "")) == kategorie
     )
 
 
@@ -133,8 +125,8 @@ def _direktwahl_ohne_zentrale_pdf(kontakt: dict, privates_telefon_zeigen: bool) 
     erscheinen stattdessen einmalig auf der Firmenzeile (siehe _zentralen_nummern),
     nicht zusaetzlich bei der einzelnen Person. Nutzer-Befund: bei einem Kontakt standen
     seine eigene Direktnummer UND die Zentralennummer der Firma in derselben Zelle,
-    weil eine als "Zentrale" getypte Nummer beim Telefon technisch als "Direkt" gilt
-    (siehe _telefon_kategorie - Telefon kennt keine eigene Allgemein-Spalte mehr)."""
+    weil eine als "Zentrale" getypte Nummer als "Allgemein" kategorisiert wird und
+    diese Zeile hier gezielt herausfiltert."""
     ergebnis = [
         t["nummer"] for t in kontakt.get("telefonnummern", [])
         if not (_ist_privat_typ(t.get("typ", "")) and not privates_telefon_zeigen)
@@ -314,6 +306,7 @@ def kontakte_csv(
             _telefon_kategorie_text(k, "Direkt"), _telefon_kategorie_text(k, "Direkt Handy"),
             _telefon_kategorie_text(k, "Privat") if privates_telefon_zeigen else "",
             _telefon_kategorie_text(k, "Privat Handy") if privates_telefon_zeigen else "",
+            _telefon_kategorie_text(k, "Allgemein"),
             _email_kategorie_text(k, "Direkt"),
             _email_kategorie_text(k, "Privat") if private_email_zeigen else "",
             _email_kategorie_text(k, "Allgemein"),

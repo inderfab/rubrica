@@ -65,12 +65,13 @@ def test_kontakte_csv_trennt_kategorien_in_eigene_spalten():
     zeilen = list(_csv.DictReader(_io.StringIO(daten.decode("utf-8-sig")), delimiter=";"))
     zeile = zeilen[0]
 
-    # "work" und "main" landen beide unter Direkt (Telefon kennt kein Allgemein mehr).
-    assert "052 111 11 11" in zeile["Telefon Direkt"]
+    assert zeile["Telefon Direkt"] == "052 111 11 11"
     # Mobilnummern haben seit 2026-08-06 eine eigene Spalte - eine geschaeftliche
     # Handynummer ist nicht mehr dasselbe wie eine private.
     assert zeile["Telefon Direkt Handy"] == "079 222 22 22"
-    assert "052 333 33 33" in zeile["Telefon Direkt"]
+    # "main" landet seit 2026-09-29 in der eigenen Allgemein-Spalte, nicht mehr
+    # zusammen mit der Direktnummer in derselben Zelle.
+    assert zeile["Telefon Allgemein"] == "052 333 33 33"
     assert zeile["E-Mail Direkt"] == "direkt@firma.ch"
     assert zeile["E-Mail Privat"] == "privat@example.com"
     assert zeile["Adresse Direkt"] == "Buerostrasse 1, 8000 Zuerich"
@@ -583,16 +584,22 @@ def test_pdf_export_ignoriert_andere_ordner_zugehoerigkeit():
     assert daten.startswith(b"%PDF")
 
 
-def test_telefon_mit_altwert_allgemein_verschwindet_nicht_aus_csv():
-    """Regression: beim Wegfall der Spalte "Telefon Allgemein" fiel eine noch als
-    "allgemein"/"main" gefuehrte Nummer durch alle Kategorien und verschwand
-    stillschweigend aus dem Export."""
+def test_telefon_mit_typ_allgemein_landet_in_eigener_spalte():
+    """Regression: eine als "Allgemein"/"Zentrale" getypte Nummer landete frueher
+    zusammen mit der Direktnummer in "Telefon Direkt" - z.B. bei einer/einem
+    Mitarbeitenden mit eigener Zentralen-Nummer standen dann zwei Nummern in
+    derselben Zelle. Seit 2026-09-29 hat Telefon dafuer eine eigene Spalte,
+    analog zu E-Mail/Adresse."""
     import csv as _csv
     import io as _io
-    kontakt = _kontakt(telefonnummern=[{"typ": "Allgemein", "nummer": "052 999 99 99"}])
+    kontakt = _kontakt(telefonnummern=[
+        {"typ": "Allgemein", "nummer": "052 999 99 99"},
+        {"typ": "Direkt", "nummer": "052 111 11 11"},
+    ])
     daten = generator.kontakte_csv([kontakt])
     zeile = list(_csv.DictReader(_io.StringIO(daten.decode("utf-8-sig")), delimiter=";"))[0]
-    assert "052 999 99 99" in zeile["Telefon Direkt"]
+    assert zeile["Telefon Allgemein"] == "052 999 99 99"
+    assert zeile["Telefon Direkt"] == "052 111 11 11"
 
 
 def test_privates_handy_bleibt_im_pdf_ausgeblendet():

@@ -220,12 +220,24 @@ Feldumfang bewusst an der tatsächlichen Nutzung im bestehenden Apple-Adressbuch
   Nummer" nur über einen eigenen namenlosen Firmenkontakt (`_ist_firmenkontakt`). In der Praxis trägt
   eine/ein Mitarbeitende die Zentralennummer aber oft direkt bei sich selbst mit dem Telefontyp
   "Zentrale" ein - sie erschien dadurch nur zufällig bei genau dieser einen Person statt auf der
-  Firmenzeile, UND zusätzlich (da Telefon keine eigene Allgemein-Spalte mehr kennt, siehe
-  `_telefon_kategorie`) gemeinsam mit der eigenen Direktnummer in derselben Zelle dieser Person. Fix:
+  Firmenzeile, UND zusätzlich (da Telefon damals keine eigene Allgemein-Spalte kannte) gemeinsam mit
+  der eigenen Direktnummer in derselben Zelle dieser Person. Fix:
   `_ALLGEMEIN_TYPEN` um `"zentrale"` ergänzt; `_zentralen_nummern` sammelt alle so getypten Nummern
   über die ganze Firmengruppe (analog zu `_firmen_webseiten_pdf`) und zeigt sie zusätzlich zum
   namenlosen Firmenkontakt auf der Firmenzeile; `_direktwahl_ohne_zentrale_pdf` blendet sie in der
   eigenen Zeile der jeweiligen Person aus.
+- **Telefonnummern-Reihenfolge und CSV-Spalte "Telefon Allgemein" (2026-09-29, v1.34.0):** zwei
+  Nutzer-Befunde. (1) Die Telefonnummern-Liste im Kontaktformular (`db/queries.py`) gab Nummern bisher
+  in DB-Einfügereihenfolge zurück statt in einer festen, nachvollziehbaren Reihenfolge. Neue Funktion
+  `_nach_typ_reihenfolge_sortiert` sortiert nach der unter `/einstellungen/kategorien` konfigurierten
+  Kategorie-Reihenfolge (derselben, die das Formular für neue Zeilen vorschlägt); unbekannte Typen
+  landen am Ende. (2) Eine als "Zentrale" getypte Nummer bei einer/einem Mitarbeitenden stand im CSV
+  weiterhin gemeinsam mit der eigenen Direktnummer in "Telefon Direkt" - anders als im PDF (siehe
+  v1.33.1) gibt es im CSV keine Firmenzeile, auf die sie ausweichen könnte. Nach Rückfrage beim Nutzer
+  (drei Optionen: neue Spalte / wie im PDF ganz ausblenden / so lassen) neue CSV-Spalte
+  "Telefon Allgemein" ergänzt (`CSV_SPALTEN`), analog zu "E-Mail Allgemein"/"Adresse Allgemein" - die
+  Sonderbehandlung `_telefon_kategorie` (Telefon-Fold ohne eigene Allgemein-Spalte, seit 2026-08-06)
+  entfällt damit wieder ersatzlos.
 
 ### 5.8 Mail-Eingang — Kontakte von unterwegs per Mail einreichen
 - **Umgesetzt (2026-07-28):** ein drittes Erfassungs­gleis neben Web-Neuanlage (5.1) und Import (5.6) für

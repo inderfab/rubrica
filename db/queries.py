@@ -5,6 +5,8 @@ import re
 import sqlite3
 from datetime import datetime, timedelta, timezone
 
+from config import settings
+
 
 def _now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -39,13 +41,26 @@ def _nur_ziffern(nummer: str) -> str:
     return re.sub(r"\D", "", nummer or "")
 
 
+def _nach_typ_reihenfolge_sortiert(rows: list[dict], reihenfolge: list[str]) -> list[dict]:
+    """Sortiert Eintraege (Telefon/E-Mail/...) nach der in den Einstellungen
+    konfigurierten Kategorie-Reihenfolge statt nach Eingabe-/DB-Reihenfolge -
+    das ist dieselbe Reihenfolge, in der das Kontaktformular die Typen im
+    Dropdown anbietet (Nutzer-Vorgabe: Liste soll "aufsteigend" sein, nicht
+    zufaellig je nachdem, welcher Typ zuerst eingegeben wurde). Unbekannte
+    Typen (z.B. inzwischen aus den Einstellungen entfernte) landen am Ende,
+    Eintraege mit gleichem Typ behalten ihre bisherige Reihenfolge (id).
+    """
+    rang = {typ: i for i, typ in enumerate(reihenfolge)}
+    return sorted(rows, key=lambda r: (rang.get(r["typ"], len(reihenfolge)), r["id"]))
+
+
 def _kontakt_row_to_dict(conn: sqlite3.Connection, row: sqlite3.Row) -> dict:
     kontakt = dict(row)
-    kontakt["telefonnummern"] = [
+    kontakt["telefonnummern"] = _nach_typ_reihenfolge_sortiert([
         dict(r) for r in conn.execute(
             "SELECT id, typ, nummer FROM telefonnummern WHERE kontakt_id = ? ORDER BY id", (row["id"],)
         )
-    ]
+    ], settings.telefon_typen())
     kontakt["emails"] = [
         dict(r) for r in conn.execute(
             "SELECT id, typ, email FROM emails WHERE kontakt_id = ? ORDER BY id", (row["id"],)
