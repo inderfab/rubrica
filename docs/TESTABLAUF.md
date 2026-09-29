@@ -14,8 +14,10 @@ B19 und C20 (neu ab 1.31.0: optionales Anlegen ohne Geburtstag/Adresse, Export-A
 Nutzer bestätigt. E11–E14 neu ab 1.32.1 (automatisches Speichern auf der Einstellungsseite,
 Aktions-Knöpfe laden die Seite nicht mehr neu, Passwörter maskiert). E15–E17 neu ab 1.32.2
 (lesbares Datum in der Erinnerungsmail, zweite Erinnerungs-Adresse mit Tage-Schwelle,
-Zahlen-Banner in der Navigation), E15 vom Nutzer bestätigt. Offene Befunde siehe
-unten.
+Zahlen-Banner in der Navigation), E15 vom Nutzer bestätigt. G13–G15 neu ab 1.33.0
+(Export-Absturz bei „Alle Kontakte" abgefangen — Ursache lokal nicht reproduzierbar,
+**G13 dringend prüfen**; CSV folgt jetzt denselben Sichtbarkeits-Flags wie PDF; Abschnitt
+„Sichtbare Spalten" immer ausgeklappt). Offene Befunde siehe unten.
 
 | Zeichen | Bedeutung |
 |---|---|
@@ -167,7 +169,7 @@ kommt zuerst als **Vorschlag**.
 | G1 | ⬜ | Ordner wählen, alle drei Formate exportieren | ZIP mit PDF, CSV und `.vcf` |
 | G2 | ⬜ | PDF öffnen | Logo im Kopf (Firmenname nur, falls **kein** Logo hinterlegt ist), nach BKP-Funktion gruppiert, Spalte heisst **„Rolle"** (nicht „Funktion") |
 | G3 | ⬜ | CSV in Excel öffnen | Eigene Spalte je Kategorie, Umlaute korrekt |
-| G4 | ⬜ | Export → Darstellung: **Private Telefonnummer** aktivieren, neu exportieren | Private Nummern erscheinen jetzt im PDF |
+| G4 | ⬜ | Export → Sichtbare Spalten: **Private Telefonnummer** aktivieren, neu exportieren | Private Nummern erscheinen jetzt im PDF **und im CSV** | ab 1.33.0 auch CSV |
 | G5 | ⬜ | Dieselbe Einstellung wieder deaktivieren | Sie verschwinden wieder |
 | G6 | ⬜ | Nach dem Speichern der Darstellung: Einstellungen prüfen | Mail-Zugangsdaten und Backup-Pfad sind unverändert |
 | G7 | ⬜ | `.vcf` per Doppelklick öffnen | Lässt sich in Kontakte.app übernehmen |
@@ -176,6 +178,9 @@ kommt zuerst als **Vorschlag**.
 | G10 | ⬜ | Zwei oder drei Formate ankreuzen und exportieren | Weiterhin ein `.zip` mit den gewählten Dateien |
 | G11 | ⬜ | PDF eines Ordners mit vielen Firmen (mehrseitig) öffnen, an jedem Seitenumbruch prüfen | Eine Firma samt ihren Sachbearbeitern steht immer komplett auf einer Seite, reisst nie über den Seitenumbruch |
 | G12 | ⬜ | Im PDF eine Firmenadresse ansehen | Firmenname, Strasse und „PLZ Ort, Land" stehen auf drei festen eigenen Zeilen, kein unschöner Umbruch mitten im Text |
+| G13 | ⬜ | **Alle Kontakte** (kein Ordner) exportieren, alle drei Formate | Funktioniert ohne Fehler — **bisher „Internal Server Error"**, bitte genau prüfen; falls wieder ein Fehler kommt: `tail -100 "~/Library/Application Support/Rubrica/logs/server.log"` und mir den Traceback schicken | ab 1.33.0 — konnte lokal nicht nachgestellt werden |
+| G14 | ⬜ | Export-Seite öffnen | Abschnitt heisst „Sichtbare Spalten" (nicht mehr „Darstellung der PDF-Liste") und ist **immer aufgeklappt**, kein Klick zum Ausklappen nötig | ab 1.33.0 |
+| G15 | ⬜ | Sichtbare Spalten: **Private E-Mail-Adresse** deaktiviert lassen, CSV exportieren, Spalte „E-Mail Privat" ansehen | Spalte ist vorhanden, aber leer — kein privater Wert drin | ab 1.33.0 |
 
 ---
 

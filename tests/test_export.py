@@ -54,7 +54,10 @@ def test_kontakte_csv_trennt_kategorien_in_eigene_spalten():
             {"typ": "home", "strasse": "Heimweg 2", "plz": "8001", "ort": "Zuerich", "region": "", "land": ""},
         ],
     )
-    daten = generator.kontakte_csv([kontakt])
+    # private_email/adresse_zeigen=True: dieser Test prueft die Spaltenaufteilung
+    # (Direkt/Privat/Handy), nicht die Sichtbarkeits-Flags selbst - siehe dafuer
+    # test_kontakte_csv_privates_bleibt_ohne_flag_leer weiter unten.
+    daten = generator.kontakte_csv([kontakt], private_email_zeigen=True, privatadresse_zeigen=True)
     # Richtig parsen statt per split(";"): eine Zelle kann mehrere Werte enthalten
     # und wird dann korrekt gequotet - naives Splitten zerlegte genau das falsch.
     import csv as _csv
@@ -72,6 +75,40 @@ def test_kontakte_csv_trennt_kategorien_in_eigene_spalten():
     assert zeile["E-Mail Privat"] == "privat@example.com"
     assert zeile["Adresse Direkt"] == "Buerostrasse 1, 8000 Zuerich"
     assert zeile["Adresse Privat"] == "Heimweg 2, 8001 Zuerich"
+
+
+def test_kontakte_csv_privates_bleibt_ohne_flag_leer():
+    """Nutzer-Vorgabe: "die Darstellung der Exceliste sollen die Felder gleich sein
+    wie im PDF" - ohne die jeweiligen Sichtbarkeits-Flags (Standard: aus, wie beim
+    PDF) bleiben die Privat-Spalten leer, obwohl die Daten vorhanden sind. Die
+    Spalten selbst bleiben bestehen (nur der Inhalt fehlt), damit die Kopfzeile
+    unabhaengig von den Einstellungen gleich aussieht."""
+    kontakt = _kontakt(
+        telefonnummern=[{"typ": "privat", "nummer": "079 999 99 99"}],
+        emails=[{"typ": "home", "email": "privat@example.com"}],
+        adressen=[{"typ": "home", "strasse": "Heimweg 2", "plz": "8001", "ort": "Zuerich", "region": "", "land": ""}],
+    )
+    daten = generator.kontakte_csv([kontakt])
+    text = daten.decode("utf-8-sig")
+    assert ";".join(generator.CSV_SPALTEN) in text  # Kopfzeile unveraendert
+    assert "079 999 99 99" not in text
+    assert "privat@example.com" not in text
+    assert "Heimweg 2" not in text
+
+
+def test_kontakte_csv_privates_mit_flag_sichtbar():
+    kontakt = _kontakt(
+        telefonnummern=[{"typ": "privat", "nummer": "079 999 99 99"}],
+        emails=[{"typ": "home", "email": "privat@example.com"}],
+        adressen=[{"typ": "home", "strasse": "Heimweg 2", "plz": "8001", "ort": "Zuerich", "region": "", "land": ""}],
+    )
+    daten = generator.kontakte_csv(
+        [kontakt], privates_telefon_zeigen=True, private_email_zeigen=True, privatadresse_zeigen=True,
+    )
+    text = daten.decode("utf-8-sig")
+    assert "079 999 99 99" in text
+    assert "privat@example.com" in text
+    assert "Heimweg 2" in text
 
 
 def test_kontakte_csv_leere_liste_nur_kopfzeile():
@@ -420,6 +457,29 @@ def test_export_mehrere_formate_liefert_zip(tmp_db):
     assert len(zf.namelist()) == 2
 
 
+def test_export_fehler_bei_generierung_zeigt_meldung_statt_absturz(tmp_db, monkeypatch):
+    """Nutzer-Meldung: Export von "Alle Kontakte" (kein Ordner gewaehlt) ergab einen
+    nackten "Internal Server Error". Welcher genaue Datensatz das ausloest, liess sich
+    lokal nicht nachstellen - hier daher zumindest abgesichert, dass ein Fehler
+    waehrend der Generierung nicht mehr als rohe Stacktrace-Seite durchschlaegt,
+    sondern als verstaendliche Meldung zurueckkommt (Traceback geht ins Server-Log,
+    siehe web/export.py::export_erzeugen)."""
+    import web.export as export_modul
+    queries.create_kontakt(tmp_db, {"vorname": "Anna", "nachname": "Muster"})
+
+    def _wirft(*a, **k):
+        raise ValueError("kaputte Testdaten")
+
+    monkeypatch.setattr(export_modul.generator, "kontakte_pdf", _wirft)
+
+    r = TestClient(app).post("/export", data={"ordner_id": "", "formate": ["pdf"]}, follow_redirects=False)
+    assert r.status_code == 303
+    assert "fehler=generieren" in r.headers["location"]
+
+    r2 = TestClient(app).get(r.headers["location"])
+    assert "Export fehlgeschlagen" in r2.text
+
+
 def test_pdf_export_ignoriert_andere_ordner_zugehoerigkeit():
     # Export ist bereits auf einen Ordner beschraenkt (Titel = Ordnername); ob ein
     # Kontakt noch weiteren Ordnern angehoert, darf im Export nicht auftauchen.
@@ -527,6 +587,19 @@ def test_export_seite_zeigt_checkbox_status(tmp_db, monkeypatch):
     r = TestClient(app).get("/export")
     assert r.status_code == 200
     assert "checked" in r.text.split('name="privates_telefon_zeigen"')[1][:20]
+
+
+def test_export_seite_zeigt_sichtbare_spalten_immer_ausgeklappt(tmp_db):
+    """Nutzer-Vorgabe: der Abschnitt (frueher "Darstellung der PDF-Liste") soll immer
+    ausgeklappt sein, ohne Einklappoption - kein <details> mehr dafuer."""
+    text = TestClient(app).get("/export").text
+    assert "Sichtbare Spalten" in text
+    assert "Darstellung der PDF-Liste" not in text
+    # Die Felder (z.B. Firmenname) muessen direkt im HTML stehen, nicht hinter einem
+    # <details>, das ohne Klick unsichtbar bliebe.
+    assert 'name="export_firmenname"' in text
+    abschnitt_start = text.index("Sichtbare Spalten")
+    assert "<details" not in text[abschnitt_start - 200:abschnitt_start]
 
 
 def test_logo_upload_wird_gespeichert_und_ausgeliefert(tmp_db, monkeypatch, tmp_path):

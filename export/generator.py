@@ -250,14 +250,23 @@ def _gruppiere_fuer_export(kontakte: list[dict]) -> list[dict]:
     return gruppen
 
 
-def kontakte_csv(kontakte: list[dict]) -> bytes:
+def kontakte_csv(
+    kontakte: list[dict], privates_telefon_zeigen: bool = False, private_email_zeigen: bool = False,
+    privatadresse_zeigen: bool = False,
+) -> bytes:
     """Erzeugt eine Excel-kompatible CSV (UTF-8 mit BOM, Semikolon als Trennzeichen -
     Standard-Spracheinstellung Excel DE verwendet Komma als Dezimaltrennzeichen und
     interpretiert Kommas in CSV sonst falsch). Telefon/E-Mail/Adresse haben je
     eine eigene Spalte pro Kategorie (Direkt/Privat/Allgemein) statt einer
     zusammengefassten Spalte - leichter in Excel weiterzuverarbeiten. Zeilen
     sortiert wie der PDF-Export (nach Funktion/BKP-Nummer, dann Firma), fuer
-    eine konsistente Reihenfolge in beiden Formaten."""
+    eine konsistente Reihenfolge in beiden Formaten.
+
+    Dieselben drei Sichtbarkeits-Flags wie beim PDF-Export (Nutzer-Vorgabe: "die
+    Darstellung der Exceliste sollen die Felder gleich sein wie im PDF") - bei
+    deaktiviertem Flag bleiben die jeweiligen Privat-Spalten leer statt befuellt.
+    Die Spalten selbst bleiben immer bestehen (nur der Inhalt wird ausgelassen),
+    damit die Kopfzeile unabhaengig von den Einstellungen immer gleich aussieht."""
     puffer = io.StringIO()
     writer = csv.writer(puffer, delimiter=";")
     writer.writerow(CSV_SPALTEN)
@@ -266,10 +275,13 @@ def kontakte_csv(kontakte: list[dict]) -> bytes:
             k.get("vorname", ""), k.get("nachname", ""), k.get("firma", ""),
             k.get("kategorie", ""), k.get("rolle", ""),
             _telefon_kategorie_text(k, "Direkt"), _telefon_kategorie_text(k, "Direkt Handy"),
-            _telefon_kategorie_text(k, "Privat"), _telefon_kategorie_text(k, "Privat Handy"),
-            _email_kategorie_text(k, "Direkt"), _email_kategorie_text(k, "Privat"),
+            _telefon_kategorie_text(k, "Privat") if privates_telefon_zeigen else "",
+            _telefon_kategorie_text(k, "Privat Handy") if privates_telefon_zeigen else "",
+            _email_kategorie_text(k, "Direkt"),
+            _email_kategorie_text(k, "Privat") if private_email_zeigen else "",
             _email_kategorie_text(k, "Allgemein"),
-            _adresse_kategorie_text(k, "Direkt"), _adresse_kategorie_text(k, "Privat"),
+            _adresse_kategorie_text(k, "Direkt"),
+            _adresse_kategorie_text(k, "Privat") if privatadresse_zeigen else "",
             _adresse_kategorie_text(k, "Allgemein"),
             _url_text(k), k.get("notizen", ""),
         ])

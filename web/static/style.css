@@ -429,6 +429,12 @@ input.gemischt::placeholder, textarea.gemischt::placeholder { color: var(--text-
 .einstell-block.gefahr { border-color: var(--gefahr); }
 .einstell-block.gefahr summary { color: var(--gefahr); }
 
+/* Titel eines NICHT einklappbaren einstell-block (z.B. "Sichtbare Spalten" auf der
+   Export-Seite, Nutzer-Vorgabe: "immer ausgeklappt ohne Einklappoption") - optisch
+   wie eine aufgeklappte summary, aber ohne cursor:pointer und ohne <details>. */
+.einstell-titel { font-weight: 600; font-size: 0.9rem; margin-bottom: 0.6rem; padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--rand); }
+
 /* Ankreuzfeld mit Beschriftung daneben statt darueber (Vorgabe von label{display:block}) */
 label.ankreuz { display: flex; align-items: center; gap: 0.4rem; font-size: 0.9rem; color: var(--text); margin-bottom: 0.35rem; }
 

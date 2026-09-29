@@ -193,6 +193,18 @@ Feldumfang bewusst an der tatsächlichen Nutzung im bestehenden Apple-Adressbuch
     Kontakte.app importierbar) — nutzt dieselbe `kontakt_zu_vcard()`-Funktion wie der CardDAV-Sync
     (`sync/radicale.py`), keine doppelte Formatierungslogik.
   - Neue Abhängigkeit `reportlab==5.0.0` in `requirements.txt`.
+- **Nachbesserung (2026-09-29, v1.33.0):** drei Nutzer-Befunde. (1) Export ohne gewählten Ordner ("Alle
+  Kontakte") ergab einen nackten "Internal Server Error" - Ursache mit den lokal verfügbaren Testdaten
+  nicht reproduzierbar (identische Route mit kleinerem Testbestand funktioniert einwandfrei, siehe
+  `tests/test_export.py`). `web/export.py::export_erzeugen` fängt Fehler bei der Generierung jetzt ab,
+  loggt den vollständigen Traceback nach `server.log` und zeigt eine verständliche Meldung statt der
+  rohen Stacktrace-Seite - beim nächsten Auftreten lässt sich die tatsächliche Ursache darüber
+  nachvollziehen. (2) CSV zeigte private Angaben (Telefon/E-Mail/Adresse) immer, unabhängig von den
+  Sichtbarkeits-Flags - `generator.kontakte_csv` nimmt jetzt dieselben drei Flags wie `kontakte_pdf`
+  entgegen (Nutzer-Vorgabe: "die Felder sollen gleich sein wie im PDF"), die Spalten selbst bleiben
+  bestehen, nur der Inhalt fehlt bei deaktiviertem Flag. (3) Der Abschnitt "Darstellung der PDF-Liste"
+  auf `/export` hiess um in "Sichtbare Spalten" und ist kein `<details>` mehr, sondern immer
+  ausgeklappt (Nutzer-Vorgabe) - er betrifft jetzt PDF UND CSV gleichermassen.
 
 ### 5.8 Mail-Eingang — Kontakte von unterwegs per Mail einreichen
 - **Umgesetzt (2026-07-28):** ein drittes Erfassungs­gleis neben Web-Neuanlage (5.1) und Import (5.6) für

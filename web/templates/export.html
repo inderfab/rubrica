@@ -9,6 +9,9 @@
 {% if fehler == "formate" %}
 <p class="fehler">Bitte mindestens ein Format auswählen.</p>
 {% endif %}
+{% if fehler == "generieren" %}
+<p class="fehler">Export fehlgeschlagen. Details stehen im Server-Log.</p>
+{% endif %}
 
 <div class="formular-schmal">
 <form method="post" action="/export">
@@ -38,10 +41,14 @@
     <button type="submit">Exportieren</button>
 </form>
 
-{# Darstellung des PDF-Exports: steht hier statt unter /einstellungen
-   (Nutzer-Vorgabe) - die Werte wirken sich ausschliesslich auf diesen Export aus. #}
-<details class="einstell-block" style="margin-top:1.2rem">
-    <summary>Darstellung der PDF-Liste</summary>
+{# Sichtbare Spalten (frueher "Darstellung der PDF-Liste"): steht hier statt unter
+   /einstellungen (Nutzer-Vorgabe) - die Werte wirken sich ausschliesslich auf diesen
+   Export aus, gleichermassen auf PDF UND CSV (Nutzer-Vorgabe: gleiche Felder in
+   beiden). Bewusst kein <details> mehr - immer ausgeklappt, keine Einklappoption
+   (Nutzer-Vorgabe), da diese Einstellungen den Export-Inhalt selbst betreffen und
+   nicht wie die uebrigen Einstellungs-Abschnitte nur gelegentlich gebraucht werden. #}
+<div class="einstell-block" style="margin-top:1.2rem">
+    <div class="einstell-titel">Sichtbare Spalten</div>
     <form method="post" action="/export/einstellungen" enctype="multipart/form-data">
         <p class="empty" style="padding:0 0 0.5rem">
             Logo erscheint im Kopf jeder PDF-Liste; der Ordnername bleibt deren Titel. Der Firmenname
@@ -68,7 +75,8 @@
         <fieldset>
             <legend>Sichtbare Felder</legend>
             <p class="empty" style="padding:0 0 0.5rem">
-                Als privat kategorisierte Angaben erscheinen nur, wenn hier aktiviert.
+                Als privat kategorisierte Angaben erscheinen nur, wenn hier aktiviert – gilt gleichermassen
+                für PDF und CSV.
             </p>
             <label class="ankreuz">
                 <input type="checkbox" name="privates_telefon_zeigen" {% if privates_telefon_zeigen %}checked{% endif %}>
@@ -86,6 +94,6 @@
 
         <button type="submit">Speichern</button>
     </form>
-</details>
+</div>
 </div>
 {% endblock %}

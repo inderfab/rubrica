@@ -1,6 +1,7 @@
 """Phase 3: Export einer Kontaktliste (Ordner) als PDF/CSV/vCard, gebuendelt in einem ZIP."""
 from __future__ import annotations
 
+import logging
 import re
 import zipfile
 from datetime import datetime
@@ -17,6 +18,7 @@ from export import generator
 from web.shared import templates
 
 router = APIRouter()
+log = logging.getLogger(__name__)
 
 
 def _dateiname_sicher(text: str) -> str:
@@ -117,22 +119,40 @@ async def export_erzeugen(request: Request):
     firmenname = settings.get("export.firmenname", "") or ""
     logo = settings.logo_pfad()
 
-    dateien = {}
-    if "pdf" in formate:
-        dateien[f"{basisname}_{datum}.pdf"] = (
-            generator.kontakte_pdf(
-                ordner_name, kontakte, firmenname=firmenname,
-                logo_pfad=str(logo) if logo else "",
-                privates_telefon_zeigen=bool(settings.get("export.privates_telefon_zeigen", False)),
-                private_email_zeigen=bool(settings.get("export.private_email_zeigen", False)),
-                privatadresse_zeigen=bool(settings.get("export.privatadresse_zeigen", False)),
-            ),
-            "application/pdf",
-        )
-    if "csv" in formate:
-        dateien[f"{basisname}_{datum}.csv"] = (generator.kontakte_csv(kontakte), "text/csv")
-    if "vcard" in formate:
-        dateien[f"{basisname}_{datum}.vcf"] = (generator.kontakte_vcard(kontakte), "text/vcard")
+    try:
+        dateien = {}
+        if "pdf" in formate:
+            dateien[f"{basisname}_{datum}.pdf"] = (
+                generator.kontakte_pdf(
+                    ordner_name, kontakte, firmenname=firmenname,
+                    logo_pfad=str(logo) if logo else "",
+                    privates_telefon_zeigen=bool(settings.get("export.privates_telefon_zeigen", False)),
+                    private_email_zeigen=bool(settings.get("export.private_email_zeigen", False)),
+                    privatadresse_zeigen=bool(settings.get("export.privatadresse_zeigen", False)),
+                ),
+                "application/pdf",
+            )
+        if "csv" in formate:
+            dateien[f"{basisname}_{datum}.csv"] = (
+                generator.kontakte_csv(
+                    kontakte,
+                    privates_telefon_zeigen=bool(settings.get("export.privates_telefon_zeigen", False)),
+                    private_email_zeigen=bool(settings.get("export.private_email_zeigen", False)),
+                    privatadresse_zeigen=bool(settings.get("export.privatadresse_zeigen", False)),
+                ),
+                "text/csv",
+            )
+        if "vcard" in formate:
+            dateien[f"{basisname}_{datum}.vcf"] = (generator.kontakte_vcard(kontakte), "text/vcard")
+    except Exception:
+        # Nutzer-Meldung: "Alle Kontakte" (kein Ordner gewaehlt) ergab einen nackten
+        # "Internal Server Error" ohne jeden Anhaltspunkt. Vollstaendiger Traceback
+        # geht ins Server-Log (server.log, siehe menubar/app.py) - dort bei einem
+        # erneuten Auftreten nachschauen statt zu raten; hier nur eine verstaendliche
+        # Meldung statt der rohen Stacktrace-Seite.
+        log.exception("Export fehlgeschlagen (Ordner=%r, %d Kontakte, Formate=%r)",
+                      ordner_name, len(kontakte), formate)
+        return RedirectResponse(url="/export?fehler=generieren", status_code=303)
 
     # Bei genau EINEM gewaehlten Format direkt die Datei ausliefern statt eines
     # Zip mit nur einem Eintrag (Nutzer-Vorgabe) - das Zip lohnt sich erst, wenn
